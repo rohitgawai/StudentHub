@@ -33,6 +33,7 @@ class UserModel {
   final List<String> savedPostIds;
   final List<String> registeredEventIds;
   final bool isVerified;
+  final Map<UserRole, DateTime> roleExpirations;
 
   UserModel({
     required this.id,
@@ -47,9 +48,14 @@ class UserModel {
     required this.savedPostIds,
     required this.registeredEventIds,
     this.isVerified = true,
+    this.roleExpirations = const {},
   });
 
   bool hasRole(UserRole role) => roles.contains(role);
+
+  bool isRoleExpiring(UserRole role) => roleExpirations[role] != null;
+
+  DateTime? getRoleExpiry(UserRole role) => roleExpirations[role];
 
   UserModel copyWith({
     String? id,
@@ -64,6 +70,7 @@ class UserModel {
     List<String>? savedPostIds,
     List<String>? registeredEventIds,
     bool? isVerified,
+    Map<UserRole, DateTime>? roleExpirations,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -78,6 +85,7 @@ class UserModel {
       savedPostIds: savedPostIds ?? this.savedPostIds,
       registeredEventIds: registeredEventIds ?? this.registeredEventIds,
       isVerified: isVerified ?? this.isVerified,
+      roleExpirations: roleExpirations ?? this.roleExpirations,
     );
   }
 }

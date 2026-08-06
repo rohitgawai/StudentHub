@@ -19,6 +19,8 @@ class RoleRequestModel {
   final RoleRequestStatus status;
   final DateTime submittedAt;
   final String? adminNotes;
+  final bool isLimitedAccess;
+  final int? durationDays;
 
   RoleRequestModel({
     required this.id,
@@ -33,11 +35,25 @@ class RoleRequestModel {
     this.status = RoleRequestStatus.pending,
     required this.submittedAt,
     this.adminNotes,
+    this.isLimitedAccess = false,
+    this.durationDays,
   });
+
+  DateTime? get expiresAt {
+    if (!isLimitedAccess || durationDays == null) return null;
+    return submittedAt.add(Duration(days: durationDays!));
+  }
+
+  String get termLabel {
+    if (!isLimitedAccess) return 'Permanent';
+    return 'Temporary • ${durationDays! >= 7 && durationDays! % 7 == 0 ? '${durationDays! ~/ 7} week${durationDays! ~/ 7 > 1 ? 's' : ''}' : '$durationDays days'}';
+  }
 
   RoleRequestModel copyWith({
     RoleRequestStatus? status,
     String? adminNotes,
+    bool? isLimitedAccess,
+    int? durationDays,
   }) {
     return RoleRequestModel(
       id: id,
@@ -52,6 +68,8 @@ class RoleRequestModel {
       status: status ?? this.status,
       submittedAt: submittedAt,
       adminNotes: adminNotes ?? this.adminNotes,
+      isLimitedAccess: isLimitedAccess ?? this.isLimitedAccess,
+      durationDays: durationDays ?? this.durationDays,
     );
   }
 }

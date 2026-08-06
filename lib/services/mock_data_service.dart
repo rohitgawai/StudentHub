@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../config/app_config.dart';
 import '../models/user_model.dart';
@@ -17,12 +18,20 @@ class MockDataService extends ChangeNotifier {
   bool _isLoading = true;
   bool get isLoading => _isLoading;
 
+  Timer? _expiryTimer;
+
   List<PostModel> get posts => List.unmodifiable(_posts);
   List<RoleRequestModel> get roleRequests => List.unmodifiable(_roleRequests);
   List<NotificationModel> get notifications => List.unmodifiable(_notifications);
 
   MockDataService() {
     _initData();
+  }
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _initData() async {
@@ -49,6 +58,10 @@ class MockDataService extends ChangeNotifier {
     _generateMockPosts();
     _generateMockRoleRequests();
     _generateMockNotifications();
+
+    checkForExpiredRoles();
+
+    _expiryTimer = Timer.periodic(const Duration(minutes: 1), (_) => checkForExpiredRoles());
 
     _isLoading = false;
     notifyListeners();
@@ -187,6 +200,8 @@ class MockDataService extends ChangeNotifier {
     required UserRole requestedRole,
     required String reason,
     required String phoneNumber,
+    bool isLimitedAccess = false,
+    int? durationDays,
   }) {
     final newReq = RoleRequestModel(
       id: 'req_${DateTime.now().millisecondsSinceEpoch}',
@@ -199,6 +214,8 @@ class MockDataService extends ChangeNotifier {
       reason: reason,
       phoneNumber: phoneNumber,
       submittedAt: DateTime.now(),
+      isLimitedAccess: isLimitedAccess,
+      durationDays: durationDays,
     );
 
     _roleRequests.insert(0, newReq);
@@ -207,7 +224,9 @@ class MockDataService extends ChangeNotifier {
     _notifications.insert(0, NotificationModel(
       id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
       title: 'Role Application Submitted',
-      body: 'Your request for ${requestedRole.displayName} status has been sent to Admin for review.',
+      body: isLimitedAccess
+          ? 'Your request for ${requestedRole.displayName} status (temporary, until ${_formatDate(newReq.expiresAt!)}) has been sent to Admin for review.'
+          : 'Your request for ${requestedRole.displayName} status has been sent to Admin for review.',
       category: NotificationCategory.personal,
       timestamp: DateTime.now(),
     ));
@@ -225,15 +244,24 @@ class MockDataService extends ChangeNotifier {
     if (status == RoleRequestStatus.approved) {
       if (req.userId == currentUser.id) {
         List<UserRole> updatedRoles = List.from(currentUser.roles);
+        Map<UserRole, DateTime> updatedExpirations = Map.from(currentUser.roleExpirations);
         if (!updatedRoles.contains(req.requestedRole)) {
           updatedRoles.add(req.requestedRole);
-          currentUser = currentUser.copyWith(roles: updatedRoles);
+          if (req.isLimitedAccess && req.expiresAt != null) {
+            updatedExpirations[req.requestedRole] = req.expiresAt!;
+          }
+          currentUser = currentUser.copyWith(
+            roles: updatedRoles,
+            roleExpirations: updatedExpirations,
+          );
         }
       }
       _notifications.insert(0, NotificationModel(
         id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
         title: 'Role Approved! 🎖️',
-        body: 'Congratulations! Your application for ${req.requestedRole.displayName} was approved.',
+        body: req.isLimitedAccess && req.expiresAt != null
+            ? 'Congratulations! Your temporary ${req.requestedRole.displayName} access is approved until ${_formatDate(req.expiresAt!)}.'
+            : 'Congratulations! Your application for ${req.requestedRole.displayName} was approved.',
         category: NotificationCategory.personal,
         timestamp: DateTime.now(),
       ));
@@ -261,6 +289,47 @@ class MockDataService extends ChangeNotifier {
   void markAllNotificationsRead() {
     _notifications = _notifications.map((n) => n.copyWith(isRead: true)).toList();
     notifyListeners();
+  }
+
+  void checkForExpiredRoles() {
+    final expirations = currentUser.roleExpirations;
+    if (expirations.isEmpty) return;
+
+    final now = DateTime.now();
+    final expiredRoles = expirations.entries
+        .where((e) => e.value.isBefore(now))
+        .map((e) => e.key)
+        .toList();
+
+    if (expiredRoles.isEmpty) return;
+
+    List<UserRole> updatedRoles = List.from(currentUser.roles)..removeWhere(expiredRoles.contains);
+    Map<UserRole, DateTime> updatedExpirations = Map.from(expirations)..removeWhere((role, _) => expiredRoles.contains(role));
+
+    currentUser = currentUser.copyWith(
+      roles: updatedRoles,
+      roleExpirations: updatedExpirations,
+    );
+
+    if (expiredRoles.contains(activeRole)) {
+      activeRole = currentUser.roles.isNotEmpty ? currentUser.roles.first : UserRole.student;
+    }
+
+    for (final role in expiredRoles) {
+      _notifications.insert(0, NotificationModel(
+        id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
+        title: '${role.displayName} Access Expired ⏳',
+        body: 'Your temporary ${role.displayName} access period has ended. You are now back to Student view. Your hosted events remain on the campus feed.',
+        category: NotificationCategory.personal,
+        timestamp: now,
+      ));
+    }
+
+    notifyListeners();
+  }
+
+  String _formatDate(DateTime dt) {
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
   }
 
   // --- Initial Mock Data Generators ---

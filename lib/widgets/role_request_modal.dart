@@ -16,6 +16,15 @@ class _RoleRequestModalState extends State<RoleRequestModal> {
   final phoneController = TextEditingController();
 
   UserRole requestedRole = UserRole.eventHost;
+  bool isLimitedAccess = false;
+  int? durationDays;
+
+  static const Map<String, int> durationOptions = {
+    '1 Week': 7,
+    '1 Month': 30,
+    '3 Months': 90,
+    '6 Months': 180,
+  };
 
   @override
   void initState() {
@@ -64,7 +73,7 @@ class _RoleRequestModalState extends State<RoleRequestModal> {
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Request permissions to post events or departmental notices. Admin approval is required.',
+                      'Request permissions to post events or departmental notices. Admin approval is required. Event Host access can be permanent or limited-time (auto-expires).',
                       style: TextStyle(fontSize: 12, color: Colors.black87),
                     ),
                   ),
@@ -95,6 +104,59 @@ class _RoleRequestModalState extends State<RoleRequestModal> {
               },
             ),
             const SizedBox(height: 16),
+
+            // Access Term Selector (Event Host only)
+            if (requestedRole == UserRole.eventHost) ...[
+              const Text(
+                'Access Term',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(
+                    value: false,
+                    label: Text('Permanent'),
+                    icon: Icon(Icons.all_inclusive, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    label: Text('Limited Time'),
+                    icon: Icon(Icons.timer, size: 16),
+                  ),
+                ],
+                selected: {isLimitedAccess},
+                onSelectionChanged: (selection) {
+                  setState(() => isLimitedAccess = selection.first);
+                  if (!selection.first) durationDays = null;
+                },
+              ),
+              if (isLimitedAccess) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Choose duration:',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: durationOptions.entries.map((entry) {
+                    final isSelected = durationDays == entry.value;
+                    return ChoiceChip(
+                      label: Text(entry.key),
+                      selected: isSelected,
+                      selectedColor: dataService.config.primaryColor.withOpacity(0.2),
+                      onSelected: (_) {
+                        setState(() => durationDays = entry.value);
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 4),
+              ],
+              const SizedBox(height: 16),
+            ],
 
             // Pre-filled Info
             TextFormField(
@@ -158,10 +220,22 @@ class _RoleRequestModalState extends State<RoleRequestModal> {
               onPressed: () {
                 if (!_formKey.currentState!.validate()) return;
 
+                if (isLimitedAccess && durationDays == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please select a duration for limited-time access.'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
+
                 dataService.submitRoleRequest(
                   requestedRole: requestedRole,
                   reason: reasonController.text.trim(),
                   phoneNumber: phoneController.text.trim(),
+                  isLimitedAccess: isLimitedAccess,
+                  durationDays: durationDays,
                 );
 
                 Navigator.of(context).pop();

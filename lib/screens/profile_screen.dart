@@ -163,12 +163,25 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   children: [
                     const Text('Assigned Roles: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 6),
-                    Wrap(
-                      spacing: 6,
-                      children: user.roles
-                          .where((r) => r != UserRole.admin)
-                          .map((r) => RoleBadge(role: r, isCompact: true))
-                          .toList(),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: user.roles
+                            .where((r) => r != UserRole.admin)
+                            .map((r) => Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    RoleBadge(role: r, isCompact: true),
+                                    if (user.isRoleExpiring(r))
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: _buildExpiryTag(user.getRoleExpiry(r)!),
+                                      ),
+                                  ],
+                                ))
+                            .toList(),
+                      ),
                     ),
                   ],
                 ),
@@ -250,6 +263,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             children: [
                               Text('${req.requestedRole.displayName}: ', style: const TextStyle(fontSize: 11)),
                               _buildStatusBadge(req.status),
+                              if (req.isLimitedAccess && req.expiresAt != null) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${req.termLabel} • till ${_formatDate(req.expiresAt!)}',
+                                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                ),
+                              ],
                             ],
                           ),
                         )),
@@ -284,6 +304,30 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         ],
       ),
     );
+  }
+
+  Widget _buildExpiryTag(DateTime expiry) {
+    final daysLeft = expiry.difference(DateTime.now()).inDays;
+    final isExpiringSoon = daysLeft <= 7;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: (isExpiringSoon ? Colors.orange : Colors.green).withOpacity(0.15),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        daysLeft < 1 ? 'Expires today' : 'Expires in $daysLeft day${daysLeft > 1 ? 's' : ''}',
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          color: isExpiringSoon ? Colors.orange.shade900 : Colors.green.shade800,
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
   }
 
   Widget _buildStatusBadge(RoleRequestStatus status) {
