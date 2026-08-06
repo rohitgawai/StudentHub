@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
-
 import '../widgets/post_card.dart';
 import '../widgets/create_post_modal.dart';
 import '../widgets/create_event_modal.dart';
@@ -35,10 +35,15 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       searchQuery: searchQuery,
     );
 
+    // Requirement 3: "post update" feature only for hosts, faculty, or admin
+    final bool canPostUpdate = dataService.activeRole == UserRole.eventHost ||
+        dataService.activeRole == UserRole.faculty ||
+        dataService.activeRole == UserRole.admin;
+
     return Scaffold(
       body: Column(
         children: [
-          // Urgent Announcement Banner (PRD requirement & non-coder configurable)
+          // Urgent Announcement Banner
           if (cfg.enableUrgentBanner && cfg.announcementBannerText.isNotEmpty)
             Container(
               width: double.infinity,
@@ -147,16 +152,18 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         ],
       ),
 
-      // FAB for creating posts or events based on active role
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: cfg.primaryColor,
-        foregroundColor: Colors.white,
-        onPressed: () {
-          _showCreateOptionsModal(context, dataService);
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Post Update'),
-      ),
+      // FAB for creating posts or events based on role (Hidden for Students)
+      floatingActionButton: canPostUpdate
+          ? FloatingActionButton.extended(
+              backgroundColor: cfg.primaryColor,
+              foregroundColor: Colors.white,
+              onPressed: () {
+                _showCreateOptionsModal(context, dataService);
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Post Update'),
+            )
+          : null,
     );
   }
 

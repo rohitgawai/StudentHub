@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
 import 'role_badge.dart';
@@ -33,6 +35,80 @@ class PostCard extends StatelessWidget {
     }
   }
 
+  void _sharePostDynamic(BuildContext context) {
+    final String shareText = '''
+📢 ${post.title}
+
+${post.description}
+
+🏫 Department: ${post.department}
+${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post.isEvent && post.eventDate != null ? "📅 Event Date: ${_formatEventDate(post.eventDate!)}\n" : ""}
+📲 Shared via StudentHub: https://studenthub.edu/post/${post.id}
+''';
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Share Post / Announcement',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  post.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF25D366),
+                    child: Icon(Icons.share, color: Colors.white),
+                  ),
+                  title: const Text('Share via Apps (System Share Sheet)'),
+                  subtitle: const Text('WhatsApp, Telegram, Messages, Mail...'),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    Share.share(shareText, subject: post.title);
+                  },
+                ),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blue.shade100,
+                    child: const Icon(Icons.copy, color: Colors.blue),
+                  ),
+                  title: const Text('Copy Post Link & Details'),
+                  subtitle: const Text('Copy formatted text to clipboard'),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    Clipboard.setData(ClipboardData(text: shareText));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('📋 Post details & link copied to clipboard!'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
@@ -49,7 +125,7 @@ class PostCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Target Year Header Alert (PRD requirement)
+          // Target Year Header Alert
           if (hasYearMismatch)
             Container(
               width: double.infinity,
@@ -327,17 +403,10 @@ class PostCard extends StatelessWidget {
 
                     const SizedBox(width: 16),
 
-                    // Share
+                    // Dynamic Share Button
                     IconButton(
                       icon: const Icon(Icons.share_outlined, color: Colors.grey),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Copied post link for: "${post.title}"'),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
+                      onPressed: () => _sharePostDynamic(context),
                     ),
 
                     const Spacer(),

@@ -6,7 +6,6 @@ import '../services/mock_data_service.dart';
 import '../widgets/role_badge.dart';
 import '../widgets/post_card.dart';
 import '../widgets/role_request_modal.dart';
-import '../widgets/non_coder_config_editor.dart';
 import 'dashboards/admin_dashboard_screen.dart';
 import 'dashboards/faculty_dashboard_screen.dart';
 import 'dashboards/event_host_dashboard_screen.dart';
@@ -43,21 +42,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final registeredEvents = dataService.posts.where((p) => user.registeredEventIds.contains(p.id)).toList();
     final myRoleRequests = dataService.roleRequests.where((r) => r.userId == user.id).toList();
 
+    // Filter approved roles for dropdown (excluding Admin as requested)
+    final allowedSwitcherRoles = user.roles.where((r) => r != UserRole.admin).toList();
+    final bool canSwitchRoles = allowedSwitcherRoles.length > 1;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Profile'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.tune),
-            tooltip: 'Non-Coder Config Manager',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (ctx) => const NonCoderConfigEditor()),
-              );
-            },
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -109,7 +100,63 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
+
+                // Active View Role Switcher Dropdown (Only appears in Profile header IF user has approved Host/Faculty roles)
+                if (canSwitchRoles) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: cfg.primaryColor.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: cfg.primaryColor.withOpacity(0.25)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.swap_horiz, size: 18, color: Colors.blueGrey),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Active Perspective: ',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey),
+                            ),
+                          ],
+                        ),
+                        DropdownButton<UserRole>(
+                          value: allowedSwitcherRoles.contains(dataService.activeRole)
+                              ? dataService.activeRole
+                              : allowedSwitcherRoles.first,
+                          isDense: true,
+                          underline: const SizedBox(),
+                          onChanged: (UserRole? newRole) {
+                            if (newRole != null) {
+                              dataService.switchActiveRole(newRole);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Switched view perspective to ${newRole.displayName}'),
+                                  duration: const Duration(seconds: 1),
+                                ),
+                              );
+                            }
+                          },
+                          items: allowedSwitcherRoles.map((role) {
+                            return DropdownMenuItem<UserRole>(
+                              value: role,
+                              child: Row(
+                                children: [
+                                  RoleBadge(role: role, isCompact: true),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
 
                 // Roles Badges Row
                 Row(
@@ -118,48 +165,31 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     const SizedBox(width: 6),
                     Wrap(
                       spacing: 6,
-                      children: user.roles.map((r) => RoleBadge(role: r, isCompact: true)).toList(),
+                      children: user.roles
+                          .where((r) => r != UserRole.admin)
+                          .map((r) => RoleBadge(role: r, isCompact: true))
+                          .toList(),
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
 
-                // Quick Action Buttons (Apply for Role / Dashboards)
-                Row(
-                  children: [
-                    if (cfg.allowRoleSelfApplication)
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (ctx) => const RoleRequestModal(),
-                            );
-                          },
-                          icon: const Icon(Icons.add_moderator, size: 16),
-                          label: const Text('Apply for Role', style: TextStyle(fontSize: 12)),
-                        ),
-                      ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.purple.shade700,
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (ctx) => const NonCoderConfigEditor()),
-                          );
-                        },
-                        icon: const Icon(Icons.settings, size: 16),
-                        label: const Text('Non-Coder Config', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                      ),
+                // Apply for Role Button
+                if (cfg.allowRoleSelfApplication)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => const RoleRequestModal(),
+                        );
+                      },
+                      icon: const Icon(Icons.add_moderator, size: 16),
+                      label: const Text('Apply for Event Host / Faculty Role', style: TextStyle(fontSize: 12)),
                     ),
-                  ],
-                ),
+                  ),
 
                 // Role Dashboards shortcuts if permitted
                 if (user.hasRole(UserRole.admin) || user.hasRole(UserRole.faculty) || user.hasRole(UserRole.eventHost)) ...[
@@ -173,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             padding: const EdgeInsets.only(right: 8),
                             child: ActionChip(
                               avatar: const Icon(Icons.admin_panel_settings, size: 16, color: Colors.purple),
-                              label: const Text('Admin Dashboard'),
+                              label: const Text('Admin Control Panel'),
                               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminDashboardScreen())),
                             ),
                           ),
@@ -204,6 +234,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 if (myRoleRequests.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,

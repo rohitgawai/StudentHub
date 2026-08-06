@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'models/user_model.dart';
-
 import 'services/mock_data_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_screen.dart';
@@ -10,7 +9,6 @@ import 'screens/events_screen.dart';
 import 'screens/explore_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/notifications_screen.dart';
-import 'widgets/non_coder_config_editor.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -110,103 +108,6 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
           ],
         ),
         actions: [
-          // Interactive Role Simulator Pill (Allows user to test all 4 roles instantly)
-          PopupMenuButton<UserRole>(
-            tooltip: 'Switch Active View Role',
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              margin: const EdgeInsets.only(right: 6),
-              decoration: BoxDecoration(
-                color: cfg.primaryColor.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cfg.primaryColor.withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _getRoleIcon(dataService.activeRole),
-                    size: 14,
-                    color: cfg.primaryColor,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    dataService.activeRole.displayName,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: cfg.primaryColor,
-                    ),
-                  ),
-                  const Icon(Icons.arrow_drop_down, size: 16),
-                ],
-              ),
-            ),
-            onSelected: (UserRole role) {
-              dataService.switchActiveRole(role);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Switched view perspective to ${role.displayName}'),
-                  duration: const Duration(seconds: 1),
-                ),
-              );
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: UserRole.student,
-                child: Row(
-                  children: [
-                    Icon(Icons.school, size: 18, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text('View as Student'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: UserRole.eventHost,
-                child: Row(
-                  children: [
-                    Icon(Icons.event, size: 18, color: Colors.orange),
-                    SizedBox(width: 8),
-                    Text('View as Event Host'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: UserRole.faculty,
-                child: Row(
-                  children: [
-                    Icon(Icons.menu_book, size: 18, color: Colors.teal),
-                    SizedBox(width: 8),
-                    Text('View as Faculty'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: UserRole.admin,
-                child: Row(
-                  children: [
-                    Icon(Icons.verified_user, size: 18, color: Colors.purple),
-                    SizedBox(width: 8),
-                    Text('View as Admin'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Non-Coder Config Manager Button
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Non-Coder Config Manager',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (c) => const NonCoderConfigEditor()),
-              );
-            },
-          ),
-
           // Notification Bell with Badge
           Stack(
             children: [
@@ -244,7 +145,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                 ),
             ],
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
         ],
       ),
 
@@ -254,7 +155,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         children: screens,
       ),
 
-      // Bottom Navigation Bar (PRD Section 8: Home, Events, Explore, Profile)
+      // Bottom Navigation Bar (Home, Events, Explore, Profile)
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
         onTap: (idx) => setState(() => currentIndex = idx),
@@ -282,18 +183,5 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         ],
       ),
     );
-  }
-
-  IconData _getRoleIcon(UserRole role) {
-    switch (role) {
-      case UserRole.student:
-        return Icons.school;
-      case UserRole.eventHost:
-        return Icons.event;
-      case UserRole.faculty:
-        return Icons.menu_book;
-      case UserRole.admin:
-        return Icons.verified_user;
-    }
   }
 }
