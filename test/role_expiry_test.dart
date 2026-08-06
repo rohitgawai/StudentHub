@@ -16,7 +16,7 @@ void main() {
         id: 'usr_test',
         name: 'Test Student',
         email: 'test@studenthub.edu',
-        studentOrEmployeeId: 'SAITS/CS/2024/001',
+        studentOrEmployeeId: 'MIT/CS/2024/001',
         department: 'Computer Science & Engineering',
         year: 'Third Year',
         mobileNumber: '+91 90000 00000',

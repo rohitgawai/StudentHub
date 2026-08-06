@@ -18,7 +18,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   final nameController = TextEditingController(text: 'Aarav Sharma');
   final emailController = TextEditingController(text: 'aarav.sharma@studenthub.edu');
-  final idController = TextEditingController(text: 'SAITS/CS/2023/042');
+  final idController = TextEditingController(text: 'MIT/CS/2023/042');
   final mobileController = TextEditingController(text: '+91 98765 12345');
   
   late String selectedDepartment;

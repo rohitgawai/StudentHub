@@ -149,7 +149,7 @@ class AppConfig {
       appName: 'StudentHub',
       tagline: 'Digital Campus Platform',
       collegeName: 'St. Andrew Institute of Technology & Science',
-      collegeShortCode: 'SAITS',
+      collegeShortCode: 'MIT',
       primaryColorHex: '#1E88E5',
       eventColorHex: '#FB8C00',
       urgentColorHex: '#E53935',

@@ -102,7 +102,7 @@ class _PdfViewerModalState extends State<PdfViewerModal> {
                   ),
                   const Chip(
                     avatar: Icon(Icons.verified, size: 14, color: Colors.blue),
-                    label: Text('Digitally Signed by SAITS Academics', style: TextStyle(fontSize: 11)),
+                    label: Text('Digitally Signed by MIT Academics', style: TextStyle(fontSize: 11)),
                   ),
                 ],
               ),
