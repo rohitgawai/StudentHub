@@ -1,122 +1,299 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'models/user_model.dart';
+
+import 'services/mock_data_service.dart';
+import 'theme/app_theme.dart';
+import 'screens/auth_screen.dart';
+import 'screens/home_feed_screen.dart';
+import 'screens/events_screen.dart';
+import 'screens/explore_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/notifications_screen.dart';
+import 'widgets/non_coder_config_editor.dart';
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => MockDataService(),
+      child: const StudentHubApp(),
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class StudentHubApp extends StatelessWidget {
+  const StudentHubApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+    return Consumer<MockDataService>(
+      builder: (context, dataService, child) {
+        if (dataService.isLoading) {
+          return const MaterialApp(
+            home: Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        return MaterialApp(
+          title: dataService.config.appName,
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme(dataService.config),
+          darkTheme: AppTheme.darkTheme(dataService.config),
+          themeMode: ThemeMode.light,
+          home: const MainNavigationContainer(),
+        );
+      },
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class MainNavigationContainer extends StatefulWidget {
+  const MainNavigationContainer({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<MainNavigationContainer> createState() => _MainNavigationContainerState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _MainNavigationContainerState extends State<MainNavigationContainer> {
+  int currentIndex = 0;
+  bool isAuthenticated = true;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  final List<Widget> screens = const [
+    HomeFeedScreen(),
+    EventsScreen(),
+    ExploreScreen(),
+    ProfileScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    if (!isAuthenticated) {
+      return AuthScreen(
+        onLoginComplete: () => setState(() => isAuthenticated = true),
+      );
+    }
+
+    final dataService = Provider.of<MockDataService>(context);
+    final cfg = dataService.config;
+    final unreadNotifs = dataService.notifications.where((n) => !n.isRead).length;
+
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
+        titleSpacing: 16,
+        title: Row(
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: cfg.primaryColor,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.school, size: 18, color: Colors.white),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  cfg.appName,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  cfg.collegeShortCode,
+                  style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600),
+                ),
+              ],
             ),
           ],
         ),
+        actions: [
+          // Interactive Role Simulator Pill (Allows user to test all 4 roles instantly)
+          PopupMenuButton<UserRole>(
+            tooltip: 'Switch Active View Role',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                color: cfg.primaryColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cfg.primaryColor.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _getRoleIcon(dataService.activeRole),
+                    size: 14,
+                    color: cfg.primaryColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    dataService.activeRole.displayName,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: cfg.primaryColor,
+                    ),
+                  ),
+                  const Icon(Icons.arrow_drop_down, size: 16),
+                ],
+              ),
+            ),
+            onSelected: (UserRole role) {
+              dataService.switchActiveRole(role);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Switched view perspective to ${role.displayName}'),
+                  duration: const Duration(seconds: 1),
+                ),
+              );
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: UserRole.student,
+                child: Row(
+                  children: [
+                    Icon(Icons.school, size: 18, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('View as Student'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: UserRole.eventHost,
+                child: Row(
+                  children: [
+                    Icon(Icons.event, size: 18, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('View as Event Host'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: UserRole.faculty,
+                child: Row(
+                  children: [
+                    Icon(Icons.menu_book, size: 18, color: Colors.teal),
+                    SizedBox(width: 8),
+                    Text('View as Faculty'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: UserRole.admin,
+                child: Row(
+                  children: [
+                    Icon(Icons.verified_user, size: 18, color: Colors.purple),
+                    SizedBox(width: 8),
+                    Text('View as Admin'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Non-Coder Config Manager Button
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Non-Coder Config Manager',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (c) => const NonCoderConfigEditor()),
+              );
+            },
+          ),
+
+          // Notification Bell with Badge
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                tooltip: 'Notifications',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (c) => const NotificationsScreen()),
+                  );
+                },
+              ),
+              if (unreadNotifs > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      '$unreadNotifs',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+
+      // Body Navigation Screen
+      body: IndexedStack(
+        index: currentIndex,
+        children: screens,
+      ),
+
+      // Bottom Navigation Bar (PRD Section 8: Home, Events, Explore, Profile)
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: currentIndex,
+        onTap: (idx) => setState(() => currentIndex = idx),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.feed_outlined),
+            activeIcon: Icon(Icons.feed),
+            label: 'Home Feed',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.event_outlined),
+            activeIcon: Icon(Icons.event),
+            label: 'Events',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.explore_outlined),
+            activeIcon: Icon(Icons.explore),
+            label: 'Explore',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
       ),
     );
+  }
+
+  IconData _getRoleIcon(UserRole role) {
+    switch (role) {
+      case UserRole.student:
+        return Icons.school;
+      case UserRole.eventHost:
+        return Icons.event;
+      case UserRole.faculty:
+        return Icons.menu_book;
+      case UserRole.admin:
+        return Icons.verified_user;
+    }
   }
 }

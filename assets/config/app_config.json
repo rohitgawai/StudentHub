@@ -1,0 +1,44 @@
+{
+  "appName": "StudentHub",
+  "tagline": "Digital Campus Platform",
+  "collegeName": "St. Andrew Institute of Technology & Science",
+  "collegeShortCode": "SAITS",
+  "primaryColorHex": "#1E88E5",
+  "eventColorHex": "#FB8C00",
+  "urgentColorHex": "#E53935",
+  "achievementColorHex": "#8E24AA",
+  "successColorHex": "#4CAF50",
+  "generalColorHex": "#37474F",
+  "academicColorHex": "#0288D1",
+  "contactEmail": "support@studenthub.edu",
+  "supportPhone": "+91 98765 43210",
+  "enableUrgentBanner": true,
+  "announcementBannerText": "🔥 Autumn Semester 2026 Registration Open! Check Academic Pulse for details.",
+  "departments": [
+    "Computer Science & Engineering",
+    "Information Technology",
+    "Electronics & Communication",
+    "Mechanical Engineering",
+    "Civil Engineering",
+    "Management Studies"
+  ],
+  "academicYears": [
+    "First Year",
+    "Second Year",
+    "Third Year",
+    "Final Year",
+    "Postgraduate"
+  ],
+  "postCategories": [
+    "Announcement",
+    "Event",
+    "Academic",
+    "Workshop",
+    "Achievement",
+    "Gallery",
+    "Placement",
+    "Urgent"
+  ],
+  "allowRoleSelfApplication": true,
+  "enablePdfAttachments": true
+}
