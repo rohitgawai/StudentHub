@@ -1,11 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:student_hub/config/app_config.dart';
 import 'package:student_hub/models/user_model.dart';
 import 'package:student_hub/services/mock_data_service.dart';
 
 Future<MockDataService> _createService(WidgetTester tester) async {
-  final service = MockDataService();
+  final service = MockDataService(initialConfig: AppConfig.defaultConfig());
   while (service.isLoading) {
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump();
   }
   return service;
 }

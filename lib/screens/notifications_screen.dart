@@ -78,10 +78,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       final n = filtered[index];
                       return Card(
                         margin: const EdgeInsets.only(bottom: 10),
-                        color: n.isRead ? Theme.of(context).cardColor : Colors.blue.shade50.withOpacity(0.4),
+                        color: n.isRead ? Theme.of(context).cardColor : Colors.blue.shade50.withValues(alpha: 0.4),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: _getCatColor(n.category).withOpacity(0.2),
+                            backgroundColor: _getCatColor(n.category).withValues(alpha: 0.2),
                             child: Icon(_getCatIcon(n.category), color: _getCatColor(n.category)),
                           ),
                           title: Text(

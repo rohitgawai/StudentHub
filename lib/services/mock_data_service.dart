@@ -28,18 +28,17 @@ class MockDataService extends ChangeNotifier {
   List<ActiveAnnouncement> get activeAnnouncements =>
       List.unmodifiable(_announcements.where((a) => !a.isExpired));
 
-  MockDataService() {
-    _initData();
+  MockDataService({AppConfig? initialConfig}) {
+    _initData(initialConfig);
   }
-
   @override
   void dispose() {
     _expiryTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _initData() async {
-    config = await AppConfig.loadFromAssets();
+  Future<void> _initData(AppConfig? initialConfig) async {
+    config = initialConfig ?? await AppConfig.loadFromAssets();
 
     // Default Current User (Student with Event Host capability or standard student)
     currentUser = UserModel(

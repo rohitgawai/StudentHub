@@ -87,7 +87,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 final dept = cfg.departments[index];
                 return Card(
                   elevation: 0,
-                  color: cfg.primaryColor.withOpacity(0.08),
+                  color: cfg.primaryColor.withValues(alpha: 0.08),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(16),
                     onTap: () {

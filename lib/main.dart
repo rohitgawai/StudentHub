@@ -99,7 +99,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: cfg.primaryColor.withOpacity(0.3),
+                    color: cfg.primaryColor.withValues(alpha: 0.3),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),

@@ -78,7 +78,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     const SizedBox(height: 8),
                     Chip(
-                      backgroundColor: cfg.primaryColor.withOpacity(0.1),
+                      backgroundColor: cfg.primaryColor.withValues(alpha: 0.1),
                       label: Text(
                         cfg.collegeName,
                         style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: cfg.primaryColor),
@@ -141,7 +141,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 12),
 
                       DropdownButtonFormField<String>(
-                        value: selectedDepartment,
+                        initialValue: selectedDepartment,
                         decoration: const InputDecoration(
                           labelText: 'Department',
                           border: OutlineInputBorder(),
@@ -154,7 +154,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 12),
 
                       DropdownButtonFormField<String>(
-                        value: selectedYear,
+                        initialValue: selectedYear,
                         decoration: const InputDecoration(
                           labelText: 'Academic Year',
                           border: OutlineInputBorder(),

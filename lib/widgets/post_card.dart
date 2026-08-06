@@ -127,7 +127,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -177,7 +177,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                     children: [
                       CircleAvatar(
                         radius: 18,
-                        backgroundColor: categoryColor.withOpacity(0.15),
+                        backgroundColor: categoryColor.withValues(alpha: 0.15),
                         child: Text(
                           post.authorName.substring(0, 1).toUpperCase(),
                           style: TextStyle(
@@ -221,9 +221,9 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: categoryColor.withOpacity(0.12),
+                          color: categoryColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: categoryColor.withOpacity(0.3)),
+                          border: Border.all(color: categoryColor.withValues(alpha: 0.3)),
                         ),
                         child: Text(
                           post.category.displayName.toUpperCase(),
@@ -289,10 +289,10 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: dataService.config.eventColor.withOpacity(0.08),
+                        color: dataService.config.eventColor.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: dataService.config.eventColor.withOpacity(0.25),
+                          color: dataService.config.eventColor.withValues(alpha: 0.25),
                         ),
                       ),
                       child: Column(
@@ -310,7 +310,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: (post.isRegistrationFull ? Colors.red : Colors.green).withOpacity(0.15),
+                                    color: (post.isRegistrationFull ? Colors.red : Colors.green).withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(

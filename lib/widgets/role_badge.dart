@@ -34,7 +34,7 @@ class RoleBadge extends StatelessWidget {
         icon = Icons.menu_book;
         break;
       case UserRole.admin:
-        bg = const Color(0xFFAF52DE).withOpacity(0.15);
+        bg = const Color(0xFFAF52DE).withValues(alpha: 0.15);
         text = const Color(0xFFAF52DE);
         icon = Icons.verified_user;
         break;
@@ -70,7 +70,7 @@ class RoleBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: text.withOpacity(0.3), width: 0.8),
+        border: Border.all(color: text.withValues(alpha: 0.3), width: 0.8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

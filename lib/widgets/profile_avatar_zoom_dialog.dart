@@ -63,7 +63,7 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.black.withOpacity(0.92),
+      backgroundColor: Colors.black.withValues(alpha: 0.92),
       insetPadding: const EdgeInsets.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,

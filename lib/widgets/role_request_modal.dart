@@ -187,7 +187,7 @@ class _RoleRequestModalState extends State<RoleRequestModal> {
                           return ChoiceChip(
                             label: Text(entry.key),
                             selected: isSelected,
-                            selectedColor: dataService.config.primaryColor.withOpacity(0.2),
+                            selectedColor: dataService.config.primaryColor.withValues(alpha: 0.2),
                             onSelected: (_) {
                               setState(() => durationDays = entry.value);
                             },

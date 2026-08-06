@@ -175,9 +175,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: cfg.primaryColor.withOpacity(0.08),
+                      color: cfg.primaryColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: cfg.primaryColor.withOpacity(0.25)),
+                      border: Border.all(color: cfg.primaryColor.withValues(alpha: 0.25)),
                     ),
                     child: Row(
                       children: [
@@ -409,7 +409,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
-        color: (isExpiringSoon ? Colors.orange : Colors.green).withOpacity(0.15),
+        color: (isExpiringSoon ? Colors.orange : Colors.green).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
@@ -447,7 +447,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(

@@ -147,7 +147,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 4,
                       ),
                     ],
@@ -180,7 +180,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   child: FilterChip(
                     label: Text(cat),
                     selected: isSelected,
-                    selectedColor: cfg.primaryColor.withOpacity(0.2),
+                    selectedColor: cfg.primaryColor.withValues(alpha: 0.2),
                     checkmarkColor: cfg.primaryColor,
                     labelStyle: TextStyle(
                       fontSize: 12,
