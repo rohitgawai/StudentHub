@@ -6,6 +6,8 @@ import '../services/mock_data_service.dart';
 import '../widgets/role_badge.dart';
 import '../widgets/post_card.dart';
 import '../widgets/role_request_modal.dart';
+import '../widgets/profile_avatar_zoom_dialog.dart';
+import '../widgets/edit_profile_modal.dart';
 import 'dashboards/admin_dashboard_screen.dart';
 import 'dashboards/faculty_dashboard_screen.dart';
 import 'dashboards/event_host_dashboard_screen.dart';
@@ -42,13 +44,40 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final registeredEvents = dataService.posts.where((p) => user.registeredEventIds.contains(p.id)).toList();
     final myRoleRequests = dataService.roleRequests.where((r) => r.userId == user.id).toList();
 
-    // Filter approved roles for dropdown (excluding Admin as requested)
+    // Filter approved roles for dropdown (excluding Admin)
     final allowedSwitcherRoles = user.roles.where((r) => r != UserRole.admin).toList();
     final bool canSwitchRoles = allowedSwitcherRoles.length > 1;
+
+    // Requirement 5: For Faculty role, filter out "Student" from assigned roles display
+    final displayAssignedRoles = user.roles.where((r) {
+      if (r == UserRole.admin) return false;
+      if (user.hasRole(UserRole.faculty) && r == UserRole.student) return false;
+      return true;
+    }).toList();
+
+    // Requirement 7: Apply for role button visibility & expiration logic
+    final bool hasHostRole = user.hasRole(UserRole.eventHost);
+    final bool hasFacultyRole = user.hasRole(UserRole.faculty);
+    final bool hasBothElevatedRoles = hasHostRole && hasFacultyRole;
+
+    // Check if host/faculty role expired notification is present
+    final bool showRoleExpiredNotice = dataService.notifications.any((n) => n.title.contains('Access Expired'));
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Profile'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Edit Profile Details',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => const EditProfileModal(),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -60,10 +89,35 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               children: [
                 Row(
                   children: [
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundImage: NetworkImage(user.avatarUrl),
-                      child: const Icon(Icons.person, size: 36),
+                    // Requirement 3: Tap profile picture to zoom like Instagram with edit option
+                    GestureDetector(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => ProfileAvatarZoomDialog(avatarUrl: user.avatarUrl),
+                        );
+                      },
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 36,
+                            backgroundImage: user.avatarUrl.isNotEmpty ? NetworkImage(user.avatarUrl) : null,
+                            child: user.avatarUrl.isEmpty ? const Icon(Icons.person, size: 36) : null,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Colors.blue,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.zoom_in, size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -72,11 +126,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         children: [
                           Row(
                             children: [
-                              Text(
-                                user.name,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                              Flexible(
+                                child: Text(
+                                  user.name,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               if (user.isVerified) ...[
@@ -88,7 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           const SizedBox(height: 2),
                           Text(
                             user.studentOrEmployeeId,
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -98,11 +155,22 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         ],
                       ),
                     ),
+                    // Requirement 4: Edit Details button over profile tab
+                    IconButton(
+                      icon: const Icon(Icons.edit_note, color: Colors.blue),
+                      tooltip: 'Edit Profile Details',
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => const EditProfileModal(),
+                        );
+                      },
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
 
-                // Active View Role Switcher Dropdown (Only appears in Profile header IF user has approved Host/Faculty roles)
+                // Requirement 2 & 1: Active Perspective dropdown menu change (compact & bounded layout)
                 if (canSwitchRoles) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -112,45 +180,44 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       border: Border.all(color: cfg.primaryColor.withOpacity(0.25)),
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.swap_horiz, size: 18, color: Colors.blueGrey),
-                            const SizedBox(width: 6),
-                            const Text(
-                              'Active Perspective: ',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey),
-                            ),
-                          ],
+                        const Icon(Icons.swap_horiz, size: 18, color: Colors.blueGrey),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Active Perspective: ',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey),
                         ),
-                        DropdownButton<UserRole>(
-                          value: allowedSwitcherRoles.contains(dataService.activeRole)
-                              ? dataService.activeRole
-                              : allowedSwitcherRoles.first,
-                          isDense: true,
-                          underline: const SizedBox(),
-                          onChanged: (UserRole? newRole) {
-                            if (newRole != null) {
-                              dataService.switchActiveRole(newRole);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Switched view perspective to ${newRole.displayName}'),
-                                  duration: const Duration(seconds: 1),
-                                ),
-                              );
-                            }
-                          },
-                          items: allowedSwitcherRoles.map((role) {
-                            return DropdownMenuItem<UserRole>(
-                              value: role,
-                              child: Row(
-                                children: [
-                                  RoleBadge(role: role, isCompact: true),
-                                ],
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<UserRole>(
+                                value: allowedSwitcherRoles.contains(dataService.activeRole)
+                                    ? dataService.activeRole
+                                    : allowedSwitcherRoles.first,
+                                isDense: true,
+                                menuMaxHeight: 220,
+                                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+                                onChanged: (UserRole? newRole) {
+                                  if (newRole != null) {
+                                    dataService.switchActiveRole(newRole);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Switched view perspective to ${newRole.displayName}'),
+                                        duration: const Duration(seconds: 1),
+                                      ),
+                                    );
+                                  }
+                                },
+                                items: allowedSwitcherRoles.map((role) {
+                                  return DropdownMenuItem<UserRole>(
+                                    value: role,
+                                    child: RoleBadge(role: role, isCompact: true),
+                                  );
+                                }).toList(),
                               ),
-                            );
-                          }).toList(),
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -158,7 +225,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   const SizedBox(height: 12),
                 ],
 
-                // Roles Badges Row
+                // Requirement 5: Roles Badges Row (Student hidden when Faculty is active)
                 Row(
                   children: [
                     const Text('Assigned Roles: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -167,8 +234,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       child: Wrap(
                         spacing: 6,
                         runSpacing: 6,
-                        children: user.roles
-                            .where((r) => r != UserRole.admin)
+                        children: displayAssignedRoles
                             .map((r) => Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -188,8 +254,34 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
                 const SizedBox(height: 14),
 
-                // Apply for Role Button
-                if (cfg.allowRoleSelfApplication)
+                // Requirement 7: Role Expiration Warning Notice if applicable
+                if (showRoleExpiredNotice) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: const [
+                        Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '⚠️ Your temporary role has expired! You can re-apply below.',
+                            style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Requirement 7: Apply for Role Button (Hidden if user holds both elevated roles; re-appears if role expired)
+                if (cfg.allowRoleSelfApplication && !hasBothElevatedRoles)
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -200,7 +292,12 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         );
                       },
                       icon: const Icon(Icons.add_moderator, size: 16),
-                      label: const Text('Apply for Event Host / Faculty Role', style: TextStyle(fontSize: 12)),
+                      label: Text(
+                        showRoleExpiredNotice
+                            ? 'Re-Apply for Event Host / Faculty Role'
+                            : 'Apply for Event Host / Faculty Role',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
 

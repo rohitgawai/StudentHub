@@ -5,6 +5,7 @@ import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../models/role_request_model.dart';
 import '../models/notification_model.dart';
+import '../models/active_announcement_model.dart';
 
 class MockDataService extends ChangeNotifier {
   late AppConfig config;
@@ -14,6 +15,7 @@ class MockDataService extends ChangeNotifier {
   List<PostModel> _posts = [];
   List<RoleRequestModel> _roleRequests = [];
   List<NotificationModel> _notifications = [];
+  List<ActiveAnnouncement> _announcements = [];
 
   bool _isLoading = true;
   bool get isLoading => _isLoading;
@@ -23,6 +25,8 @@ class MockDataService extends ChangeNotifier {
   List<PostModel> get posts => List.unmodifiable(_posts);
   List<RoleRequestModel> get roleRequests => List.unmodifiable(_roleRequests);
   List<NotificationModel> get notifications => List.unmodifiable(_notifications);
+  List<ActiveAnnouncement> get activeAnnouncements =>
+      List.unmodifiable(_announcements.where((a) => !a.isExpired));
 
   MockDataService() {
     _initData();
@@ -58,10 +62,14 @@ class MockDataService extends ChangeNotifier {
     _generateMockPosts();
     _generateMockRoleRequests();
     _generateMockNotifications();
+    _seedDefaultAnnouncement();
 
     checkForExpiredRoles();
 
-    _expiryTimer = Timer.periodic(const Duration(minutes: 1), (_) => checkForExpiredRoles());
+    _expiryTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      checkForExpiredRoles();
+      _clearExpiredAnnouncements();
+    });
 
     _isLoading = false;
     notifyListeners();
@@ -190,9 +198,130 @@ class MockDataService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updatePost(PostModel updatedPost) {
+    final idx = _posts.indexWhere((p) => p.id == updatedPost.id);
+    if (idx != -1) {
+      _posts[idx] = updatedPost;
+      notifyListeners();
+    }
+  }
+
   void deletePost(String postId) {
     _posts.removeWhere((p) => p.id == postId);
     notifyListeners();
+  }
+
+  Future<void> refreshFeed() async {
+    await Future.delayed(const Duration(milliseconds: 600));
+    notifyListeners();
+  }
+
+  void updateUserProfile({
+    required String name,
+    required String department,
+    required String year,
+    String? studentOrEmployeeId,
+    String? avatarUrl,
+  }) {
+    bool hasChanged = currentUser.hasChangedUniqueId;
+    String finalId = currentUser.studentOrEmployeeId;
+
+    if (studentOrEmployeeId != null &&
+        studentOrEmployeeId.trim().isNotEmpty &&
+        studentOrEmployeeId.trim() != currentUser.studentOrEmployeeId &&
+        !hasChanged) {
+      finalId = studentOrEmployeeId.trim();
+      hasChanged = true;
+    }
+
+    currentUser = currentUser.copyWith(
+      name: name.trim(),
+      department: department,
+      year: year,
+      studentOrEmployeeId: finalId,
+      hasChangedUniqueId: hasChanged,
+      avatarUrl: (avatarUrl != null && avatarUrl.trim().isNotEmpty) ? avatarUrl.trim() : currentUser.avatarUrl,
+    );
+
+    notifyListeners();
+  }
+
+  // --- Header Announcement (Time-limited, one per department) ---
+  ActiveAnnouncement? activeAnnouncementFor(String userDepartment) {
+    final active = activeAnnouncements;
+    if (active.isEmpty) return null;
+
+    // Prefer an announcement targeting the user's own department.
+    final deptMatches = active.where((a) => a.department == userDepartment).toList();
+    if (deptMatches.isNotEmpty) {
+      deptMatches.sort((a, b) => b.expiresAt.compareTo(a.expiresAt));
+      return deptMatches.first;
+    }
+
+    // Fall back to a campus-wide (global) announcement.
+    final global = active.where((a) => a.department.isEmpty).toList();
+    if (global.isNotEmpty) {
+      global.sort((a, b) => b.expiresAt.compareTo(a.expiresAt));
+      return global.first;
+    }
+
+    return null;
+  }
+
+  Duration? canPostAnnouncement(String department) {
+    // Blocking is per-department only; the campus-wide seed does not lock slots.
+    final matches = activeAnnouncements.where((a) => a.department == department).toList();
+    if (matches.isEmpty) return null;
+    return matches.first.remaining;
+  }
+
+  bool postAnnouncement({
+    required String title,
+    required String description,
+    required String department,
+    required Duration duration,
+    required String authorName,
+    required UserRole authorRole,
+  }) {
+    if (canPostAnnouncement(department) != null) return false;
+
+    _announcements.removeWhere((a) => a.department == department);
+    _announcements.insert(0, ActiveAnnouncement(
+      id: 'ann_${DateTime.now().millisecondsSinceEpoch}',
+      title: title.trim(),
+      description: description.trim(),
+      authorName: authorName,
+      authorRole: authorRole,
+      department: department,
+      postedAt: DateTime.now(),
+      expiresAt: DateTime.now().add(duration),
+    ));
+
+    notifyListeners();
+    return true;
+  }
+
+  void _clearExpiredAnnouncements() {
+    final before = _announcements.length;
+    _announcements.removeWhere((a) => a.isExpired);
+    if (_announcements.length != before) notifyListeners();
+  }
+
+  void _seedDefaultAnnouncement() {
+    final text = config.announcementBannerText.trim();
+    if (text.isEmpty) return;
+    _announcements = [
+      ActiveAnnouncement(
+        id: 'ann_default',
+        title: text,
+        description: '',
+        authorName: 'StudentHub Admin',
+        authorRole: UserRole.admin,
+        department: '',
+        postedAt: DateTime.now().subtract(const Duration(hours: 1)),
+        expiresAt: DateTime.now().add(const Duration(days: 7)),
+      ),
+    ];
   }
 
   // --- Role Request Actions ---
@@ -247,6 +376,9 @@ class MockDataService extends ChangeNotifier {
         Map<UserRole, DateTime> updatedExpirations = Map.from(currentUser.roleExpirations);
         if (!updatedRoles.contains(req.requestedRole)) {
           updatedRoles.add(req.requestedRole);
+          if (req.requestedRole == UserRole.faculty) {
+            updatedRoles.remove(UserRole.student);
+          }
           if (req.isLimitedAccess && req.expiresAt != null) {
             updatedExpirations[req.requestedRole] = req.expiresAt!;
           }

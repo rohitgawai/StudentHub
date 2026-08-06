@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
+import 'custom_dropdown.dart';
+import 'image_picker_field.dart';
+import 'pdf_upload_field.dart';
 
 class CreatePostModal extends StatefulWidget {
   const CreatePostModal({super.key});
@@ -14,14 +17,17 @@ class _CreatePostModalState extends State<CreatePostModal> {
   final _formKey = GlobalKey<FormState>();
   final titleController = TextEditingController();
   final descController = TextEditingController();
-  final imageUrlController = TextEditingController();
 
   PostCategory category = PostCategory.announcement;
   late String department;
   String? targetYear;
+  String? selectedImageUrl;
   bool isUrgent = false;
   bool isPinned = false;
   bool attachPdfMock = false;
+  int announcementWeeks = 1;
+
+  List<PostAttachment> attachedPdfs = [];
 
   @override
   void initState() {
@@ -34,13 +40,79 @@ class _CreatePostModalState extends State<CreatePostModal> {
   void dispose() {
     titleController.dispose();
     descController.dispose();
-    imageUrlController.dispose();
     super.dispose();
+  }
+
+  void _publishUrgentAnnouncement() {
+    final dataService = Provider.of<MockDataService>(context, listen: false);
+
+    final wait = dataService.canPostAnnouncement(department);
+    if (wait != null) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Announcement Already Active 📢'),
+          content: Text(
+            'An announcement for $department is already posted on the header. '
+            'It expires in ${_formatWait(wait)}. '
+            'Please wait and post a new one after that.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final published = dataService.postAnnouncement(
+      title: titleController.text.trim(),
+      description: descController.text.trim(),
+      department: department,
+      duration: Duration(days: announcementWeeks * 7),
+      authorName: dataService.currentUser.name,
+      authorRole: dataService.activeRole,
+    );
+
+    if (!published) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Announcement already active for this department. Please wait for it to expire.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('📢 Urgent announcement live on header for ${announcementWeeks == 1 ? '1 week' : '2 weeks'}!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  String _formatWait(Duration d) {
+    if (d.inDays >= 1) {
+      return d.inDays == 1 ? '1 day' : '${d.inDays} days';
+    }
+    if (d.inHours >= 1) {
+      return d.inHours == 1 ? '1 hour' : '${d.inHours} hours';
+    }
+    return d.inMinutes <= 1 ? 'a minute' : '${d.inMinutes} minutes';
   }
 
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
+
+    final allowedCategories = PostCategory.values.where((c) => c != PostCategory.event).toList();
+    final yearOptions = ['All Academic Years', ...dataService.config.academicYears];
 
     return Scaffold(
       appBar: AppBar(
@@ -57,32 +129,41 @@ class _CreatePostModalState extends State<CreatePostModal> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Category Selector
-            DropdownButtonFormField<PostCategory>(
+            // Requirement 1: Compact Custom Dropdown for Category
+            CustomDropdownField<PostCategory>(
               value: category,
-              decoration: const InputDecoration(
-                labelText: 'Post Category',
-                border: OutlineInputBorder(),
-              ),
-              items: PostCategory.values
-                  .where((c) => c != PostCategory.event)
-                  .map((c) => DropdownMenuItem(
-                        value: c,
-                        child: Text(c.displayName),
-                      ))
-                  .toList(),
+              labelText: 'Post Category',
+              prefixIcon: Icons.category_outlined,
+              items: allowedCategories,
+              itemLabel: (c) => c.displayName,
               onChanged: (val) {
                 if (val != null) setState(() => category = val);
               },
             ),
             const SizedBox(height: 12),
 
+            // Announcement Validity (only for header announcements)
+            if (category == PostCategory.urgentAnnouncement) ...[
+              CustomDropdownField<int>(
+                value: announcementWeeks,
+                labelText: 'Announcement Validity',
+                prefixIcon: Icons.timer_outlined,
+                items: const [1, 2],
+                itemLabel: (w) => '$w Week${w > 1 ? 's' : ''}',
+                onChanged: (val) {
+                  if (val != null) setState(() => announcementWeeks = val);
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+
             // Title
             TextFormField(
               controller: titleController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Post Title *',
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.title_outlined),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               validator: (v) => v == null || v.trim().isEmpty ? 'Enter post title' : null,
             ),
@@ -92,79 +173,81 @@ class _CreatePostModalState extends State<CreatePostModal> {
             TextFormField(
               controller: descController,
               maxLines: 4,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Detailed Description *',
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.description_outlined),
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               validator: (v) => v == null || v.trim().isEmpty ? 'Enter description' : null,
             ),
             const SizedBox(height: 12),
 
-            // Department
-            DropdownButtonFormField<String>(
+            // Target Department Custom Dropdown
+            CustomDropdownField<String>(
               value: department,
-              decoration: const InputDecoration(
-                labelText: 'Target Department',
-                border: OutlineInputBorder(),
-              ),
-              items: dataService.config.departments
-                  .map((d) => DropdownMenuItem(value: d, child: Text(d)))
-                  .toList(),
+              labelText: 'Target Department',
+              prefixIcon: Icons.school_outlined,
+              items: dataService.config.departments,
+              itemLabel: (d) => d,
               onChanged: (val) {
                 if (val != null) setState(() => department = val);
               },
             ),
             const SizedBox(height: 12),
 
-            // Target Year
-            DropdownButtonFormField<String?>(
-              value: targetYear,
-              decoration: const InputDecoration(
-                labelText: 'Target Academic Year (Optional)',
-                border: OutlineInputBorder(),
-                hintText: 'All Academic Years',
+            // Target Academic Year Custom Dropdown
+            CustomDropdownField<String>(
+              value: targetYear ?? 'All Academic Years',
+              labelText: 'Target Academic Year (Optional)',
+              prefixIcon: Icons.calendar_month_outlined,
+              items: yearOptions,
+              itemLabel: (y) => y,
+              onChanged: (val) {
+                setState(() {
+                  targetYear = (val == 'All Academic Years') ? null : val;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
+
+            // Requirement 10: Image Upload Picker (Replaces raw URL field)
+            ImagePickerField(
+              initialUrl: selectedImageUrl,
+              onImageSelected: (url) {
+                setState(() => selectedImageUrl = url);
+              },
+            ),
+            const SizedBox(height: 14),
+
+            // Toggles & PDF Attachment (Requirement 11)
+            if (category != PostCategory.urgentAnnouncement) ...[
+              SwitchListTile(
+                title: const Text('Mark as Urgent Post 🔥', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text('Will be prioritized at top of student feeds', style: TextStyle(fontSize: 11)),
+                value: isUrgent,
+                onChanged: (val) => setState(() => isUrgent = val),
               ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('All Academic Years'),
+              SwitchListTile(
+                title: const Text('Pin to Department Top 📌', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                value: isPinned,
+                onChanged: (val) => setState(() => isPinned = val),
+              ),
+              // Requirement 11: Switch yes button triggers PDF Upload options
+              SwitchListTile(
+                title: const Text('Attach Official PDF Document 📄', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text('Upload/attach official PDF notice, syllabus, or timetable', style: TextStyle(fontSize: 11)),
+                value: attachPdfMock,
+                onChanged: (val) => setState(() => attachPdfMock = val),
+              ),
+              if (attachPdfMock) ...[
+                PdfUploadField(
+                  onAttachmentChanged: (attachments) {
+                    attachedPdfs = attachments;
+                  },
                 ),
-                ...dataService.config.academicYears
-                    .map((y) => DropdownMenuItem<String?>(value: y, child: Text(y))),
               ],
-              onChanged: (val) => setState(() => targetYear = val),
-            ),
-            const SizedBox(height: 12),
-
-            // Image URL (optional)
-            TextFormField(
-              controller: imageUrlController,
-              decoration: const InputDecoration(
-                labelText: 'Image URL (Optional)',
-                hintText: 'https://images.unsplash.com/...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Toggles
-            SwitchListTile(
-              title: const Text('Mark as Urgent Post 🔥'),
-              subtitle: const Text('Will be prioritized at top of student feeds'),
-              value: isUrgent,
-              onChanged: (val) => setState(() => isUrgent = val),
-            ),
-            SwitchListTile(
-              title: const Text('Pin to Department Top 📌'),
-              value: isPinned,
-              onChanged: (val) => setState(() => isPinned = val),
-            ),
-            SwitchListTile(
-              title: const Text('Attach Official PDF Document 📄'),
-              subtitle: const Text('Simulates embedding downloadable PDF syllabus/notice'),
-              value: attachPdfMock,
-              onChanged: (val) => setState(() => attachPdfMock = val),
-            ),
+            ],
 
             const SizedBox(height: 24),
             ElevatedButton(
@@ -172,9 +255,15 @@ class _CreatePostModalState extends State<CreatePostModal> {
                 padding: const EdgeInsets.all(16),
                 backgroundColor: dataService.config.primaryColor,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
                 if (!_formKey.currentState!.validate()) return;
+
+                if (category == PostCategory.urgentAnnouncement) {
+                  _publishUrgentAnnouncement();
+                  return;
+                }
 
                 final newPost = PostModel(
                   id: 'pst_${DateTime.now().millisecondsSinceEpoch}',
@@ -187,21 +276,10 @@ class _CreatePostModalState extends State<CreatePostModal> {
                   authorRole: dataService.activeRole,
                   authorId: dataService.currentUser.id,
                   timestamp: DateTime.now(),
-                  imageUrl: imageUrlController.text.trim().isNotEmpty
-                      ? imageUrlController.text.trim()
-                      : null,
+                  imageUrl: selectedImageUrl,
                   isUrgent: isUrgent,
                   isPinned: isPinned,
-                  attachments: attachPdfMock
-                      ? [
-                          PostAttachment(
-                            title: 'Official_Notice_${titleController.text.trim().replaceAll(' ', '_')}.pdf',
-                            fileType: 'pdf',
-                            url: 'notice.pdf',
-                            fileSize: '1.2 MB',
-                          )
-                        ]
-                      : [],
+                  attachments: attachPdfMock ? attachedPdfs : [],
                 );
 
                 dataService.addPost(newPost);

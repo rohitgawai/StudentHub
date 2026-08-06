@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
+import 'custom_dropdown.dart';
+import 'image_picker_field.dart';
 
 class CreateEventModal extends StatefulWidget {
   const CreateEventModal({super.key});
@@ -16,7 +18,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
   final descController = TextEditingController();
   final venueController = TextEditingController();
   final maxSeatsController = TextEditingController(text: '100');
-  final imageUrlController = TextEditingController();
+  String? selectedImageUrl = 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=800';
 
   late String department;
   DateTime eventDate = DateTime.now().add(const Duration(days: 3));
@@ -35,7 +37,6 @@ class _CreateEventModalState extends State<CreateEventModal> {
     descController.dispose();
     venueController.dispose();
     maxSeatsController.dispose();
-    imageUrlController.dispose();
     super.dispose();
   }
 
@@ -60,9 +61,10 @@ class _CreateEventModalState extends State<CreateEventModal> {
           children: [
             TextFormField(
               controller: titleController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Event Title *',
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.event_note),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               validator: (v) => v == null || v.trim().isEmpty ? 'Enter event title' : null,
             ),
@@ -71,9 +73,11 @@ class _CreateEventModalState extends State<CreateEventModal> {
             TextFormField(
               controller: descController,
               maxLines: 3,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Event Description & Agenda *',
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.description_outlined),
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               validator: (v) => v == null || v.trim().isEmpty ? 'Enter event details' : null,
             ),
@@ -81,10 +85,11 @@ class _CreateEventModalState extends State<CreateEventModal> {
 
             TextFormField(
               controller: venueController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Venue / Hall / Room *',
                 hintText: 'e.g. Main Auditorium / Lab 102',
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.location_on_outlined),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               validator: (v) => v == null || v.trim().isEmpty ? 'Enter venue' : null,
             ),
@@ -96,23 +101,20 @@ class _CreateEventModalState extends State<CreateEventModal> {
                   child: TextFormField(
                     controller: maxSeatsController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Max Capacity',
-                      border: OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.groups_outlined),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: DropdownButtonFormField<String>(
+                  child: CustomDropdownField<String>(
                     value: department,
-                    decoration: const InputDecoration(
-                      labelText: 'Host Dept',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: dataService.config.departments
-                        .map((d) => DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis)))
-                        .toList(),
+                    labelText: 'Host Dept',
+                    items: dataService.config.departments,
+                    itemLabel: (d) => d,
                     onChanged: (val) {
                       if (val != null) setState(() => department = val);
                     },
@@ -120,26 +122,26 @@ class _CreateEventModalState extends State<CreateEventModal> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
-            TextFormField(
-              controller: imageUrlController,
-              decoration: const InputDecoration(
-                labelText: 'Event Banner Image URL',
-                hintText: 'https://images.unsplash.com/...',
-                border: OutlineInputBorder(),
-              ),
+            // Requirement 10: Image Upload / Selector
+            ImagePickerField(
+              label: 'Event Cover / Banner Image (Optional)',
+              initialUrl: selectedImageUrl,
+              onImageSelected: (url) {
+                setState(() => selectedImageUrl = url);
+              },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
             // Date Pickers
             ListTile(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade300),
               ),
               leading: const Icon(Icons.event, color: Colors.orange),
-              title: const Text('Event Date & Time'),
+              title: const Text('Event Date & Time', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               subtitle: Text('${eventDate.day}/${eventDate.month}/${eventDate.year} at ${eventDate.hour}:00'),
               trailing: const Icon(Icons.edit_calendar),
               onTap: () async {
@@ -154,15 +156,15 @@ class _CreateEventModalState extends State<CreateEventModal> {
                 }
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
 
             ListTile(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade300),
               ),
               leading: const Icon(Icons.timer, color: Colors.red),
-              title: const Text('Registration Deadline'),
+              title: const Text('Registration Deadline', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               subtitle: Text('${regDeadline.day}/${regDeadline.month}/${regDeadline.year} at 23:59'),
               trailing: const Icon(Icons.edit_calendar),
               onTap: () async {
@@ -184,6 +186,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
                 padding: const EdgeInsets.all(16),
                 backgroundColor: dataService.config.eventColor,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
                 if (!_formKey.currentState!.validate()) return;
@@ -200,9 +203,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
                   authorRole: dataService.activeRole,
                   authorId: dataService.currentUser.id,
                   timestamp: DateTime.now(),
-                  imageUrl: imageUrlController.text.trim().isNotEmpty
-                      ? imageUrlController.text.trim()
-                      : 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80&w=800',
+                  imageUrl: selectedImageUrl ?? 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80&w=800',
                   venue: venueController.text.trim(),
                   eventDate: eventDate,
                   registrationDeadline: regDeadline,

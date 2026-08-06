@@ -9,6 +9,7 @@ enum PostCategory {
   gallery,
   placement,
   urgent,
+  urgentAnnouncement,
 }
 
 extension PostCategoryExtension on PostCategory {
@@ -30,6 +31,8 @@ extension PostCategoryExtension on PostCategory {
         return 'Placement';
       case PostCategory.urgent:
         return 'Urgent';
+      case PostCategory.urgentAnnouncement:
+        return 'Urgent Announcement';
     }
   }
 }

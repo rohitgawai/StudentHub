@@ -34,6 +34,7 @@ class UserModel {
   final List<String> registeredEventIds;
   final bool isVerified;
   final Map<UserRole, DateTime> roleExpirations;
+  final bool hasChangedUniqueId;
 
   UserModel({
     required this.id,
@@ -49,6 +50,7 @@ class UserModel {
     required this.registeredEventIds,
     this.isVerified = true,
     this.roleExpirations = const {},
+    this.hasChangedUniqueId = false,
   });
 
   bool hasRole(UserRole role) => roles.contains(role);
@@ -71,6 +73,7 @@ class UserModel {
     List<String>? registeredEventIds,
     bool? isVerified,
     Map<UserRole, DateTime>? roleExpirations,
+    bool? hasChangedUniqueId,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -86,6 +89,7 @@ class UserModel {
       registeredEventIds: registeredEventIds ?? this.registeredEventIds,
       isVerified: isVerified ?? this.isVerified,
       roleExpirations: roleExpirations ?? this.roleExpirations,
+      hasChangedUniqueId: hasChangedUniqueId ?? this.hasChangedUniqueId,
     );
   }
 }
