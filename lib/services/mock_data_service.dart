@@ -571,8 +571,9 @@ class MockDataService extends ChangeNotifier {
       for (final post in localOnly) {
         _persistPost(post);
       }
-    } catch (_) {
+    } catch (e) {
       // Table missing / offline: keep the in-memory seeds.
+      debugPrint('StudentHub: backend sync failed: $e');
     }
   }
 
@@ -696,8 +697,9 @@ class MockDataService extends ChangeNotifier {
       await client.from('posts').upsert(_rowFromPost(stored), onConflict: 'id');
       final idx = _posts.indexWhere((p) => p.id == post.id);
       if (idx != -1) _posts[idx] = stored;
-    } catch (_) {
+    } catch (e) {
       // Keep local state; the next sync may still push this post.
+      debugPrint('StudentHub: post ${post.id} not persisted: $e');
     }
   }
 
@@ -870,6 +872,7 @@ class MockDataService extends ChangeNotifier {
     }
 
     currentUser = currentUser.copyWith(savedPostIds: updatedSaved);
+    if (postIndex != -1) _persistPost(_posts[postIndex]);
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
@@ -900,6 +903,7 @@ class MockDataService extends ChangeNotifier {
     currentUser = currentUser.copyWith(
       congratulatedPostIds: userCongratulated,
     );
+    _persistPost(_posts[index]);
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
@@ -941,6 +945,7 @@ class MockDataService extends ChangeNotifier {
 
     _posts[index] = post.copyWith(registeredUserIds: regUsers);
     currentUser = currentUser.copyWith(registeredEventIds: userRegEvents);
+    _persistPost(_posts[index]);
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
@@ -948,6 +953,7 @@ class MockDataService extends ChangeNotifier {
 
   void addPost(PostModel newPost) {
     _posts.insert(0, newPost);
+    _invalidateDataCaches();
     notifyListeners();
     _persistPost(newPost);
     _scheduleLocalSave();

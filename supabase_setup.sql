@@ -17,6 +17,8 @@ create table if not exists public.posts (
   is_urgent boolean not null default false,
   is_pinned boolean not null default false,
   save_count integer not null default 0,
+  congratulate_count integer not null default 0,
+  congratulated_user_ids text[] not null default '{}',
   venue text,
   event_date timestamptz,
   registration_deadline timestamptz,
@@ -25,6 +27,11 @@ create table if not exists public.posts (
   attachments jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
+
+-- Migrate tables created before the congratulate feature existed, so upserts
+-- from the app never fail on missing columns (idempotent, safe to re-run).
+alter table public.posts add column if not exists congratulate_count integer not null default 0;
+alter table public.posts add column if not exists congratulated_user_ids text[] not null default '{}';
 
 alter table public.posts enable row level security;
 

@@ -43,8 +43,9 @@ Future<void> _initBackend(MockDataService dataService) async {
       url: SupabaseConfig.url,
       publishableKey: SupabaseConfig.anonKey,
     );
-  } catch (_) {
+  } catch (e) {
     // Backend unavailable: continue with local/mock dataset.
+    debugPrint('StudentHub: Supabase init skipped: $e');
     return;
   }
   await dataService.syncNow();
