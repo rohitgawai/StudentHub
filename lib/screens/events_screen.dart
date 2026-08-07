@@ -5,7 +5,6 @@ import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
 import '../widgets/post_card.dart';
-import '../widgets/create_event_modal.dart';
 import 'dashboards/event_host_dashboard_screen.dart';
 
 class EventsScreen extends StatefulWidget {
@@ -36,6 +35,7 @@ class _EventsScreenState extends State<EventsScreen>
     final dataService = context.read<MockDataService>();
     final cfg = context.select((MockDataService s) => s.config);
     final user = context.select((MockDataService s) => s.currentUser);
+    // Same underlying feed, filtered down to Events + Workshops.
     final allEvents = dataService.posts.where((p) => p.isEvent).toList();
     final registeredEvents = allEvents
         .where((e) => user.registeredEventIds.contains(e.id))
@@ -46,10 +46,11 @@ class _EventsScreenState extends State<EventsScreen>
 
     final savedIds = user.savedPostIds.toSet();
     final registeredIds = user.registeredEventIds.toSet();
+    final congratulatedIds = user.congratulatedPostIds.toSet();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🎉 Events Hub'),
+        title: const Text('🎉 Events'),
         bottom: TabBar(
           controller: tabController,
           indicatorColor: cfg.eventColor,
@@ -77,55 +78,69 @@ class _EventsScreenState extends State<EventsScreen>
             ),
         ],
       ),
-      body: TabBarView(
-        controller: tabController,
+      body: Column(
         children: [
-          _buildEventList(
-            context,
-            allEvents,
-            cfg: cfg,
-            savedIds: savedIds,
-            registeredIds: registeredIds,
-            userYear: user.year,
-            dataService: dataService,
+          // A gentle reminder that this is just the event view of one feed.
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: cfg.eventColor.withValues(alpha: 0.06),
+            child: Row(
+              children: [
+                Icon(Icons.filter_alt, size: 16, color: cfg.eventColor),
+                const SizedBox(width: 8),
+                Text(
+                  'Filtered from campus feed · Events & Workshops',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: cfg.eventColor,
+                  ),
+                ),
+              ],
+            ),
           ),
-          _buildEventList(
-            context,
-            registeredEvents,
-            cfg: cfg,
-            savedIds: savedIds,
-            registeredIds: registeredIds,
-            userYear: user.year,
-            dataService: dataService,
-            emptyMessage: 'You have not registered for any events yet.',
-          ),
-          _buildEventList(
-            context,
-            myHostedEvents,
-            cfg: cfg,
-            savedIds: savedIds,
-            registeredIds: registeredIds,
-            userYear: user.year,
-            dataService: dataService,
-            emptyMessage: 'You have not hosted any events yet.',
+          Expanded(
+            child: TabBarView(
+              controller: tabController,
+              children: [
+                _buildEventList(
+                  context,
+                  allEvents,
+                  cfg: cfg,
+                  savedIds: savedIds,
+                  registeredIds: registeredIds,
+                  congratulatedIds: congratulatedIds,
+                  userYear: user.year,
+                  dataService: dataService,
+                ),
+                _buildEventList(
+                  context,
+                  registeredEvents,
+                  cfg: cfg,
+                  savedIds: savedIds,
+                  registeredIds: registeredIds,
+                  congratulatedIds: congratulatedIds,
+                  userYear: user.year,
+                  dataService: dataService,
+                  emptyMessage: 'You have not registered for any events yet.',
+                ),
+                _buildEventList(
+                  context,
+                  myHostedEvents,
+                  cfg: cfg,
+                  savedIds: savedIds,
+                  registeredIds: registeredIds,
+                  congratulatedIds: congratulatedIds,
+                  userYear: user.year,
+                  dataService: dataService,
+                  emptyMessage: 'You have not hosted any events yet.',
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      floatingActionButton:
-          (user.hasRole(UserRole.eventHost) || user.hasRole(UserRole.admin))
-          ? FloatingActionButton.extended(
-              backgroundColor: cfg.eventColor,
-              foregroundColor: Colors.white,
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => const CreateEventModal(),
-                );
-              },
-              icon: const Icon(Icons.add_location_alt),
-              label: const Text('Host Event'),
-            )
-          : null,
     );
   }
 
@@ -135,6 +150,7 @@ class _EventsScreenState extends State<EventsScreen>
     required AppConfig cfg,
     required Set<String> savedIds,
     required Set<String> registeredIds,
+    required Set<String> congratulatedIds,
     required String userYear,
     required MockDataService dataService,
     String emptyMessage = 'No upcoming events found.',
@@ -153,7 +169,7 @@ class _EventsScreenState extends State<EventsScreen>
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 80),
+      padding: const EdgeInsets.only(top: 8, bottom: 96),
       itemCount: events.length,
       itemBuilder: (context, index) {
         final post = events[index] as PostModel;
@@ -162,17 +178,14 @@ class _EventsScreenState extends State<EventsScreen>
           config: cfg,
           isSaved: savedIds.contains(post.id),
           isRegistered: registeredIds.contains(post.id),
+          isCongratulated: congratulatedIds.contains(post.id),
           userYear: userYear,
           onToggleSave: () {
             dataService.toggleSavePost(post.id);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Saved to Profile!'),
-                duration: Duration(seconds: 1),
-              ),
-            );
           },
           onToggleRegister: () => _handleToggleRegister(dataService, post),
+          onToggleCongratulate: () =>
+              _handleToggleCongratulate(dataService, post),
         );
       },
     );
@@ -196,6 +209,26 @@ class _EventsScreenState extends State<EventsScreen>
         ),
         backgroundColor: isRegistered ? Colors.green : Colors.orange,
         behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _handleToggleCongratulate(MockDataService dataService, PostModel post) {
+    dataService.toggleCongratulate(post.id);
+    final isCongratulated =
+        dataService.currentUser.congratulatedPostIds.contains(post.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isCongratulated
+              ? '👏 Congratulated ${post.authorName}!'
+              : 'Removed congratulations',
+        ),
+        backgroundColor: isCongratulated
+            ? const Color(0xFF8E24AA)
+            : Colors.orange,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1),
       ),
     );
   }

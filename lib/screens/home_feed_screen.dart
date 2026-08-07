@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/post_model.dart';
-import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
 import '../widgets/post_card.dart';
-import '../widgets/create_post_modal.dart';
-import '../widgets/create_event_modal.dart';
+import '../widgets/post_card_skeleton.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -43,12 +41,23 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   void _handleToggleSave(MockDataService dataService, PostModel post) {
     dataService.toggleSavePost(post.id);
-    final isSaved = dataService.currentUser.savedPostIds.contains(post.id);
+  }
+
+  void _handleToggleCongratulate(MockDataService dataService, PostModel post) {
+    dataService.toggleCongratulate(post.id);
+    final isCongratulated =
+        dataService.currentUser.congratulatedPostIds.contains(post.id);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          isSaved ? 'Saved to Profile!' : 'Removed from saved posts',
+          isCongratulated
+              ? '👏 Congratulated ${post.authorName}!'
+              : 'Removed congratulations',
         ),
+        backgroundColor: isCongratulated
+            ? const Color(0xFF8E24AA)
+            : Colors.orange,
+        behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 1),
       ),
     );
@@ -82,10 +91,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     // Narrow subscriptions: this screen only rebuilds when the data it
     // actually renders changes.
     final cfg = context.select((MockDataService s) => s.config);
-    final activeRole = context.select((MockDataService s) => s.activeRole);
-    final userDept = context.select(
-      (MockDataService s) => s.currentUser.department,
-    );
+    final isLoading = context.select((MockDataService s) => s.isLoading);
     final userYear = context.select((MockDataService s) => s.currentUser.year);
     final savedIds = context.select(
       (MockDataService s) => s.currentUser.savedPostIds,
@@ -93,18 +99,18 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     final registeredIds = context.select(
       (MockDataService s) => s.currentUser.registeredEventIds,
     );
+    final congratulatedIds = context.select(
+      (MockDataService s) => s.currentUser.congratulatedPostIds,
+    );
+    final userDept = context.select(
+      (MockDataService s) => s.currentUser.department,
+    );
 
     final categories = ['All', ...cfg.postCategories];
     final posts = dataService.getPersonalizedFeed(
       categoryFilter: selectedCategory,
       searchQuery: searchQuery,
     );
-
-    // Requirement 3: "post update" feature only for hosts, faculty, or admin
-    final bool canPostUpdate =
-        activeRole == UserRole.eventHost ||
-        activeRole == UserRole.faculty ||
-        activeRole == UserRole.admin;
 
     final headerAnnouncement = dataService.activeAnnouncementFor(userDept);
 
@@ -173,7 +179,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                     controller: searchController,
                     onChanged: (val) => setState(() => searchQuery = val),
                     decoration: InputDecoration(
-                      hintText: 'Search campus notices, events, faculty...',
+                      hintText: '🔍 Search posts, events, faculty...',
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: searchQuery.isNotEmpty
                           ? IconButton(
@@ -199,7 +205,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                 ),
                 const SizedBox(width: 8),
 
-                // Requirement 9: Rolling circle refresh button under search/selection menu
+                // Rolling circle refresh button
                 Container(
                   decoration: BoxDecoration(
                     color: Theme.of(context).cardColor,
@@ -229,29 +235,40 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             ),
           ),
 
-          // Priority Filter Chips
+          // Priority Filter Chips — tinted by the category color system
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Row(
               children: categories.map((cat) {
                 final isSelected = selectedCategory == cat;
+                final chipColor = cat == 'All'
+                    ? cfg.primaryColor
+                    : cfg.colorForCategory(
+                        PostCategory.values.firstWhere(
+                          (c) => c.displayName == cat,
+                          orElse: () => PostCategory.announcement,
+                        ),
+                      );
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
                     label: Text(cat),
                     selected: isSelected,
-                    selectedColor: cfg.primaryColor.withValues(alpha: 0.2),
-                    checkmarkColor: cfg.primaryColor,
+                    selectedColor: chipColor.withValues(alpha: 0.18),
+                    checkmarkColor: chipColor,
                     labelStyle: TextStyle(
                       fontSize: 12,
                       fontWeight: isSelected
                           ? FontWeight.bold
                           : FontWeight.normal,
                       color: isSelected
-                          ? cfg.primaryColor
+                          ? chipColor
                           : Theme.of(context).colorScheme.onSurface,
                     ),
+                    side: isSelected
+                        ? BorderSide(color: chipColor.withValues(alpha: 0.4))
+                        : null,
                     onSelected: (selected) {
                       setState(() => selectedCategory = cat);
                     },
@@ -263,12 +280,14 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
           const SizedBox(height: 4),
 
-          // Requirement 9: Pull-to-refresh feed wrapped in RefreshIndicator
+          // Pull-to-refresh feed; skeleton placeholders while initial data loads
           Expanded(
             child: RefreshIndicator(
               color: cfg.primaryColor,
               onRefresh: () => _handleRefresh(dataService),
-              child: posts.isEmpty
+              child: isLoading
+                  ? const FeedSkeleton()
+                  : posts.isEmpty
                   ? ListView(
                       children: const [
                         SizedBox(height: 100),
@@ -292,7 +311,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                       ],
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 80),
+                      padding: const EdgeInsets.only(bottom: 96),
                       itemCount: posts.length,
                       itemBuilder: (context, index) {
                         final post = posts[index];
@@ -301,11 +320,14 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                           config: cfg,
                           isSaved: savedIds.contains(post.id),
                           isRegistered: registeredIds.contains(post.id),
+                          isCongratulated: congratulatedIds.contains(post.id),
                           userYear: userYear,
                           onToggleSave: () =>
                               _handleToggleSave(dataService, post),
                           onToggleRegister: () =>
                               _handleToggleRegister(dataService, post),
+                          onToggleCongratulate: () =>
+                              _handleToggleCongratulate(dataService, post),
                         );
                       },
                     ),
@@ -313,85 +335,6 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           ),
         ],
       ),
-
-      // FAB for creating posts or events based on role (Hidden for Students)
-      floatingActionButton: canPostUpdate
-          ? FloatingActionButton.extended(
-              backgroundColor: cfg.primaryColor,
-              foregroundColor: Colors.white,
-              onPressed: () {
-                _showCreateOptionsModal(context, dataService);
-              },
-              icon: const Icon(Icons.add_rounded),
-              label: const Text(
-                'Post Update',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            )
-          : null,
-    );
-  }
-
-  void _showCreateOptionsModal(
-    BuildContext context,
-    MockDataService dataService,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'What would you like to publish?',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.blue.shade100,
-                    child: const Icon(Icons.announcement, color: Colors.blue),
-                  ),
-                  title: const Text('New Announcement / Notice'),
-                  subtitle: const Text(
-                    'Post academic updates, attachments, or achievements',
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    showDialog(
-                      context: context,
-                      builder: (c) => const CreatePostModal(),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.orange.shade100,
-                    child: const Icon(Icons.event, color: Colors.orange),
-                  ),
-                  title: const Text('New Campus Event'),
-                  subtitle: const Text(
-                    'Publish hackathons, workshops, or competitions',
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    showDialog(
-                      context: context,
-                      builder: (c) => const CreateEventModal(),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }

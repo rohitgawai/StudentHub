@@ -59,7 +59,6 @@ class MockDataService extends ChangeNotifier {
   MockDataService({AppConfig? initialConfig}) {
     config = initialConfig ?? AppConfig.defaultConfig();
     _seedDefaults();
-    _isLoading = false;
     _invalidateDataCaches();
     _initData(initialConfig);
   }
@@ -100,6 +99,10 @@ class MockDataService extends ChangeNotifier {
       checkForExpiredRoles();
       _clearExpiredAnnouncements();
     });
+
+    _isLoading = false;
+    _invalidateDataCaches();
+    notifyListeners();
   }
 
   /// Merges the Supabase mirror into the device state (background; safe to
@@ -125,6 +128,7 @@ class MockDataService extends ChangeNotifier {
       roles: [UserRole.student, UserRole.eventHost],
       savedPostIds: ['pst_002', 'pst_004'],
       registeredEventIds: ['pst_002'],
+      congratulatedPostIds: ['pst_005'],
       isVerified: true,
     );
 
@@ -222,6 +226,7 @@ class MockDataService extends ChangeNotifier {
           'roles': currentUser.roles.map((r) => r.name).toList(),
           'savedPostIds': currentUser.savedPostIds,
           'registeredEventIds': currentUser.registeredEventIds,
+          'congratulatedPostIds': currentUser.congratulatedPostIds,
           'isVerified': currentUser.isVerified,
           'hasChangedUniqueId': currentUser.hasChangedUniqueId,
           'roleExpirations': currentUser.roleExpirations.map(
@@ -380,6 +385,9 @@ class MockDataService extends ChangeNotifier {
       registeredEventIds: ((m['registeredEventIds'] as List?) ?? const [])
           .whereType<String>()
           .toList(),
+      congratulatedPostIds: ((m['congratulatedPostIds'] as List?) ?? const [])
+          .whereType<String>()
+          .toList(),
       isVerified: m['isVerified'] as bool? ?? true,
       roleExpirations: expirations,
       hasChangedUniqueId: m['hasChangedUniqueId'] as bool? ?? false,
@@ -497,6 +505,7 @@ class MockDataService extends ChangeNotifier {
     String avatarUrl = '',
     List<String> savedPostIds = const [],
     List<String> registeredEventIds = const [],
+    List<String> congratulatedPostIds = const [],
   }) {
     currentUser = UserModel(
       id: id,
@@ -510,6 +519,7 @@ class MockDataService extends ChangeNotifier {
       roles: const [UserRole.student],
       savedPostIds: savedPostIds,
       registeredEventIds: registeredEventIds,
+      congratulatedPostIds: congratulatedPostIds,
       isVerified: true,
     );
     activeRole = UserRole.student;
@@ -607,6 +617,10 @@ class MockDataService extends ChangeNotifier {
       isUrgent: row['is_urgent'] as bool? ?? false,
       isPinned: row['is_pinned'] as bool? ?? false,
       saveCount: row['save_count'] as int? ?? 0,
+      congratulateCount: row['congratulate_count'] as int? ?? 0,
+      congratulatedUserIds: ((row['congratulated_user_ids'] as List?) ??
+              const [])
+          .cast<String>(),
       venue: row['venue'] as String?,
       eventDate: _parseDate(row['event_date']),
       registrationDeadline: _parseDate(row['registration_deadline']),
@@ -630,6 +644,8 @@ class MockDataService extends ChangeNotifier {
     'is_urgent': p.isUrgent,
     'is_pinned': p.isPinned,
     'save_count': p.saveCount,
+    'congratulate_count': p.congratulateCount,
+    'congratulated_user_ids': p.congratulatedUserIds,
     'venue': p.venue,
     'event_date': p.eventDate?.toIso8601String(),
     'registration_deadline': p.registrationDeadline?.toIso8601String(),
@@ -854,6 +870,36 @@ class MockDataService extends ChangeNotifier {
     }
 
     currentUser = currentUser.copyWith(savedPostIds: updatedSaved);
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+  }
+
+  void toggleCongratulate(String postId) {
+    int index = _posts.indexWhere((p) => p.id == postId);
+    if (index == -1) return;
+
+    PostModel post = _posts[index];
+    List<String> congratulated = List.from(post.congratulatedUserIds);
+    List<String> userCongratulated = List.from(
+      currentUser.congratulatedPostIds,
+    );
+
+    if (congratulated.contains(currentUser.id)) {
+      congratulated.remove(currentUser.id);
+      userCongratulated.remove(postId);
+    } else {
+      congratulated.add(currentUser.id);
+      userCongratulated.add(postId);
+    }
+
+    _posts[index] = post.copyWith(
+      congratulatedUserIds: congratulated,
+      congratulateCount: congratulated.length,
+    );
+    currentUser = currentUser.copyWith(
+      congratulatedPostIds: userCongratulated,
+    );
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();

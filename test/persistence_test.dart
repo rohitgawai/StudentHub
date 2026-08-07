@@ -5,10 +5,16 @@ import 'package:student_hub/models/user_model.dart';
 import 'package:student_hub/services/mock_data_service.dart';
 
 Future<MockDataService> _createService(WidgetTester tester) async {
-  final service = MockDataService(initialConfig: AppConfig.defaultConfig());
-  while (service.isLoading) {
-    await tester.pump(const Duration(milliseconds: 20));
-  }
+  late MockDataService service;
+  // The service restores its snapshot asynchronously — including an isolate
+  // `compute` for JSON parsing — which cannot complete inside the test's
+  // fake-async zone, so construct it and poll under `runAsync`.
+  await tester.runAsync(() async {
+    service = MockDataService(initialConfig: AppConfig.defaultConfig());
+    while (service.isLoading) {
+      await Future.delayed(const Duration(milliseconds: 10));
+    }
+  });
   return service;
 }
 

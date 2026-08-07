@@ -6,14 +6,14 @@ import '../widgets/post_card.dart';
 import '../widgets/role_badge.dart';
 import '../models/user_model.dart';
 
-class ExploreScreen extends StatefulWidget {
-  const ExploreScreen({super.key});
+class DiscoverScreen extends StatefulWidget {
+  const DiscoverScreen({super.key});
 
   @override
-  State<ExploreScreen> createState() => _ExploreScreenState();
+  State<DiscoverScreen> createState() => _DiscoverScreenState();
 }
 
-class _ExploreScreenState extends State<ExploreScreen> {
+class _DiscoverScreenState extends State<DiscoverScreen> {
   String searchQuery = '';
   final searchController = TextEditingController();
 
@@ -21,6 +21,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
   void dispose() {
     searchController.dispose();
     super.dispose();
+  }
+
+  ({int posts, int faculty}) _deptStats(
+    MockDataService dataService,
+    String dept,
+  ) {
+    final deptPosts = dataService.posts.where((p) => p.department == dept);
+    final postCount = deptPosts.length;
+    final faculty = deptPosts
+        .where((p) => p.authorRole == UserRole.faculty)
+        .map((p) => p.authorName)
+        .toSet()
+        .length;
+    return (posts: postCount, faculty: faculty);
   }
 
   @override
@@ -34,6 +48,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final registeredIds = context.select(
       (MockDataService s) => s.currentUser.registeredEventIds,
     );
+    final congratulatedIds = context.select(
+      (MockDataService s) => s.currentUser.congratulatedPostIds,
+    );
     final filteredPosts = dataService.getPersonalizedFeed(
       searchQuery: searchQuery,
     );
@@ -42,7 +59,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       controller: searchController,
       onChanged: (val) => setState(() => searchQuery = val),
       decoration: InputDecoration(
-        hintText: 'Search announcements, departments, faculty...',
+        hintText: '🔍 Search posts, events, faculty...',
         prefixIcon: const Icon(Icons.search),
         suffixIcon: searchQuery.isNotEmpty
             ? IconButton(
@@ -59,7 +76,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('🔍 Explore Campus')),
+      appBar: AppBar(title: const Text('Discover')),
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
@@ -91,15 +108,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   config: cfg,
                   isSaved: savedIds.contains(post.id),
                   isRegistered: registeredIds.contains(post.id),
+                  isCongratulated: congratulatedIds.contains(post.id),
                   userYear: userYear,
                   onToggleSave: () => _handleToggleSave(dataService, post),
                   onToggleRegister: () =>
                       _handleToggleRegister(dataService, post),
+                  onToggleCongratulate: () =>
+                      _handleToggleCongratulate(dataService, post),
                 );
               },
             ),
           ] else ...[
-            // Departments Directory Section
+            // Departments Directory Section — informative cards
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
@@ -115,16 +135,30 @@ class _ExploreScreenState extends State<ExploreScreen> {
               sliver: SliverGrid.builder(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
-                  childAspectRatio: 1.7,
+                  childAspectRatio: 1.45,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                 ),
                 itemCount: cfg.departments.length,
                 itemBuilder: (context, index) {
                   final dept = cfg.departments[index];
-                  return Card(
-                    elevation: 0,
-                    color: cfg.primaryColor.withValues(alpha: 0.08),
+                  final stats = _deptStats(dataService, dept);
+                  final accent = cfg.colorForCategory(PostCategory.academic);
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.25),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(16),
                       onTap: () {
@@ -135,30 +169,78 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         padding: const EdgeInsets.all(12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  dept,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: cfg.primaryColor,
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: accent.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                                  child: Icon(
+                                    Icons.school_outlined,
+                                    size: 18,
+                                    color: accent,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    dept,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.2,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'View Updates ›',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey,
-                              ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.article_outlined,
+                                  size: 13,
+                                  color: Colors.grey.shade500,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${stats.posts} Posts',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Icon(
+                                  Icons.badge_outlined,
+                                  size: 13,
+                                  color: Colors.grey.shade500,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${stats.faculty} Faculty',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Icon(
+                                  Icons.chevron_right,
+                                  size: 16,
+                                  color: accent,
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -240,10 +322,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   config: cfg,
                   isSaved: savedIds.contains(post.id),
                   isRegistered: registeredIds.contains(post.id),
+                  isCongratulated: congratulatedIds.contains(post.id),
                   userYear: userYear,
                   onToggleSave: () => _handleToggleSave(dataService, post),
                   onToggleRegister: () =>
                       _handleToggleRegister(dataService, post),
+                  onToggleCongratulate: () =>
+                      _handleToggleCongratulate(dataService, post),
                 );
               },
             ),
@@ -261,6 +346,26 @@ class _ExploreScreenState extends State<ExploreScreen> {
         content: Text(
           isSaved ? 'Saved to Profile!' : 'Removed from saved posts',
         ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _handleToggleCongratulate(MockDataService dataService, PostModel post) {
+    dataService.toggleCongratulate(post.id);
+    final isCongratulated =
+        dataService.currentUser.congratulatedPostIds.contains(post.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isCongratulated
+              ? '👏 Congratulated ${post.authorName}!'
+              : 'Removed congratulations',
+        ),
+        backgroundColor: isCongratulated
+            ? const Color(0xFF8E24AA)
+            : Colors.orange,
+        behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 1),
       ),
     );

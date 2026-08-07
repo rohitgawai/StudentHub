@@ -32,6 +32,7 @@ class UserModel {
   final List<UserRole> roles;
   final List<String> savedPostIds;
   final List<String> registeredEventIds;
+  final List<String> congratulatedPostIds;
   final bool isVerified;
   final Map<UserRole, DateTime> roleExpirations;
   final bool hasChangedUniqueId;
@@ -48,6 +49,7 @@ class UserModel {
     required this.roles,
     required this.savedPostIds,
     required this.registeredEventIds,
+    this.congratulatedPostIds = const [],
     this.isVerified = true,
     this.roleExpirations = const {},
     this.hasChangedUniqueId = false,
@@ -71,6 +73,7 @@ class UserModel {
     List<UserRole>? roles,
     List<String>? savedPostIds,
     List<String>? registeredEventIds,
+    List<String>? congratulatedPostIds,
     bool? isVerified,
     Map<UserRole, DateTime>? roleExpirations,
     bool? hasChangedUniqueId,
@@ -87,6 +90,8 @@ class UserModel {
       roles: roles ?? this.roles,
       savedPostIds: savedPostIds ?? this.savedPostIds,
       registeredEventIds: registeredEventIds ?? this.registeredEventIds,
+      congratulatedPostIds:
+          congratulatedPostIds ?? this.congratulatedPostIds,
       isVerified: isVerified ?? this.isVerified,
       roleExpirations: roleExpirations ?? this.roleExpirations,
       hasChangedUniqueId: hasChangedUniqueId ?? this.hasChangedUniqueId,

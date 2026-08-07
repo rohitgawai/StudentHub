@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
+import '../models/post_model.dart';
 
 
 class AppConfig {
@@ -133,6 +134,28 @@ class AppConfig {
   Color get successColor => hexToColor(successColorHex);
   Color get generalColor => hexToColor(generalColorHex);
   Color get academicColor => hexToColor(academicColorHex);
+
+  /// Reserved color system for post categories:
+  /// 🔴 Urgent · 🟠 Events · 🔵 Academic · 🟢 Success · 🟣 Achievement.
+  Color colorForCategory(PostCategory category) {
+    switch (category) {
+      case PostCategory.urgent:
+      case PostCategory.urgentAnnouncement:
+        return urgentColor;
+      case PostCategory.event:
+      case PostCategory.workshop:
+        return eventColor;
+      case PostCategory.academic:
+      case PostCategory.announcement:
+        return academicColor;
+      case PostCategory.placement:
+        return successColor;
+      case PostCategory.gallery:
+        return generalColor;
+      case PostCategory.achievement:
+        return achievementColor;
+    }
+  }
 
   static Future<AppConfig> loadFromAssets() async {
     try {

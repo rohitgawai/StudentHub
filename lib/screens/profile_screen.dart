@@ -658,6 +658,9 @@ class _ProfileScreenState extends State<ProfileScreen>
           isRegistered:
               isRegisteredForAll ||
               dataService.currentUser.registeredEventIds.contains(post.id),
+          isCongratulated: dataService.currentUser.congratulatedPostIds.contains(
+            post.id,
+          ),
           userYear: userYear,
           onToggleSave: () {
             dataService.toggleSavePost(post.id);

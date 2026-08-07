@@ -82,6 +82,16 @@ class AppImage extends StatelessWidget {
       height: height,
       width: width,
       fit: fit,
+      frameBuilder: (ctx, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded) return child;
+        if (frame == null) {
+          return _ImageLoadingPlaceholder(
+            height: height,
+            width: width,
+          );
+        }
+        return _ImageFadeIn(child: child);
+      },
       errorBuilder: (ctx, err, stack) =>
           errorChild ??
           Container(
@@ -98,6 +108,79 @@ class AppImage extends StatelessWidget {
               child: Icon(Icons.image, size: 40, color: Colors.grey),
             ),
           ),
+    );
+  }
+}
+
+/// Soft grey placeholder shown while the image is still decoding, so cards
+/// never flash an empty void.
+class _ImageLoadingPlaceholder extends StatefulWidget {
+  final double? height;
+  final double? width;
+
+  const _ImageLoadingPlaceholder({this.height, this.width});
+
+  @override
+  State<_ImageLoadingPlaceholder> createState() =>
+      _ImageLoadingPlaceholderState();
+}
+
+class _ImageLoadingPlaceholderState extends State<_ImageLoadingPlaceholder>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.45, end: 0.85).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      ),
+      child: Container(
+        height: widget.height,
+        width: widget.width,
+        constraints: widget.height != null || widget.width != null
+            ? BoxConstraints(
+                minHeight: widget.height ?? 0,
+                maxHeight: widget.height ?? double.infinity,
+                minWidth: widget.width ?? 0,
+                maxWidth: widget.width ?? double.infinity,
+              )
+            : null,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Icon(Icons.image_outlined, size: 32, color: Colors.grey),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fades the decoded frame in over 350ms.
+class _ImageFadeIn extends StatelessWidget {
+  final Widget child;
+
+  const _ImageFadeIn({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+      builder: (ctx, value, child) => Opacity(opacity: value, child: child),
+      child: child,
     );
   }
 }

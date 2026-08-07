@@ -67,6 +67,8 @@ class PostModel {
   final bool isUrgent;
   final bool isPinned;
   final int saveCount;
+  final int congratulateCount;
+  final List<String> congratulatedUserIds;
   
   // Optional Event/Workshop details
   final String? venue;
@@ -91,6 +93,8 @@ class PostModel {
     this.isUrgent = false,
     this.isPinned = false,
     this.saveCount = 0,
+    this.congratulateCount = 0,
+    this.congratulatedUserIds = const [],
     this.venue,
     this.eventDate,
     this.registrationDeadline,
@@ -118,6 +122,8 @@ class PostModel {
     bool? isUrgent,
     bool? isPinned,
     int? saveCount,
+    int? congratulateCount,
+    List<String>? congratulatedUserIds,
     String? venue,
     DateTime? eventDate,
     DateTime? registrationDeadline,
@@ -140,6 +146,8 @@ class PostModel {
       isUrgent: isUrgent ?? this.isUrgent,
       isPinned: isPinned ?? this.isPinned,
       saveCount: saveCount ?? this.saveCount,
+      congratulateCount: congratulateCount ?? this.congratulateCount,
+      congratulatedUserIds: congratulatedUserIds ?? this.congratulatedUserIds,
       venue: venue ?? this.venue,
       eventDate: eventDate ?? this.eventDate,
       registrationDeadline: registrationDeadline ?? this.registrationDeadline,

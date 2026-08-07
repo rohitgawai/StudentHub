@@ -4,15 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
+import 'models/post_model.dart';
+import 'models/user_model.dart';
 import 'services/mock_data_service.dart';
 import 'services/local_store_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_feed_screen.dart';
 import 'screens/events_screen.dart';
-import 'screens/explore_screen.dart';
+import 'screens/discover_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/notifications_screen.dart';
+import 'widgets/create_post_modal.dart';
+import 'widgets/create_event_modal.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,7 +82,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   final List<Widget> screens = const [
     HomeFeedScreen(),
     EventsScreen(),
-    ExploreScreen(),
+    DiscoverScreen(),
     ProfileScreen(),
   ];
 
@@ -94,6 +98,11 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     final unreadNotifs = context.select(
       (MockDataService s) => s.notifications.where((n) => !n.isRead).length,
     );
+    final user = context.select((MockDataService s) => s.currentUser);
+    final canCreate =
+        user.hasRole(UserRole.eventHost) ||
+        user.hasRole(UserRole.admin) ||
+        user.hasRole(UserRole.faculty);
 
     return Scaffold(
       appBar: AppBar(
@@ -197,32 +206,222 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       // Body Navigation Screen
       body: IndexedStack(index: currentIndex, children: screens),
 
-      // Bottom Navigation Bar (Home, Events, Explore, Profile)
-      bottomNavigationBar: BottomNavigationBar(
+      // Global create FAB (Event Host / Faculty / Admin) — one entry point
+      // for every publish action, shown across the whole app.
+      floatingActionButton: canCreate
+          ? FloatingActionButton.extended(
+              backgroundColor: cfg.primaryColor,
+              foregroundColor: Colors.white,
+              onPressed: () => _showCreateOptionsSheet(context, dataService: context.read<MockDataService>()),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text(
+                'Create',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            )
+          : null,
+
+      // Bottom Navigation with active-tab pill (Google Photos / Spotify style)
+      bottomNavigationBar: _PillNavigationBar(
         currentIndex: currentIndex,
+        activeColor: cfg.primaryColor,
         onTap: (idx) => setState(() => currentIndex = idx),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.feed_outlined),
-            activeIcon: Icon(Icons.feed),
-            label: 'Home Feed',
+      ),
+    );
+  }
+
+  void _showCreateOptionsSheet(
+    BuildContext context, {
+    required MockDataService dataService,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'What would you like to publish?',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.orange.shade100,
+                    child: const Icon(Icons.event, color: Colors.orange),
+                  ),
+                  title: const Text('Create Event'),
+                  subtitle: const Text(
+                    'Hackathons, workshops, competitions with registration',
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    showDialog(
+                      context: context,
+                      builder: (c) => const CreateEventModal(),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blue.shade100,
+                    child: const Icon(Icons.announcement, color: Colors.blue),
+                  ),
+                  title: const Text('Create Announcement'),
+                  subtitle: const Text(
+                    'Post academic updates, notices, or achievements',
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    showDialog(
+                      context: context,
+                      builder: (c) => const CreatePostModal(),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.green.shade100,
+                    child: const Icon(
+                      Icons.photo_library_outlined,
+                      color: Colors.green,
+                    ),
+                  ),
+                  title: const Text('Upload Gallery'),
+                  subtitle: const Text(
+                    'Publish campus event photos and highlights',
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    showDialog(
+                      context: context,
+                      builder: (c) => const CreatePostModal(
+                        initialCategory: PostCategory.gallery,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.event_outlined),
-            activeIcon: Icon(Icons.event),
-            label: 'Events',
+        );
+      },
+    );
+  }
+}
+
+class _NavItem {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+
+  const _NavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
+}
+
+/// Bottom navigation where the active tab sits inside an animated pill,
+/// instead of a thin indicator line.
+class _PillNavigationBar extends StatelessWidget {
+  final int currentIndex;
+  final Color activeColor;
+  final ValueChanged<int> onTap;
+
+  const _PillNavigationBar({
+    required this.currentIndex,
+    required this.activeColor,
+    required this.onTap,
+  });
+
+  static const List<_NavItem> _items = [
+    _NavItem(icon: Icons.feed_outlined, activeIcon: Icons.feed, label: 'Home'),
+    _NavItem(
+      icon: Icons.event_outlined,
+      activeIcon: Icons.event,
+      label: 'Events',
+    ),
+    _NavItem(
+      icon: Icons.explore_outlined,
+      activeIcon: Icons.explore,
+      label: 'Discover',
+    ),
+    _NavItem(
+      icon: Icons.person_outline,
+      activeIcon: Icons.person,
+      label: 'Profile',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).cardColor,
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: List.generate(_items.length, (index) {
+              final item = _items[index];
+              final selected = index == currentIndex;
+              return Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onTap(index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? activeColor.withValues(alpha: 0.14)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          child: Icon(
+                            selected ? item.activeIcon : item.icon,
+                            key: ValueKey(selected),
+                            size: 22,
+                            color: selected
+                                ? activeColor
+                                : Colors.grey.shade500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          item.label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: selected
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: selected
+                                ? activeColor
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.explore_outlined),
-            activeIcon: Icon(Icons.explore),
-            label: 'Explore',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+        ),
       ),
     );
   }

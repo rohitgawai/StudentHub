@@ -7,7 +7,9 @@ import 'image_picker_field.dart';
 import 'pdf_upload_field.dart';
 
 class CreatePostModal extends StatefulWidget {
-  const CreatePostModal({super.key});
+  final PostCategory? initialCategory;
+
+  const CreatePostModal({super.key, this.initialCategory});
 
   @override
   State<CreatePostModal> createState() => _CreatePostModalState();
@@ -18,7 +20,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
   final titleController = TextEditingController();
   final descController = TextEditingController();
 
-  PostCategory category = PostCategory.announcement;
+  late PostCategory category = widget.initialCategory ?? PostCategory.announcement;
   late String department;
   String? targetYear;
   String? selectedImageUrl;
