@@ -30,12 +30,18 @@ class _ProfileScreenState extends State<ProfileScreen>
   void initState() {
     super.initState();
     tabController = TabController(length: 2, vsync: this);
+    tabController.addListener(_onTabChanged);
   }
 
   @override
   void dispose() {
+    tabController.removeListener(_onTabChanged);
     tabController.dispose();
     super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -99,429 +105,440 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ],
       ),
-      body: Column(
-        children: [
+      body: CustomScrollView(
+        slivers: [
           // Profile Header Card
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Theme.of(context).cardColor,
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    // Requirement 3: Tap profile picture to zoom like Instagram with edit option
-                    GestureDetector(
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => ProfileAvatarZoomDialog(
-                            avatarUrl: user.avatarUrl,
-                          ),
-                        );
-                      },
-                      child: Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 36,
-                            backgroundImage: resolveImageProvider(
-                              user.avatarUrl,
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              color: Theme.of(context).cardColor,
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      // Requirement 3: Tap profile picture to zoom like Instagram with edit option
+                      GestureDetector(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => ProfileAvatarZoomDialog(
+                              avatarUrl: user.avatarUrl,
                             ),
-                            child: user.avatarUrl.isEmpty
-                                ? const Icon(Icons.person, size: 36)
-                                : null,
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.blue,
-                                shape: BoxShape.circle,
+                          );
+                        },
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 36,
+                              backgroundImage: resolveImageProvider(
+                                user.avatarUrl,
                               ),
-                              child: const Icon(
-                                Icons.zoom_in,
-                                size: 14,
-                                color: Colors.white,
-                              ),
+                              child: user.avatarUrl.isEmpty
+                                  ? const Icon(Icons.person, size: 36)
+                                  : null,
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  user.name,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (user.isVerified) ...[
-                                const SizedBox(width: 4),
-                                const Icon(
-                                  Icons.verified,
-                                  size: 18,
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
                                   color: Colors.blue,
+                                  shape: BoxShape.circle,
                                 ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            user.studentOrEmployeeId,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w600,
+                                child: const Icon(
+                                  Icons.zoom_in,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${user.department} • ${user.year}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cfg.primaryColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Requirement 4: Edit Details button over profile tab
-                    IconButton(
-                      icon: const Icon(Icons.edit_note, color: Colors.blue),
-                      tooltip: 'Edit Profile Details',
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => const EditProfileModal(),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-
-                // Requirement 2 & 1: Active Perspective dropdown menu change (compact & bounded layout)
-                if (canSwitchRoles) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cfg.primaryColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: cfg.primaryColor.withValues(alpha: 0.25),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.swap_horiz,
-                          size: 18,
-                          color: Colors.blueGrey,
+                          ],
                         ),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Active Perspective: ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    user.name,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (user.isVerified) ...[
+                                  const SizedBox(width: 4),
+                                  const Icon(
+                                    Icons.verified,
+                                    size: 18,
+                                    color: Colors.blue,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              user.studentOrEmployeeId,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${user.department} • ${user.year}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cfg.primaryColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Requirement 4: Edit Details button over profile tab
+                      IconButton(
+                        icon: const Icon(Icons.edit_note, color: Colors.blue),
+                        tooltip: 'Edit Profile Details',
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => const EditProfileModal(),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Requirement 2 & 1: Active Perspective dropdown menu change (compact & bounded layout)
+                  if (canSwitchRoles) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cfg.primaryColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: cfg.primaryColor.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.swap_horiz,
+                            size: 18,
                             color: Colors.blueGrey,
                           ),
-                        ),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<UserRole>(
-                                value: allowedSwitcherRoles.contains(activeRole)
-                                    ? activeRole
-                                    : allowedSwitcherRoles.first,
-                                isDense: true,
-                                menuMaxHeight: 220,
-                                icon: const Icon(
-                                  Icons.keyboard_arrow_down,
-                                  size: 18,
-                                ),
-                                onChanged: (UserRole? newRole) {
-                                  if (newRole != null) {
-                                    dataService.switchActiveRole(newRole);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Switched view perspective to ${newRole.displayName}',
-                                        ),
-                                        duration: const Duration(seconds: 1),
-                                      ),
-                                    );
-                                  }
-                                },
-                                items: allowedSwitcherRoles.map((role) {
-                                  return DropdownMenuItem<UserRole>(
-                                    value: role,
-                                    child: RoleBadge(
-                                      role: role,
-                                      isCompact: true,
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                // Requirement 5: Roles Badges Row (Student hidden when Faculty is active)
-                Row(
-                  children: [
-                    const Text(
-                      'Assigned Roles: ',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: displayAssignedRoles
-                            .map(
-                              (r) => Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  RoleBadge(role: r, isCompact: true),
-                                  if (user.isRoleExpiring(r))
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 4),
-                                      child: _buildExpiryTag(
-                                        user.getRoleExpiry(r)!,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 14),
-
-                // Requirement 7: Role Expiration Warning Notice if applicable
-                if (showRoleExpiredNotice) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    margin: const EdgeInsets.only(bottom: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Row(
-                      children: const [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.red,
-                          size: 20,
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '⚠️ Your temporary role has expired! You can re-apply below.',
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Active Perspective: ',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.red,
                               fontWeight: FontWeight.bold,
+                              color: Colors.blueGrey,
                             ),
                           ),
-                        ),
-                      ],
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<UserRole>(
+                                  value:
+                                      allowedSwitcherRoles.contains(activeRole)
+                                      ? activeRole
+                                      : allowedSwitcherRoles.first,
+                                  isDense: true,
+                                  menuMaxHeight: 220,
+                                  icon: const Icon(
+                                    Icons.keyboard_arrow_down,
+                                    size: 18,
+                                  ),
+                                  onChanged: (UserRole? newRole) {
+                                    if (newRole != null) {
+                                      dataService.switchActiveRole(newRole);
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Switched view perspective to ${newRole.displayName}',
+                                          ),
+                                          duration: const Duration(seconds: 1),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  items: allowedSwitcherRoles.map((role) {
+                                    return DropdownMenuItem<UserRole>(
+                                      value: role,
+                                      child: RoleBadge(
+                                        role: role,
+                                        isCompact: true,
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                  ],
 
-                // Requirement 7: Apply for Role Button (Hidden if user holds both elevated roles; re-appears if role expired)
-                if (cfg.allowRoleSelfApplication && !hasBothElevatedRoles)
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => const RoleRequestModal(),
-                        );
-                      },
-                      icon: const Icon(Icons.add_moderator, size: 16),
-                      label: Text(
-                        showRoleExpiredNotice
-                            ? 'Re-Apply for Event Host / Faculty Role'
-                            : 'Apply for Event Host / Faculty Role',
-                        style: const TextStyle(
+                  // Requirement 5: Roles Badges Row (Student hidden when Faculty is active)
+                  Row(
+                    children: [
+                      const Text(
+                        'Assigned Roles: ',
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: displayAssignedRoles
+                              .map(
+                                (r) => Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    RoleBadge(role: r, isCompact: true),
+                                    if (user.isRoleExpiring(r))
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: _buildExpiryTag(
+                                          user.getRoleExpiry(r)!,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    ],
                   ),
 
-                // Role Dashboards shortcuts if permitted
-                if (user.hasRole(UserRole.admin) ||
-                    user.hasRole(UserRole.faculty) ||
-                    user.hasRole(UserRole.eventHost)) ...[
-                  const SizedBox(height: 10),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        if (user.hasRole(UserRole.admin))
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ActionChip(
-                              avatar: const Icon(
-                                Icons.admin_panel_settings,
-                                size: 16,
-                                color: Colors.purple,
-                              ),
-                              label: const Text('Admin Control Panel'),
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (c) => const AdminDashboardScreen(),
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (user.hasRole(UserRole.faculty))
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ActionChip(
-                              avatar: const Icon(
-                                Icons.menu_book,
-                                size: 16,
-                                color: Colors.blue,
-                              ),
-                              label: const Text('Faculty Dashboard'),
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (c) =>
-                                      const FacultyDashboardScreen(),
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (user.hasRole(UserRole.eventHost))
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ActionChip(
-                              avatar: const Icon(
-                                Icons.event,
-                                size: 16,
-                                color: Colors.orange,
-                              ),
-                              label: const Text('Event Host Dashboard'),
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (c) =>
-                                      const EventHostDashboardScreen(),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
+                  const SizedBox(height: 14),
 
-                // Role Requests Status Box
-                if (myRoleRequests.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(10),
+                  // Requirement 7: Role Expiration Warning Notice if applicable
+                  if (showRoleExpiredNotice) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: const [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '⚠️ Your temporary role has expired! You can re-apply below.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Role Application Statuses:',
-                          style: TextStyle(
-                            fontSize: 11,
+                  ],
+
+                  // Requirement 7: Apply for Role Button (Hidden if user holds both elevated roles; re-appears if role expired)
+                  if (cfg.allowRoleSelfApplication && !hasBothElevatedRoles)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => const RoleRequestModal(),
+                          );
+                        },
+                        icon: const Icon(Icons.add_moderator, size: 16),
+                        label: Text(
+                          showRoleExpiredNotice
+                              ? 'Re-Apply for Event Host / Faculty Role'
+                              : 'Apply for Event Host / Faculty Role',
+                          style: const TextStyle(
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        ...myRoleRequests.map(
-                          (req) => Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Row(
-                              children: [
-                                Text(
-                                  '${req.requestedRole.displayName}: ',
-                                  style: const TextStyle(fontSize: 11),
+                      ),
+                    ),
+
+                  // Role Dashboards shortcuts if permitted
+                  if (user.hasRole(UserRole.admin) ||
+                      user.hasRole(UserRole.faculty) ||
+                      user.hasRole(UserRole.eventHost)) ...[
+                    const SizedBox(height: 10),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          if (user.hasRole(UserRole.admin))
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ActionChip(
+                                avatar: const Icon(
+                                  Icons.admin_panel_settings,
+                                  size: 16,
+                                  color: Colors.purple,
                                 ),
-                                _buildStatusBadge(req.status),
-                                if (req.isLimitedAccess &&
-                                    req.expiresAt != null) ...[
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${req.termLabel} • till ${_formatDate(req.expiresAt!)}',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.grey,
-                                    ),
+                                label: const Text('Admin Control Panel'),
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) =>
+                                        const AdminDashboardScreen(),
                                   ),
-                                ],
-                              ],
+                                ),
+                              ),
+                            ),
+                          if (user.hasRole(UserRole.faculty))
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ActionChip(
+                                avatar: const Icon(
+                                  Icons.menu_book,
+                                  size: 16,
+                                  color: Colors.blue,
+                                ),
+                                label: const Text('Faculty Dashboard'),
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) =>
+                                        const FacultyDashboardScreen(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (user.hasRole(UserRole.eventHost))
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ActionChip(
+                                avatar: const Icon(
+                                  Icons.event,
+                                  size: 16,
+                                  color: Colors.orange,
+                                ),
+                                label: const Text('Event Host Dashboard'),
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) =>
+                                        const EventHostDashboardScreen(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // Role Requests Status Box
+                  if (myRoleRequests.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Role Application Statuses:',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ),
-                      ],
+                          ...myRoleRequests.map(
+                            (req) => Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    '${req.requestedRole.displayName}: ',
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                  _buildStatusBadge(req.status),
+                                  if (req.isLimitedAccess &&
+                                      req.expiresAt != null) ...[
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${req.termLabel} • till ${_formatDate(req.expiresAt!)}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
 
           // Tabs: Saved Posts & Registered Events
-          TabBar(
-            controller: tabController,
-            labelColor: cfg.primaryColor,
-            unselectedLabelColor: Colors.grey,
-            tabs: [
-              Tab(text: 'Saved Posts (${savedPosts.length})'),
-              Tab(text: 'Registered Events (${registeredEvents.length})'),
-            ],
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _ProfileTabBarDelegate(
+              tabBar: TabBar(
+                controller: tabController,
+                labelColor: cfg.primaryColor,
+                unselectedLabelColor: Colors.grey,
+                tabs: [
+                  Tab(text: 'Saved Posts (${savedPosts.length})'),
+                  Tab(text: 'Registered Events (${registeredEvents.length})'),
+                ],
+              ),
+            ),
           ),
 
-          Expanded(
-            child: TabBarView(
-              controller: tabController,
+          SliverToBoxAdapter(
+            child: IndexedStack(
+              index: tabController.index,
               children: [
                 _buildList(
                   savedPosts,
@@ -627,6 +644,8 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
     return ListView.builder(
       padding: const EdgeInsets.all(8),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: posts.length,
       itemBuilder: (ctx, idx) {
         final post = posts[idx] as PostModel;
@@ -652,5 +671,35 @@ class _ProfileScreenState extends State<ProfileScreen>
         );
       },
     );
+  }
+}
+
+class _ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
+  _ProfileTabBarDelegate({required this.tabBar});
+
+  final TabBar tabBar;
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Material(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      elevation: overlapsContent ? 2 : 0,
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _ProfileTabBarDelegate oldDelegate) {
+    return oldDelegate.tabBar != tabBar;
   }
 }
