@@ -14,6 +14,12 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
 
+  // The window is shown and the splash is painted synchronously up front, so
+  // the logo is visible while the engine is starting up (which blocks this
+  // thread). The Flutter view is attached only once the first frame is ready,
+  // so the user never sees a blank/black window.
+  ShowSplashImmediately();
+
   RECT frame = GetClientArea();
 
   // The size here must match the window dimensions to avoid unnecessary surface
@@ -25,9 +31,13 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
-  SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  // Swap the native splash for the rendered Flutter content once the first
+  // frame is ready.
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
+    HWND flutter_view = flutter_controller_->view()->GetNativeWindow();
+    SetChildContent(flutter_view);
+    ShowWindow(flutter_view, SW_SHOW);
     this->Show();
   });
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
 import '../widgets/post_card.dart';
 import '../widgets/role_badge.dart';
@@ -24,147 +25,265 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dataService = Provider.of<MockDataService>(context);
-    final cfg = dataService.config;
-    final filteredPosts = dataService.getPersonalizedFeed(searchQuery: searchQuery);
+    final dataService = context.read<MockDataService>();
+    final cfg = context.select((MockDataService s) => s.config);
+    final userYear = context.select((MockDataService s) => s.currentUser.year);
+    final savedIds = context.select(
+      (MockDataService s) => s.currentUser.savedPostIds,
+    );
+    final registeredIds = context.select(
+      (MockDataService s) => s.currentUser.registeredEventIds,
+    );
+    final filteredPosts = dataService.getPersonalizedFeed(
+      searchQuery: searchQuery,
+    );
+
+    Widget searchField = TextField(
+      controller: searchController,
+      onChanged: (val) => setState(() => searchQuery = val),
+      decoration: InputDecoration(
+        hintText: 'Search announcements, departments, faculty...',
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: searchQuery.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: () {
+                  searchController.clear();
+                  setState(() => searchQuery = '');
+                },
+              )
+            : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        filled: true,
+      ),
+    );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('🔍 Explore Campus'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Search Input
-          TextField(
-            controller: searchController,
-            onChanged: (val) => setState(() => searchQuery = val),
-            decoration: InputDecoration(
-              hintText: 'Search announcements, departments, faculty...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        searchController.clear();
-                        setState(() => searchQuery = '');
-                      },
-                    )
-                  : null,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              filled: true,
+      appBar: AppBar(title: const Text('🔍 Explore Campus')),
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: searchField,
             ),
           ),
-          const SizedBox(height: 20),
-
           if (searchQuery.isNotEmpty) ...[
-            Text(
-              'Search Results (${filteredPosts.length})',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            ...filteredPosts.map((p) => PostCard(post: p)),
-          ] else ...[
-            // Departments Directory Section
-            const Text(
-              '🏫 Academic Departments',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 2.2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-              ),
-              itemCount: cfg.departments.length,
-              itemBuilder: (context, index) {
-                final dept = cfg.departments[index];
-                return Card(
-                  elevation: 0,
-                  color: cfg.primaryColor.withValues(alpha: 0.08),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () {
-                      searchController.text = dept;
-                      setState(() => searchQuery = dept);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            dept,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: cfg.primaryColor,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          const Text('View Updates ›', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                        ],
-                      ),
-                    ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Search Results (${filteredPosts.length})',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+            SliverList.builder(
+              itemCount: filteredPosts.length,
+              itemBuilder: (context, index) {
+                final post = filteredPosts[index];
+                return PostCard(
+                  post: post,
+                  config: cfg,
+                  isSaved: savedIds.contains(post.id),
+                  isRegistered: registeredIds.contains(post.id),
+                  userYear: userYear,
+                  onToggleSave: () => _handleToggleSave(dataService, post),
+                  onToggleRegister: () =>
+                      _handleToggleRegister(dataService, post),
                 );
               },
             ),
+          ] else ...[
+            // Departments Directory Section
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  '🏫 Academic Departments',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 10)),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverGrid.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 1.7,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount: cfg.departments.length,
+                itemBuilder: (context, index) {
+                  final dept = cfg.departments[index];
+                  return Card(
+                    elevation: 0,
+                    color: cfg.primaryColor.withValues(alpha: 0.08),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () {
+                        searchController.text = dept;
+                        setState(() => searchQuery = dept);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  dept,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: cfg.primaryColor,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'View Updates ›',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
 
-            const SizedBox(height: 24),
-            // Featured Faculty & Hosts Directory
-            const Text(
-              '👩‍🏫 Key Faculty & Event Hosts',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  '👩‍🏫 Key Faculty & Event Hosts',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
             ),
-            const SizedBox(height: 10),
-            ListTile(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Colors.black12),
+            const SliverToBoxAdapter(child: SizedBox(height: 10)),
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    side: BorderSide(color: Colors.black12),
+                  ),
+                  leading: CircleAvatar(
+                    backgroundColor: Color(0xFFE0F2FE),
+                    child: Icon(Icons.school, color: Color(0xFF0369A1)),
+                  ),
+                  title: Text('Dr. Ramesh K. Verma'),
+                  subtitle: Text('Dean Academics • Computer Science'),
+                  trailing: RoleBadge(role: UserRole.faculty, isCompact: true),
+                ),
               ),
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFFE0F2FE),
-                child: Icon(Icons.school, color: Color(0xFF0369A1)),
-              ),
-              title: const Text('Dr. Ramesh K. Verma'),
-              subtitle: const Text('Dean Academics • Computer Science'),
-              trailing: const RoleBadge(role: UserRole.faculty, isCompact: true),
             ),
-            const SizedBox(height: 8),
-            ListTile(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Colors.black12),
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    side: BorderSide(color: Colors.black12),
+                  ),
+                  leading: CircleAvatar(
+                    backgroundColor: Color(0xFFFFEDD5),
+                    child: Icon(Icons.event, color: Color(0xFFC2410C)),
+                  ),
+                  title: Text('Dev Society'),
+                  subtitle: Text('Official Tech Club • Student Host'),
+                  trailing: RoleBadge(
+                    role: UserRole.eventHost,
+                    isCompact: true,
+                  ),
+                ),
               ),
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFFFFEDD5),
-                child: Icon(Icons.event, color: Color(0xFFC2410C)),
-              ),
-              title: const Text('Dev Society'),
-              subtitle: const Text('Official Tech Club • Student Host'),
-              trailing: const RoleBadge(role: UserRole.eventHost, isCompact: true),
             ),
 
-            const SizedBox(height: 24),
-            // Popular Campus Announcements
-            const Text(
-              '🔥 Popular Campus Announcements',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  '🔥 Popular Campus Announcements',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
-            ...dataService.posts.take(3).map((p) => PostCard(post: p)),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+            SliverList.builder(
+              itemCount: 3,
+              itemBuilder: (context, index) {
+                final post = dataService.posts[index];
+                return PostCard(
+                  post: post,
+                  config: cfg,
+                  isSaved: savedIds.contains(post.id),
+                  isRegistered: registeredIds.contains(post.id),
+                  userYear: userYear,
+                  onToggleSave: () => _handleToggleSave(dataService, post),
+                  onToggleRegister: () =>
+                      _handleToggleRegister(dataService, post),
+                );
+              },
+            ),
           ],
         ],
+      ),
+    );
+  }
+
+  void _handleToggleSave(MockDataService dataService, PostModel post) {
+    dataService.toggleSavePost(post.id);
+    final isSaved = dataService.currentUser.savedPostIds.contains(post.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isSaved ? 'Saved to Profile!' : 'Removed from saved posts',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _handleToggleRegister(MockDataService dataService, PostModel post) {
+    final wasRegistered = dataService.currentUser.registeredEventIds.contains(
+      post.id,
+    );
+    dataService.toggleEventRegistration(post.id);
+    final isRegistered = dataService.currentUser.registeredEventIds.contains(
+      post.id,
+    );
+    if (wasRegistered == isRegistered) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isRegistered
+              ? '🎉 Successfully registered for ${post.title}!'
+              : 'Unregistered from event.',
+        ),
+        backgroundColor: isRegistered ? Colors.green : Colors.orange,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

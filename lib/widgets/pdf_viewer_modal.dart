@@ -12,10 +12,7 @@ import '../services/local_store_service.dart';
 class PdfViewerModal extends StatefulWidget {
   final PostAttachment attachment;
 
-  const PdfViewerModal({
-    super.key,
-    required this.attachment,
-  });
+  const PdfViewerModal({super.key, required this.attachment});
 
   @override
   State<PdfViewerModal> createState() => _PdfViewerModalState();
@@ -109,8 +106,9 @@ class _PdfViewerModalState extends State<PdfViewerModal> {
   void _zoomBy(int delta) {
     final controller = _controller;
     if (!controller.isReady) return;
-    final zoom =
-        delta > 0 ? controller.getNextZoom() : controller.getPreviousZoom();
+    final zoom = delta > 0
+        ? controller.getNextZoom()
+        : controller.getPreviousZoom();
     controller.setZoom(controller.centerPosition, zoom);
   }
 
@@ -144,10 +142,7 @@ class _PdfViewerModalState extends State<PdfViewerModal> {
   void _showSnack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -163,7 +158,10 @@ class _PdfViewerModalState extends State<PdfViewerModal> {
             children: [
               Text(
                 widget.attachment.title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
               Text(
@@ -180,10 +178,11 @@ class _PdfViewerModalState extends State<PdfViewerModal> {
             ),
             Center(
               child: Text(
-                _viewerReady
-                    ? '${(_zoomDisplay * 100).round()}%'
-                    : '100%',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                _viewerReady ? '${(_zoomDisplay * 100).round()}%' : '100%',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             IconButton(
@@ -208,7 +207,10 @@ class _PdfViewerModalState extends State<PdfViewerModal> {
             if (hasDoc && _pageCount > 0)
               Container(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [

@@ -1,44 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../config/app_config.dart';
 import '../models/post_model.dart';
-import '../services/mock_data_service.dart';
 import 'role_badge.dart';
 import 'pdf_viewer_modal.dart';
 import 'app_image.dart';
 
+/// A stateless, pure post card. All data it renders is passed in; it never
+/// subscribes to the data service, so unrelated changes don't rebuild cards.
 class PostCard extends StatelessWidget {
   final PostModel post;
+  final AppConfig config;
+  final bool isSaved;
+  final bool isRegistered;
+  final String userYear;
+  final VoidCallback? onToggleSave;
+  final VoidCallback? onToggleRegister;
 
   const PostCard({
     super.key,
     required this.post,
+    required this.config,
+    required this.isSaved,
+    required this.isRegistered,
+    required this.userYear,
+    this.onToggleSave,
+    this.onToggleRegister,
   });
 
-  Color _getCategoryColor(MockDataService dataService, PostCategory category) {
-    final cfg = dataService.config;
+  Color _getCategoryColor(PostCategory category) {
     switch (category) {
       case PostCategory.academic:
-        return cfg.academicColor;
+        return config.academicColor;
       case PostCategory.event:
       case PostCategory.workshop:
-        return cfg.eventColor;
+        return config.eventColor;
       case PostCategory.urgent:
       case PostCategory.urgentAnnouncement:
-        return cfg.urgentColor;
+        return config.urgentColor;
       case PostCategory.achievement:
-        return cfg.achievementColor;
+        return config.achievementColor;
       case PostCategory.placement:
       case PostCategory.announcement:
-        return cfg.primaryColor;
+        return config.primaryColor;
       case PostCategory.gallery:
-        return cfg.successColor;
+        return config.successColor;
     }
   }
 
   void _sharePostDynamic(BuildContext context) {
-    final String shareText = '''
+    final String shareText =
+        '''
 📢 ${post.title}
 
 ${post.description}
@@ -97,7 +110,9 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                     Clipboard.setData(ClipboardData(text: shareText));
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('📋 Post details & link copied to clipboard!'),
+                        content: Text(
+                          '📋 Post details & link copied to clipboard!',
+                        ),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -113,369 +128,419 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
 
   @override
   Widget build(BuildContext context) {
-    final dataService = Provider.of<MockDataService>(context);
-    final user = dataService.currentUser;
-    final categoryColor = _getCategoryColor(dataService, post.category);
-    final isSaved = user.savedPostIds.contains(post.id);
-    final isRegistered = post.registeredUserIds.contains(user.id);
+    final categoryColor = _getCategoryColor(post.category);
+    final hasYearMismatch =
+        post.targetYear != null && post.targetYear != userYear;
 
-    final bool hasYearMismatch = post.targetYear != null && post.targetYear != user.year;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return RepaintBoundary(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(
+            color: post.isUrgent ? Colors.red.shade300 : Colors.grey.shade200,
+            width: post.isUrgent ? 1.5 : 1,
           ),
-        ],
-        border: Border.all(
-          color: post.isUrgent ? Colors.red.shade300 : Colors.grey.shade200,
-          width: post.isUrgent ? 1.5 : 1,
         ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Target Year Header Alert Banner
-            if (hasYearMismatch)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                color: Colors.amber.shade50,
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, size: 14, color: Colors.amber),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Target Audience: ${post.targetYear} students',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.amber.shade900,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Target Year Header Alert Banner
+              if (hasYearMismatch)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  color: Colors.amber.shade50,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline,
+                        size: 14,
+                        color: Colors.amber,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Target Audience: ${post.targetYear} students',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.amber.shade900,
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Author Info & Post Category Chip
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: categoryColor.withValues(
+                            alpha: 0.15,
+                          ),
+                          child: Text(
+                            post.authorName.substring(0, 1).toUpperCase(),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: categoryColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      post.authorName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  RoleBadge(
+                                    role: post.authorRole,
+                                    isCompact: true,
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                '${post.department} • ${_formatTimestamp(post.timestamp)}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Category Badge
+                        Flexible(
+                          flex: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: categoryColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: categoryColor.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Text(
+                              post.category.displayName.toUpperCase(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: categoryColor,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Post Title
+                    Text(
+                      post.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        height: 1.25,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Post Description
+                    Text(
+                      post.description,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        height: 1.4,
+                      ),
+                    ),
+
+                    // Optional Post Image
+                    if (post.imageUrl != null) ...[
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: AppImage(
+                          source: post.imageUrl,
+                          height: 180,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ],
+
+                    // Event Details Box (if post is an Event/Workshop)
+                    if (post.isEvent) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: config.eventColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: config.eventColor.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  size: 16,
+                                  color: config.eventColor,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    post.venue ?? 'Campus Auditorium',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                if (post.maxParticipants != null) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          (post.isRegistrationFull
+                                                  ? Colors.red
+                                                  : Colors.green)
+                                              .withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '${post.currentRegistrations}/${post.maxParticipants} Seats',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: post.isRegistrationFull
+                                            ? Colors.red
+                                            : Colors.green.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (post.eventDate != null) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.access_time,
+                                    size: 16,
+                                    color: config.eventColor,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _formatEventDate(post.eventDate!),
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // Attachments List (PDF attachments)
+                    if (post.attachments.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      ...post.attachments.map(
+                        (att) => InkWell(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => PdfViewerModal(attachment: att),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            margin: const EdgeInsets.only(bottom: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.blue.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.picture_as_pdf,
+                                  color: Colors.red,
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        att.title,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blue,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        'Tap to view document • ${att.fileSize}',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.remove_red_eye_outlined,
+                                  size: 18,
+                                  color: Colors.blue,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 6),
+
+                    // Action Buttons Row (Save, Share, Register)
+                    Row(
+                      children: [
+                        // Save / Bookmark
+                        IconButton(
+                          icon: Icon(
+                            isSaved ? Icons.bookmark : Icons.bookmark_border,
+                            color: isSaved ? config.primaryColor : Colors.grey,
+                          ),
+                          onPressed: onToggleSave,
+                        ),
+                        Text(
+                          '${post.saveCount}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        // Dynamic Share Button
+                        IconButton(
+                          icon: const Icon(
+                            Icons.share_outlined,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () => _sharePostDynamic(context),
+                        ),
+
+                        const Spacer(),
+
+                        // Register Button if Event
+                        if (post.isEvent) ...[
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isRegistered
+                                  ? Colors.grey.shade300
+                                  : config.eventColor,
+                              foregroundColor: isRegistered
+                                  ? Colors.black87
+                                  : Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              elevation: isRegistered ? 0 : 2,
+                            ),
+                            onPressed: post.isRegistrationFull && !isRegistered
+                                ? null
+                                : onToggleRegister,
+                            icon: Icon(
+                              isRegistered
+                                  ? Icons.check_circle
+                                  : Icons.how_to_reg,
+                              size: 16,
+                            ),
+                            label: Text(
+                              isRegistered
+                                  ? 'Registered'
+                                  : (post.isRegistrationFull
+                                        ? 'Full'
+                                        : 'Register Now'),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
               ),
-
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Author Info & Post Category Chip
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: categoryColor.withValues(alpha: 0.15),
-                        child: Text(
-                          post.authorName.substring(0, 1).toUpperCase(),
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: categoryColor,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    post.authorName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                RoleBadge(role: post.authorRole, isCompact: true),
-                              ],
-                            ),
-                            Text(
-                              '${post.department} • ${_formatTimestamp(post.timestamp)}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Theme.of(context).colorScheme.outline,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Category Badge
-                      Flexible(
-                        flex: 0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: categoryColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: categoryColor.withValues(alpha: 0.3)),
-                          ),
-                          child: Text(
-                            post.category.displayName.toUpperCase(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: categoryColor,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Post Title
-                  Text(
-                    post.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      height: 1.25,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Post Description
-                  Text(
-                    post.description,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      height: 1.4,
-                    ),
-                  ),
-
-                  // Optional Post Image
-                  if (post.imageUrl != null) ...[
-                    const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: AppImage(
-                        source: post.imageUrl,
-                        height: 180,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ],
-
-                  // Event Details Box (if post is an Event/Workshop)
-                  if (post.isEvent) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: dataService.config.eventColor.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: dataService.config.eventColor.withValues(alpha: 0.25),
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.location_on, size: 16, color: dataService.config.eventColor),
-                              const SizedBox(width: 6),
-                              Text(
-                                post.venue ?? 'Campus Auditorium',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                              ),
-                              const Spacer(),
-                              if (post.maxParticipants != null)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: (post.isRegistrationFull ? Colors.red : Colors.green).withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '${post.currentRegistrations}/${post.maxParticipants} Seats',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: post.isRegistrationFull ? Colors.red : Colors.green.shade700,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          if (post.eventDate != null) ...[
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Icon(Icons.access_time, size: 16, color: dataService.config.eventColor),
-                                const SizedBox(width: 6),
-                                Text(
-                                  _formatEventDate(post.eventDate!),
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  // Attachments List (PDF attachments)
-                  if (post.attachments.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    ...post.attachments.map((att) => InkWell(
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => PdfViewerModal(attachment: att),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        margin: const EdgeInsets.only(bottom: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.blue.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.picture_as_pdf, color: Colors.red, size: 22),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    att.title,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    'Tap to view document • ${att.fileSize}',
-                                    style: const TextStyle(fontSize: 10, color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.remove_red_eye_outlined, size: 18, color: Colors.blue),
-                          ],
-                        ),
-                      ),
-                    )),
-                  ],
-
-                  const SizedBox(height: 12),
-                  const Divider(height: 1),
-                  const SizedBox(height: 6),
-
-                  // Action Buttons Row (Save, Share, Register)
-                  Row(
-                    children: [
-                      // Save / Bookmark
-                      IconButton(
-                        icon: Icon(
-                          isSaved ? Icons.bookmark : Icons.bookmark_border,
-                          color: isSaved ? dataService.config.primaryColor : Colors.grey,
-                        ),
-                        onPressed: () {
-                          dataService.toggleSavePost(post.id);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(isSaved ? 'Removed from saved posts' : 'Saved to Profile!'),
-                              duration: const Duration(seconds: 1),
-                            ),
-                          );
-                        },
-                      ),
-                      Text(
-                        '${post.saveCount}',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-
-                      const SizedBox(width: 12),
-
-                      // Dynamic Share Button
-                      IconButton(
-                        icon: const Icon(Icons.share_outlined, color: Colors.grey),
-                        onPressed: () => _sharePostDynamic(context),
-                      ),
-
-                      const Spacer(),
-
-                      // Register Button if Event
-                      if (post.isEvent) ...[
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isRegistered
-                                ? Colors.grey.shade300
-                                : dataService.config.eventColor,
-                            foregroundColor: isRegistered ? Colors.black87 : Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            elevation: isRegistered ? 0 : 2,
-                          ),
-                          onPressed: post.isRegistrationFull && !isRegistered
-                              ? null
-                              : () {
-                                  dataService.toggleEventRegistration(post.id);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        isRegistered
-                                            ? 'Unregistered from event.'
-                                            : '🎉 Successfully registered for ${post.title}!',
-                                      ),
-                                      backgroundColor: isRegistered ? Colors.orange : Colors.green,
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
-                                },
-                          icon: Icon(
-                            isRegistered ? Icons.check_circle : Icons.how_to_reg,
-                            size: 16,
-                          ),
-                          label: Text(
-                            isRegistered
-                                ? 'Registered'
-                                : (post.isRegistrationFull ? 'Full' : 'Register Now'),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

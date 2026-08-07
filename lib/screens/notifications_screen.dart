@@ -15,12 +15,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dataService = Provider.of<MockDataService>(context);
-    final notifs = dataService.notifications;
+    final dataService = context.read<MockDataService>();
+    final notifs = context.select((MockDataService s) => s.notifications);
 
     final filtered = selectedCat == 'All'
         ? notifs
-        : notifs.where((n) => n.category.displayName.toLowerCase() == selectedCat.toLowerCase()).toList();
+        : notifs
+              .where(
+                (n) =>
+                    n.category.displayName.toLowerCase() ==
+                    selectedCat.toLowerCase(),
+              )
+              .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -32,7 +38,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             onPressed: () {
               dataService.markAllNotificationsRead();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('All notifications marked as read.')),
+                const SnackBar(
+                  content: Text('All notifications marked as read.'),
+                ),
               );
             },
           ),
@@ -45,17 +53,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.all(12),
             child: Row(
-              children: ['All', 'Academic', 'Events', 'General', 'Personal'].map((cat) {
-                final isSelected = selectedCat == cat;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    label: Text(cat),
-                    selected: isSelected,
-                    onSelected: (sel) => setState(() => selectedCat = cat),
-                  ),
-                );
-              }).toList(),
+              children: ['All', 'Academic', 'Events', 'General', 'Personal']
+                  .map((cat) {
+                    final isSelected = selectedCat == cat;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(cat),
+                        selected: isSelected,
+                        onSelected: (sel) => setState(() => selectedCat = cat),
+                      ),
+                    );
+                  })
+                  .toList(),
             ),
           ),
 
@@ -65,9 +75,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: const [
-                        Icon(Icons.notifications_none, size: 64, color: Colors.grey),
+                        Icon(
+                          Icons.notifications_none,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
                         SizedBox(height: 12),
-                        Text('No notifications in this category', style: TextStyle(color: Colors.grey)),
+                        Text(
+                          'No notifications in this category',
+                          style: TextStyle(color: Colors.grey),
+                        ),
                       ],
                     ),
                   )
@@ -78,16 +95,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       final n = filtered[index];
                       return Card(
                         margin: const EdgeInsets.only(bottom: 10),
-                        color: n.isRead ? Theme.of(context).cardColor : Colors.blue.shade50.withValues(alpha: 0.4),
+                        color: n.isRead
+                            ? Theme.of(context).cardColor
+                            : Colors.blue.shade50.withValues(alpha: 0.4),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: _getCatColor(n.category).withValues(alpha: 0.2),
-                            child: Icon(_getCatIcon(n.category), color: _getCatColor(n.category)),
+                            backgroundColor: _getCatColor(
+                              n.category,
+                            ).withValues(alpha: 0.2),
+                            child: Icon(
+                              _getCatIcon(n.category),
+                              color: _getCatColor(n.category),
+                            ),
                           ),
                           title: Text(
                             n.title,
                             style: TextStyle(
-                              fontWeight: n.isRead ? FontWeight.normal : FontWeight.bold,
+                              fontWeight: n.isRead
+                                  ? FontWeight.normal
+                                  : FontWeight.bold,
                               fontSize: 14,
                             ),
                           ),
@@ -95,11 +121,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 4),
-                              Text(n.body, style: const TextStyle(fontSize: 12)),
+                              Text(
+                                n.body,
+                                style: const TextStyle(fontSize: 12),
+                              ),
                               const SizedBox(height: 4),
                               Text(
                                 _formatTime(n.timestamp),
-                                style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                ),
                               ),
                             ],
                           ),

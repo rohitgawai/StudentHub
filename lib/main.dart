@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -6,7 +8,6 @@ import 'services/mock_data_service.dart';
 import 'services/local_store_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_screen.dart';
-import 'screens/splash_screen.dart';
 import 'screens/home_feed_screen.dart';
 import 'screens/events_screen.dart';
 import 'screens/explore_screen.dart';
@@ -15,22 +16,34 @@ import 'screens/notifications_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await LocalStoreService.instance.warmUp();
+  // Fast unawaited local warm-up so runApp() starts on frame 1 immediately.
+  unawaited(LocalStoreService.instance.warmUp());
+  final dataService = MockDataService();
+  runApp(
+    ChangeNotifierProvider.value(
+      value: dataService,
+      child: const StudentHubApp(),
+    ),
+  );
+  // Background backend init delayed post-frame so app startup renders instantly
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future.delayed(const Duration(seconds: 2), () {
+      _initBackend(dataService);
+    });
+  });
+}
+
+Future<void> _initBackend(MockDataService dataService) async {
   try {
     await Supabase.initialize(
       url: SupabaseConfig.url,
       publishableKey: SupabaseConfig.anonKey,
     );
   } catch (_) {
-    // Backend unavailable (offline / not set up): the app continues with
-    // the in-memory mock dataset.
+    // Backend unavailable: continue with local/mock dataset.
+    return;
   }
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => MockDataService(),
-      child: const StudentHubApp(),
-    ),
-  );
+  await dataService.syncNow();
 }
 
 class StudentHubApp extends StatelessWidget {
@@ -38,25 +51,14 @@ class StudentHubApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<MockDataService>(
-      builder: (context, dataService, child) {
-        if (dataService.isLoading) {
-          return const MaterialApp(
-            home: Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            ),
-          );
-        }
-
-        return MaterialApp(
-          title: dataService.config.appName,
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.lightTheme(dataService.config),
-          darkTheme: AppTheme.darkTheme(dataService.config),
-          themeMode: ThemeMode.light,
-          home: const MainNavigationContainer(),
-        );
-      },
+    final cfg = context.select((MockDataService s) => s.config);
+    return MaterialApp(
+      title: cfg.appName,
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme(cfg),
+      darkTheme: AppTheme.darkTheme(cfg),
+      themeMode: ThemeMode.light,
+      home: const MainNavigationContainer(),
     );
   }
 }
@@ -65,13 +67,13 @@ class MainNavigationContainer extends StatefulWidget {
   const MainNavigationContainer({super.key});
 
   @override
-  State<MainNavigationContainer> createState() => _MainNavigationContainerState();
+  State<MainNavigationContainer> createState() =>
+      _MainNavigationContainerState();
 }
 
 class _MainNavigationContainerState extends State<MainNavigationContainer> {
   int currentIndex = 0;
   bool isAuthenticated = true;
-  bool showSplash = true;
 
   final List<Widget> screens = const [
     HomeFeedScreen(),
@@ -82,21 +84,16 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
 
   @override
   Widget build(BuildContext context) {
-    if (showSplash) {
-      return SplashScreen(
-        onGetStarted: () => setState(() => showSplash = false),
-      );
-    }
-
     if (!isAuthenticated) {
       return AuthScreen(
         onLoginComplete: () => setState(() => isAuthenticated = true),
       );
     }
 
-    final dataService = Provider.of<MockDataService>(context);
-    final cfg = dataService.config;
-    final unreadNotifs = dataService.notifications.where((n) => !n.isRead).length;
+    final cfg = context.select((MockDataService s) => s.config);
+    final unreadNotifs = context.select(
+      (MockDataService s) => s.notifications.where((n) => !n.isRead).length,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -118,7 +115,11 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                   ),
                 ],
               ),
-              child: const Icon(Icons.school_rounded, size: 20, color: Colors.white),
+              child: const Icon(
+                Icons.school_rounded,
+                size: 20,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(width: 10),
             Column(
@@ -135,7 +136,12 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                 ),
                 Text(
                   cfg.collegeShortCode,
-                  style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 0.6),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.6,
+                  ),
                 ),
               ],
             ),
@@ -151,7 +157,9 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (c) => const NotificationsScreen()),
+                    MaterialPageRoute(
+                      builder: (c) => const NotificationsScreen(),
+                    ),
                   );
                 },
               ),
@@ -165,7 +173,10 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                       color: Colors.red,
                       shape: BoxShape.circle,
                     ),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
                     child: Text(
                       '$unreadNotifs',
                       style: const TextStyle(
@@ -184,10 +195,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       ),
 
       // Body Navigation Screen
-      body: IndexedStack(
-        index: currentIndex,
-        children: screens,
-      ),
+      body: IndexedStack(index: currentIndex, children: screens),
 
       // Bottom Navigation Bar (Home, Events, Explore, Profile)
       bottomNavigationBar: BottomNavigationBar(

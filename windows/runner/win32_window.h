@@ -39,7 +39,12 @@ class Win32Window {
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
 
-  // Release OS resources associated with window.
+  // Show the window and paint the splash synchronously (without waiting for the
+  // message loop). This must be used before the Flutter engine boots, since
+  // queueing a WM_PAINT alone won't be delivered until the loop runs.
+  void ShowSplashImmediately();
+
+  // Release OS resources associated with the window.
   void Destroy();
 
   // Inserts |content| into the window tree.
@@ -89,6 +94,10 @@ class Win32Window {
 
   // Update the window frame's theme to match the system theme.
   static void UpdateTheme(HWND const window);
+
+  // Paints the brand splash (logo) while the Flutter view hasn't been attached
+  // yet, so the native window never shows a blank/black screen at startup.
+  static void PaintSplash(HWND window);
 
   bool quit_on_close_ = false;
 

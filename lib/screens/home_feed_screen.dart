@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
 import '../widgets/post_card.dart';
@@ -40,10 +41,58 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     }
   }
 
+  void _handleToggleSave(MockDataService dataService, PostModel post) {
+    dataService.toggleSavePost(post.id);
+    final isSaved = dataService.currentUser.savedPostIds.contains(post.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isSaved ? 'Saved to Profile!' : 'Removed from saved posts',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _handleToggleRegister(MockDataService dataService, PostModel post) {
+    final wasRegistered = dataService.currentUser.registeredEventIds.contains(
+      post.id,
+    );
+    dataService.toggleEventRegistration(post.id);
+    final isRegistered = dataService.currentUser.registeredEventIds.contains(
+      post.id,
+    );
+    if (wasRegistered == isRegistered) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isRegistered
+              ? '🎉 Successfully registered for ${post.title}!'
+              : 'Unregistered from event.',
+        ),
+        backgroundColor: isRegistered ? Colors.green : Colors.orange,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final dataService = Provider.of<MockDataService>(context);
-    final cfg = dataService.config;
+    final dataService = context.read<MockDataService>();
+    // Narrow subscriptions: this screen only rebuilds when the data it
+    // actually renders changes.
+    final cfg = context.select((MockDataService s) => s.config);
+    final activeRole = context.select((MockDataService s) => s.activeRole);
+    final userDept = context.select(
+      (MockDataService s) => s.currentUser.department,
+    );
+    final userYear = context.select((MockDataService s) => s.currentUser.year);
+    final savedIds = context.select(
+      (MockDataService s) => s.currentUser.savedPostIds,
+    );
+    final registeredIds = context.select(
+      (MockDataService s) => s.currentUser.registeredEventIds,
+    );
 
     final categories = ['All', ...cfg.postCategories];
     final posts = dataService.getPersonalizedFeed(
@@ -52,18 +101,20 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     );
 
     // Requirement 3: "post update" feature only for hosts, faculty, or admin
-    final bool canPostUpdate = dataService.activeRole == UserRole.eventHost ||
-        dataService.activeRole == UserRole.faculty ||
-        dataService.activeRole == UserRole.admin;
+    final bool canPostUpdate =
+        activeRole == UserRole.eventHost ||
+        activeRole == UserRole.faculty ||
+        activeRole == UserRole.admin;
 
-    final headerAnnouncement = dataService.activeAnnouncementFor(dataService.currentUser.department);
+    final headerAnnouncement = dataService.activeAnnouncementFor(userDept);
 
     return Scaffold(
       body: Column(
         children: [
           // Urgent Announcement Banner
           if (cfg.enableUrgentBanner &&
-              (headerAnnouncement != null || cfg.announcementBannerText.isNotEmpty))
+              (headerAnnouncement != null ||
+                  cfg.announcementBannerText.isNotEmpty))
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -74,14 +125,19 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.campaign_rounded, color: Colors.white, size: 22),
+                  const Icon(
+                    Icons.campaign_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          headerAnnouncement?.title ?? cfg.announcementBannerText,
+                          headerAnnouncement?.title ??
+                              cfg.announcementBannerText,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -128,7 +184,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                               },
                             )
                           : null,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 0,
+                        horizontal: 16,
+                      ),
                       filled: true,
                       fillColor: Theme.of(context).cardColor,
                       border: OutlineInputBorder(
@@ -161,7 +220,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                           )
                         : Icon(Icons.refresh_rounded, color: cfg.primaryColor),
                     tooltip: 'Refresh Feed',
-                    onPressed: isRefreshing ? null : () => _handleRefresh(dataService),
+                    onPressed: isRefreshing
+                        ? null
+                        : () => _handleRefresh(dataService),
                   ),
                 ),
               ],
@@ -184,8 +245,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                     checkmarkColor: cfg.primaryColor,
                     labelStyle: TextStyle(
                       fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? cfg.primaryColor : Theme.of(context).colorScheme.onSurface,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      color: isSelected
+                          ? cfg.primaryColor
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                     onSelected: (selected) {
                       setState(() => selectedCategory = cat);
@@ -211,9 +276,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.feed_outlined, size: 64, color: Colors.grey),
+                              Icon(
+                                Icons.feed_outlined,
+                                size: 64,
+                                color: Colors.grey,
+                              ),
                               SizedBox(height: 12),
-                              Text('No posts match your filters', style: TextStyle(color: Colors.grey)),
+                              Text(
+                                'No posts match your filters',
+                                style: TextStyle(color: Colors.grey),
+                              ),
                             ],
                           ),
                         ),
@@ -223,7 +295,18 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                       padding: const EdgeInsets.only(bottom: 80),
                       itemCount: posts.length,
                       itemBuilder: (context, index) {
-                        return PostCard(post: posts[index]);
+                        final post = posts[index];
+                        return PostCard(
+                          post: post,
+                          config: cfg,
+                          isSaved: savedIds.contains(post.id),
+                          isRegistered: registeredIds.contains(post.id),
+                          userYear: userYear,
+                          onToggleSave: () =>
+                              _handleToggleSave(dataService, post),
+                          onToggleRegister: () =>
+                              _handleToggleRegister(dataService, post),
+                        );
                       },
                     ),
             ),
@@ -240,13 +323,19 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                 _showCreateOptionsModal(context, dataService);
               },
               icon: const Icon(Icons.add_rounded),
-              label: const Text('Post Update', style: TextStyle(fontWeight: FontWeight.bold)),
+              label: const Text(
+                'Post Update',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             )
           : null,
     );
   }
 
-  void _showCreateOptionsModal(BuildContext context, MockDataService dataService) {
+  void _showCreateOptionsModal(
+    BuildContext context,
+    MockDataService dataService,
+  ) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -270,7 +359,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                     child: const Icon(Icons.announcement, color: Colors.blue),
                   ),
                   title: const Text('New Announcement / Notice'),
-                  subtitle: const Text('Post academic updates, attachments, or achievements'),
+                  subtitle: const Text(
+                    'Post academic updates, attachments, or achievements',
+                  ),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     showDialog(
@@ -285,7 +376,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                     child: const Icon(Icons.event, color: Colors.orange),
                   ),
                   title: const Text('New Campus Event'),
-                  subtitle: const Text('Publish hackathons, workshops, or competitions'),
+                  subtitle: const Text(
+                    'Publish hackathons, workshops, or competitions',
+                  ),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     showDialog(

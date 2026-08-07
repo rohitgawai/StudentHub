@@ -5,7 +5,9 @@ import 'package:student_hub/models/user_model.dart';
 import 'package:student_hub/services/mock_data_service.dart';
 
 void main() {
-  testWidgets('limited-time Event Host role auto-expires', (WidgetTester tester) async {
+  testWidgets('limited-time Event Host role auto-expires', (
+    WidgetTester tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     final service = MockDataService();
     try {
@@ -44,13 +46,24 @@ void main() {
       expect(service.currentUser.roles, isNot(contains(UserRole.eventHost)));
 
       // Admin approves
-      service.updateRoleRequestStatus(request.id, RoleRequestStatus.approved, 'Approved');
+      service.updateRoleRequestStatus(
+        request.id,
+        RoleRequestStatus.approved,
+        'Approved',
+      );
       expect(service.currentUser.roles, contains(UserRole.eventHost));
-      expect(service.currentUser.roleExpirations.containsKey(UserRole.eventHost), isTrue);
+      expect(
+        service.currentUser.roleExpirations.containsKey(UserRole.eventHost),
+        isTrue,
+      );
 
       // Backdate the expiry, then run the expiry check
       service.currentUser = service.currentUser.copyWith(
-        roleExpirations: {UserRole.eventHost: DateTime.now().subtract(const Duration(minutes: 1))},
+        roleExpirations: {
+          UserRole.eventHost: DateTime.now().subtract(
+            const Duration(minutes: 1),
+          ),
+        },
       );
       service.checkForExpiredRoles();
 
@@ -62,6 +75,9 @@ void main() {
         service.notifications.any((n) => n.title.contains('Expired')),
         isTrue,
       );
+
+      // Flush the debounced snapshot so no timer is left pending.
+      await service.flushLocalSave();
     } finally {
       service.dispose();
     }

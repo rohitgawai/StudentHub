@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
+import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../models/role_request_model.dart';
 import '../services/mock_data_service.dart';
@@ -20,7 +22,8 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
   late TabController tabController;
 
   @override
@@ -37,16 +40,30 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
-    final dataService = Provider.of<MockDataService>(context);
-    final user = dataService.currentUser;
-    final cfg = dataService.config;
+    final dataService = context.read<MockDataService>();
+    final user = context.select((MockDataService s) => s.currentUser);
+    final cfg = context.select((MockDataService s) => s.config);
+    final activeRole = context.select((MockDataService s) => s.activeRole);
+    final posts = context.select((MockDataService s) => s.posts);
+    final roleRequests = context.select((MockDataService s) => s.roleRequests);
+    final notifications = context.select(
+      (MockDataService s) => s.notifications,
+    );
 
-    final savedPosts = dataService.posts.where((p) => user.savedPostIds.contains(p.id)).toList();
-    final registeredEvents = dataService.posts.where((p) => user.registeredEventIds.contains(p.id)).toList();
-    final myRoleRequests = dataService.roleRequests.where((r) => r.userId == user.id).toList();
+    final savedPosts = posts
+        .where((p) => user.savedPostIds.contains(p.id))
+        .toList();
+    final registeredEvents = posts
+        .where((p) => user.registeredEventIds.contains(p.id))
+        .toList();
+    final myRoleRequests = roleRequests
+        .where((r) => r.userId == user.id)
+        .toList();
 
     // Filter approved roles for dropdown (excluding Admin)
-    final allowedSwitcherRoles = user.roles.where((r) => r != UserRole.admin).toList();
+    final allowedSwitcherRoles = user.roles
+        .where((r) => r != UserRole.admin)
+        .toList();
     final bool canSwitchRoles = allowedSwitcherRoles.length > 1;
 
     // Requirement 5: For Faculty role, filter out "Student" from assigned roles display
@@ -62,7 +79,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final bool hasBothElevatedRoles = hasHostRole && hasFacultyRole;
 
     // Check if host/faculty role expired notification is present
-    final bool showRoleExpiredNotice = dataService.notifications.any((n) => n.title.contains('Access Expired'));
+    final bool showRoleExpiredNotice = notifications.any(
+      (n) => n.title.contains('Access Expired'),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -95,15 +114,21 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       onTap: () {
                         showDialog(
                           context: context,
-                          builder: (ctx) => ProfileAvatarZoomDialog(avatarUrl: user.avatarUrl),
+                          builder: (ctx) => ProfileAvatarZoomDialog(
+                            avatarUrl: user.avatarUrl,
+                          ),
                         );
                       },
                       child: Stack(
                         children: [
                           CircleAvatar(
                             radius: 36,
-                            backgroundImage: resolveImageProvider(user.avatarUrl),
-                            child: user.avatarUrl.isEmpty ? const Icon(Icons.person, size: 36) : null,
+                            backgroundImage: resolveImageProvider(
+                              user.avatarUrl,
+                            ),
+                            child: user.avatarUrl.isEmpty
+                                ? const Icon(Icons.person, size: 36)
+                                : null,
                           ),
                           Positioned(
                             bottom: 0,
@@ -114,7 +139,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 color: Colors.blue,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.zoom_in, size: 14, color: Colors.white),
+                              child: const Icon(
+                                Icons.zoom_in,
+                                size: 14,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ],
@@ -139,19 +168,31 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                               ),
                               if (user.isVerified) ...[
                                 const SizedBox(width: 4),
-                                const Icon(Icons.verified, size: 18, color: Colors.blue),
+                                const Icon(
+                                  Icons.verified,
+                                  size: 18,
+                                  color: Colors.blue,
+                                ),
                               ],
                             ],
                           ),
                           const SizedBox(height: 2),
                           Text(
                             user.studentOrEmployeeId,
-                            style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             '${user.department} • ${user.year}',
-                            style: TextStyle(fontSize: 12, color: cfg.primaryColor, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cfg.primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ),
@@ -174,37 +215,55 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 // Requirement 2 & 1: Active Perspective dropdown menu change (compact & bounded layout)
                 if (canSwitchRoles) ...[
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: cfg.primaryColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: cfg.primaryColor.withValues(alpha: 0.25)),
+                      border: Border.all(
+                        color: cfg.primaryColor.withValues(alpha: 0.25),
+                      ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.swap_horiz, size: 18, color: Colors.blueGrey),
+                        const Icon(
+                          Icons.swap_horiz,
+                          size: 18,
+                          color: Colors.blueGrey,
+                        ),
                         const SizedBox(width: 6),
                         const Text(
                           'Active Perspective: ',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueGrey,
+                          ),
                         ),
                         Expanded(
                           child: Align(
                             alignment: Alignment.centerRight,
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<UserRole>(
-                                value: allowedSwitcherRoles.contains(dataService.activeRole)
-                                    ? dataService.activeRole
+                                value: allowedSwitcherRoles.contains(activeRole)
+                                    ? activeRole
                                     : allowedSwitcherRoles.first,
                                 isDense: true,
                                 menuMaxHeight: 220,
-                                icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+                                icon: const Icon(
+                                  Icons.keyboard_arrow_down,
+                                  size: 18,
+                                ),
                                 onChanged: (UserRole? newRole) {
                                   if (newRole != null) {
                                     dataService.switchActiveRole(newRole);
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Switched view perspective to ${newRole.displayName}'),
+                                        content: Text(
+                                          'Switched view perspective to ${newRole.displayName}',
+                                        ),
                                         duration: const Duration(seconds: 1),
                                       ),
                                     );
@@ -213,7 +272,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 items: allowedSwitcherRoles.map((role) {
                                   return DropdownMenuItem<UserRole>(
                                     value: role,
-                                    child: RoleBadge(role: role, isCompact: true),
+                                    child: RoleBadge(
+                                      role: role,
+                                      isCompact: true,
+                                    ),
                                   );
                                 }).toList(),
                               ),
@@ -229,24 +291,34 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 // Requirement 5: Roles Badges Row (Student hidden when Faculty is active)
                 Row(
                   children: [
-                    const Text('Assigned Roles: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Assigned Roles: ',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Wrap(
                         spacing: 6,
                         runSpacing: 6,
                         children: displayAssignedRoles
-                            .map((r) => Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    RoleBadge(role: r, isCompact: true),
-                                    if (user.isRoleExpiring(r))
-                                      Padding(
-                                        padding: const EdgeInsets.only(left: 4),
-                                        child: _buildExpiryTag(user.getRoleExpiry(r)!),
+                            .map(
+                              (r) => Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  RoleBadge(role: r, isCompact: true),
+                                  if (user.isRoleExpiring(r))
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: _buildExpiryTag(
+                                        user.getRoleExpiry(r)!,
                                       ),
-                                  ],
-                                ))
+                                    ),
+                                ],
+                              ),
+                            )
                             .toList(),
                       ),
                     ),
@@ -268,12 +340,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     ),
                     child: Row(
                       children: const [
-                        Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.red,
+                          size: 20,
+                        ),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             '⚠️ Your temporary role has expired! You can re-apply below.',
-                            style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
@@ -297,13 +377,18 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         showRoleExpiredNotice
                             ? 'Re-Apply for Event Host / Faculty Role'
                             : 'Apply for Event Host / Faculty Role',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
 
                 // Role Dashboards shortcuts if permitted
-                if (user.hasRole(UserRole.admin) || user.hasRole(UserRole.faculty) || user.hasRole(UserRole.eventHost)) ...[
+                if (user.hasRole(UserRole.admin) ||
+                    user.hasRole(UserRole.faculty) ||
+                    user.hasRole(UserRole.eventHost)) ...[
                   const SizedBox(height: 10),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -313,27 +398,56 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ActionChip(
-                              avatar: const Icon(Icons.admin_panel_settings, size: 16, color: Colors.purple),
+                              avatar: const Icon(
+                                Icons.admin_panel_settings,
+                                size: 16,
+                                color: Colors.purple,
+                              ),
                               label: const Text('Admin Control Panel'),
-                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AdminDashboardScreen())),
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (c) => const AdminDashboardScreen(),
+                                ),
+                              ),
                             ),
                           ),
                         if (user.hasRole(UserRole.faculty))
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ActionChip(
-                              avatar: const Icon(Icons.menu_book, size: 16, color: Colors.blue),
+                              avatar: const Icon(
+                                Icons.menu_book,
+                                size: 16,
+                                color: Colors.blue,
+                              ),
                               label: const Text('Faculty Dashboard'),
-                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const FacultyDashboardScreen())),
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (c) =>
+                                      const FacultyDashboardScreen(),
+                                ),
+                              ),
                             ),
                           ),
                         if (user.hasRole(UserRole.eventHost))
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ActionChip(
-                              avatar: const Icon(Icons.event, size: 16, color: Colors.orange),
+                              avatar: const Icon(
+                                Icons.event,
+                                size: 16,
+                                color: Colors.orange,
+                              ),
                               label: const Text('Event Host Dashboard'),
-                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const EventHostDashboardScreen())),
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (c) =>
+                                      const EventHostDashboardScreen(),
+                                ),
+                              ),
                             ),
                           ),
                       ],
@@ -354,23 +468,38 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Role Application Statuses:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        ...myRoleRequests.map((req) => Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Row(
-                            children: [
-                              Text('${req.requestedRole.displayName}: ', style: const TextStyle(fontSize: 11)),
-                              _buildStatusBadge(req.status),
-                              if (req.isLimitedAccess && req.expiresAt != null) ...[
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${req.termLabel} • till ${_formatDate(req.expiresAt!)}',
-                                  style: const TextStyle(fontSize: 10, color: Colors.grey),
-                                ),
-                              ],
-                            ],
+                        const Text(
+                          'Role Application Statuses:',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
                           ),
-                        )),
+                        ),
+                        ...myRoleRequests.map(
+                          (req) => Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '${req.requestedRole.displayName}: ',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                _buildStatusBadge(req.status),
+                                if (req.isLimitedAccess &&
+                                    req.expiresAt != null) ...[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${req.termLabel} • till ${_formatDate(req.expiresAt!)}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -394,8 +523,22 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             child: TabBarView(
               controller: tabController,
               children: [
-                _buildList(savedPosts, 'No saved posts yet. Tap bookmark on feed posts!'),
-                _buildList(registeredEvents, 'No registered events yet.'),
+                _buildList(
+                  savedPosts,
+                  'No saved posts yet. Tap bookmark on feed posts!',
+                  cfg: cfg,
+                  userYear: user.year,
+                  isSavedForAll: true,
+                  dataService: dataService,
+                ),
+                _buildList(
+                  registeredEvents,
+                  'No registered events yet.',
+                  cfg: cfg,
+                  userYear: user.year,
+                  isRegisteredForAll: true,
+                  dataService: dataService,
+                ),
               ],
             ),
           ),
@@ -410,15 +553,21 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
-        color: (isExpiringSoon ? Colors.orange : Colors.green).withValues(alpha: 0.15),
+        color: (isExpiringSoon ? Colors.orange : Colors.green).withValues(
+          alpha: 0.15,
+        ),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        daysLeft < 1 ? 'Expires today' : 'Expires in $daysLeft day${daysLeft > 1 ? 's' : ''}',
+        daysLeft < 1
+            ? 'Expires today'
+            : 'Expires in $daysLeft day${daysLeft > 1 ? 's' : ''}',
         style: TextStyle(
           fontSize: 9,
           fontWeight: FontWeight.bold,
-          color: isExpiringSoon ? Colors.orange.shade900 : Colors.green.shade800,
+          color: isExpiringSoon
+              ? Colors.orange.shade900
+              : Colors.green.shade800,
         ),
       ),
     );
@@ -453,12 +602,24 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
       ),
     );
   }
 
-  Widget _buildList(List posts, String emptyMsg) {
+  Widget _buildList(
+    List posts,
+    String emptyMsg, {
+    required AppConfig cfg,
+    required String userYear,
+    required MockDataService dataService,
+    bool isSavedForAll = false,
+    bool isRegisteredForAll = false,
+  }) {
     if (posts.isEmpty) {
       return Center(
         child: Text(emptyMsg, style: const TextStyle(color: Colors.grey)),
@@ -467,7 +628,29 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     return ListView.builder(
       padding: const EdgeInsets.all(8),
       itemCount: posts.length,
-      itemBuilder: (ctx, idx) => PostCard(post: posts[idx]),
+      itemBuilder: (ctx, idx) {
+        final post = posts[idx] as PostModel;
+        return PostCard(
+          post: post,
+          config: cfg,
+          isSaved:
+              isSavedForAll ||
+              dataService.currentUser.savedPostIds.contains(post.id),
+          isRegistered:
+              isRegisteredForAll ||
+              dataService.currentUser.registeredEventIds.contains(post.id),
+          userYear: userYear,
+          onToggleSave: () {
+            dataService.toggleSavePost(post.id);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Saved!'),
+                duration: Duration(seconds: 1),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

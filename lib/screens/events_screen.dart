@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
+import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
 import '../widgets/post_card.dart';
@@ -13,7 +15,8 @@ class EventsScreen extends StatefulWidget {
   State<EventsScreen> createState() => _EventsScreenState();
 }
 
-class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderStateMixin {
+class _EventsScreenState extends State<EventsScreen>
+    with SingleTickerProviderStateMixin {
   late TabController tabController;
 
   @override
@@ -30,19 +33,27 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    final dataService = Provider.of<MockDataService>(context);
-    final user = dataService.currentUser;
+    final dataService = context.read<MockDataService>();
+    final cfg = context.select((MockDataService s) => s.config);
+    final user = context.select((MockDataService s) => s.currentUser);
     final allEvents = dataService.posts.where((p) => p.isEvent).toList();
-    final registeredEvents = allEvents.where((e) => user.registeredEventIds.contains(e.id)).toList();
-    final myHostedEvents = allEvents.where((e) => e.authorId == user.id).toList();
+    final registeredEvents = allEvents
+        .where((e) => user.registeredEventIds.contains(e.id))
+        .toList();
+    final myHostedEvents = allEvents
+        .where((e) => e.authorId == user.id)
+        .toList();
+
+    final savedIds = user.savedPostIds.toSet();
+    final registeredIds = user.registeredEventIds.toSet();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('🎉 Events Hub'),
         bottom: TabBar(
           controller: tabController,
-          indicatorColor: dataService.config.eventColor,
-          labelColor: dataService.config.eventColor,
+          indicatorColor: cfg.eventColor,
+          labelColor: cfg.eventColor,
           unselectedLabelColor: Colors.grey,
           tabs: [
             Tab(text: 'All (${allEvents.length})'),
@@ -58,7 +69,9 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (ctx) => const EventHostDashboardScreen()),
+                  MaterialPageRoute(
+                    builder: (ctx) => const EventHostDashboardScreen(),
+                  ),
                 );
               },
             ),
@@ -67,14 +80,41 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
       body: TabBarView(
         controller: tabController,
         children: [
-          _buildEventList(context, allEvents),
-          _buildEventList(context, registeredEvents, emptyMessage: 'You have not registered for any events yet.'),
-          _buildEventList(context, myHostedEvents, emptyMessage: 'You have not hosted any events yet.'),
+          _buildEventList(
+            context,
+            allEvents,
+            cfg: cfg,
+            savedIds: savedIds,
+            registeredIds: registeredIds,
+            userYear: user.year,
+            dataService: dataService,
+          ),
+          _buildEventList(
+            context,
+            registeredEvents,
+            cfg: cfg,
+            savedIds: savedIds,
+            registeredIds: registeredIds,
+            userYear: user.year,
+            dataService: dataService,
+            emptyMessage: 'You have not registered for any events yet.',
+          ),
+          _buildEventList(
+            context,
+            myHostedEvents,
+            cfg: cfg,
+            savedIds: savedIds,
+            registeredIds: registeredIds,
+            userYear: user.year,
+            dataService: dataService,
+            emptyMessage: 'You have not hosted any events yet.',
+          ),
         ],
       ),
-      floatingActionButton: (user.hasRole(UserRole.eventHost) || user.hasRole(UserRole.admin))
+      floatingActionButton:
+          (user.hasRole(UserRole.eventHost) || user.hasRole(UserRole.admin))
           ? FloatingActionButton.extended(
-              backgroundColor: dataService.config.eventColor,
+              backgroundColor: cfg.eventColor,
               foregroundColor: Colors.white,
               onPressed: () {
                 showDialog(
@@ -89,7 +129,16 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildEventList(BuildContext context, List events, {String emptyMessage = 'No upcoming events found.'}) {
+  Widget _buildEventList(
+    BuildContext context,
+    List events, {
+    required AppConfig cfg,
+    required Set<String> savedIds,
+    required Set<String> registeredIds,
+    required String userYear,
+    required MockDataService dataService,
+    String emptyMessage = 'No upcoming events found.',
+  }) {
     if (events.isEmpty) {
       return Center(
         child: Column(
@@ -107,8 +156,47 @@ class _EventsScreenState extends State<EventsScreen> with SingleTickerProviderSt
       padding: const EdgeInsets.only(top: 8, bottom: 80),
       itemCount: events.length,
       itemBuilder: (context, index) {
-        return PostCard(post: events[index]);
+        final post = events[index] as PostModel;
+        return PostCard(
+          post: post,
+          config: cfg,
+          isSaved: savedIds.contains(post.id),
+          isRegistered: registeredIds.contains(post.id),
+          userYear: userYear,
+          onToggleSave: () {
+            dataService.toggleSavePost(post.id);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Saved to Profile!'),
+                duration: Duration(seconds: 1),
+              ),
+            );
+          },
+          onToggleRegister: () => _handleToggleRegister(dataService, post),
+        );
       },
+    );
+  }
+
+  void _handleToggleRegister(MockDataService dataService, PostModel post) {
+    final wasRegistered = dataService.currentUser.registeredEventIds.contains(
+      post.id,
+    );
+    dataService.toggleEventRegistration(post.id);
+    final isRegistered = dataService.currentUser.registeredEventIds.contains(
+      post.id,
+    );
+    if (wasRegistered == isRegistered) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isRegistered
+              ? '🎉 Successfully registered for ${post.title}!'
+              : 'Unregistered from event.',
+        ),
+        backgroundColor: isRegistered ? Colors.green : Colors.orange,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 }

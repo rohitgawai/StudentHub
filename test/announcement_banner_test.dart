@@ -14,55 +14,78 @@ Future<MockDataService> _createService(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('Urgent Announcement posts with duration and blocks same-department posts', (WidgetTester tester) async {
-    final service = await _createService(tester);
-    try {
-      final posted = service.postAnnouncement(
-        title: 'Fee Notice',
-        description: 'Deadline extended',
-        department: 'Computer Science & Engineering',
-        duration: const Duration(days: 14),
-        authorName: 'Dr. Ramesh K. Verma',
-        authorRole: UserRole.faculty,
-      );
+  testWidgets(
+    'Urgent Announcement posts with duration and blocks same-department posts',
+    (WidgetTester tester) async {
+      final service = await _createService(tester);
+      try {
+        final posted = service.postAnnouncement(
+          title: 'Fee Notice',
+          description: 'Deadline extended',
+          department: 'Computer Science & Engineering',
+          duration: const Duration(days: 14),
+          authorName: 'Dr. Ramesh K. Verma',
+          authorRole: UserRole.faculty,
+        );
 
-      expect(posted, isTrue);
-      final ann = service.activeAnnouncementFor('Computer Science & Engineering');
-      expect(ann, isNotNull);
-      expect(ann!.title, 'Fee Notice');
-      expect(ann.expiresAt.difference(DateTime.now()).inDays, greaterThanOrEqualTo(13));
+        expect(posted, isTrue);
+        final ann = service.activeAnnouncementFor(
+          'Computer Science & Engineering',
+        );
+        expect(ann, isNotNull);
+        expect(ann!.title, 'Fee Notice');
+        expect(
+          ann.expiresAt.difference(DateTime.now()).inDays,
+          greaterThanOrEqualTo(13),
+        );
 
-      final wait = service.canPostAnnouncement('Computer Science & Engineering');
-      expect(wait, isNotNull);
-      expect(wait!.inDays, greaterThanOrEqualTo(13));
+        final wait = service.canPostAnnouncement(
+          'Computer Science & Engineering',
+        );
+        expect(wait, isNotNull);
+        expect(wait!.inDays, greaterThanOrEqualTo(13));
 
-      final blocked = service.postAnnouncement(
-        title: 'Another Notice',
-        description: 'Should be blocked',
-        department: 'Computer Science & Engineering',
-        duration: const Duration(days: 7),
-        authorName: 'Prof. Ananya Sen',
-        authorRole: UserRole.faculty,
-      );
-      expect(blocked, isFalse);
-      expect(service.activeAnnouncementFor('Computer Science & Engineering')!.title, 'Fee Notice');
+        final blocked = service.postAnnouncement(
+          title: 'Another Notice',
+          description: 'Should be blocked',
+          department: 'Computer Science & Engineering',
+          duration: const Duration(days: 7),
+          authorName: 'Prof. Ananya Sen',
+          authorRole: UserRole.faculty,
+        );
+        expect(blocked, isFalse);
+        expect(
+          service
+              .activeAnnouncementFor('Computer Science & Engineering')!
+              .title,
+          'Fee Notice',
+        );
 
-      final otherDept = service.postAnnouncement(
-        title: 'IT Seminar',
-        description: 'Allowed in another department',
-        department: 'Information Technology',
-        duration: const Duration(days: 7),
-        authorName: 'Prof. Ananya Sen',
-        authorRole: UserRole.faculty,
-      );
-      expect(otherDept, isTrue);
-      expect(service.activeAnnouncementFor('Information Technology')!.title, 'IT Seminar');
-    } finally {
-      service.dispose();
-    }
-  });
+        final otherDept = service.postAnnouncement(
+          title: 'IT Seminar',
+          description: 'Allowed in another department',
+          department: 'Information Technology',
+          duration: const Duration(days: 7),
+          authorName: 'Prof. Ananya Sen',
+          authorRole: UserRole.faculty,
+        );
+        expect(otherDept, isTrue);
+        expect(
+          service.activeAnnouncementFor('Information Technology')!.title,
+          'IT Seminar',
+        );
 
-  testWidgets('Expired announcement no longer blocks new posts', (WidgetTester tester) async {
+        // Flush the debounced snapshot so no timer is left pending.
+        await service.flushLocalSave();
+      } finally {
+        service.dispose();
+      }
+    },
+  );
+
+  testWidgets('Expired announcement no longer blocks new posts', (
+    WidgetTester tester,
+  ) async {
     final service = await _createService(tester);
     try {
       final expired = service.postAnnouncement(
@@ -74,8 +97,16 @@ void main() {
         authorRole: UserRole.admin,
       );
       expect(expired, isTrue);
-      expect(service.activeAnnouncements.where((a) => a.department == 'Computer Science & Engineering'), isEmpty);
-      expect(service.canPostAnnouncement('Computer Science & Engineering'), isNull);
+      expect(
+        service.activeAnnouncements.where(
+          (a) => a.department == 'Computer Science & Engineering',
+        ),
+        isEmpty,
+      );
+      expect(
+        service.canPostAnnouncement('Computer Science & Engineering'),
+        isNull,
+      );
 
       final posted = service.postAnnouncement(
         title: 'Fresh Notice',
@@ -86,7 +117,13 @@ void main() {
         authorRole: UserRole.admin,
       );
       expect(posted, isTrue);
-      expect(service.activeAnnouncementFor('Computer Science & Engineering')!.title, 'Fresh Notice');
+      expect(
+        service.activeAnnouncementFor('Computer Science & Engineering')!.title,
+        'Fresh Notice',
+      );
+
+      // Flush the debounced snapshot so no timer is left pending.
+      await service.flushLocalSave();
     } finally {
       service.dispose();
     }

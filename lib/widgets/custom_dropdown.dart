@@ -53,6 +53,7 @@ class CustomDropdownField<T> extends StatelessWidget {
             child: DropdownButton<T>(
               value: value,
               isDense: true,
+              isExpanded: true,
               icon: const Icon(Icons.keyboard_arrow_down, size: 22, color: Colors.grey),
               menuMaxHeight: 280,
               borderRadius: BorderRadius.circular(16),
@@ -61,6 +62,23 @@ class CustomDropdownField<T> extends StatelessWidget {
               onChanged: (T? newValue) {
                 state.didChange(newValue);
                 onChanged(newValue);
+              },
+              selectedItemBuilder: (BuildContext context) {
+                return items.map<Widget>((T item) {
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      itemLabel(item),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: theme.textTheme.bodyMedium?.color,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }).toList();
               },
               items: items.map<DropdownMenuItem<T>>((T item) {
                 final isSelected = item == value;
@@ -76,6 +94,7 @@ class CustomDropdownField<T> extends StatelessWidget {
                         color: isSelected ? primaryColor : theme.textTheme.bodyMedium?.color,
                       ),
                       overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
                 );

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,9 +19,30 @@ class LocalStoreService {
   static final LocalStoreService instance = LocalStoreService._();
 
   static const String _snapshotKey = 'studenthub.local_state.v1';
+  static const String _splashKey = 'studenthub.has_seen_splash.v1';
   static const String localPrefix = 'local://';
 
   Directory? _cachedDir;
+
+  // --- First-run flags --------------------------------------------------------
+
+  Future<bool> hasSeenSplash() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_splashKey) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> markSplashSeen() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_splashKey, true);
+    } catch (_) {
+      // Best-effort.
+    }
+  }
 
   /// Warms the in-memory cache of the attachments directory so that image
   /// providers can resolve `local://` refs synchronously. Call once at startup
@@ -96,8 +117,7 @@ class LocalStoreService {
 
   String referenceTo(String basename) => '$localPrefix$basename';
 
-  bool isLocalRef(String? url) =>
-      url != null && url.startsWith(localPrefix);
+  bool isLocalRef(String? url) => url != null && url.startsWith(localPrefix);
 
   String _basenameOf(String ref) => ref.substring(localPrefix.length);
 
@@ -117,7 +137,12 @@ class LocalStoreService {
     try {
       final commaIndex = source.indexOf(',');
       if (commaIndex == -1) return source;
-      final bytes = base64Decode(source.substring(commaIndex + 1));
+      // Decode on a background isolate: PDFs and camera photos are multi-MB and
+      // base64 decoding them on the UI isolate blocks frames.
+      final bytes = await compute(
+        _decodeBase64,
+        source.substring(commaIndex + 1),
+      );
       final safeName = baseId.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
       final fileName = '${safeName}_$suffix.$extension';
       final dir = await _attachmentsDir();
@@ -162,3 +187,5 @@ class LocalStoreService {
     }
   }
 }
+
+Uint8List _decodeBase64(String base64) => base64Decode(base64);

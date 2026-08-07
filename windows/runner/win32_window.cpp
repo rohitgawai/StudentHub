@@ -18,6 +18,13 @@ namespace {
 
 constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 
+// Brand colors for the native splash (matches the Flutter theme):
+// deep navy background, indigo accent, off-white foreground.
+constexpr COLORREF kSplashDark = RGB(13, 21, 38);       // #0D1526
+constexpr COLORREF kSplashAccent = RGB(79, 70, 229);    // #4F46E5
+constexpr COLORREF kSplashWhite = RGB(245, 245, 247);   // #F5F5F7
+constexpr COLORREF kSplashGrey = RGB(168, 176, 194);    // #A8B0C2
+
 /// Registry key for app theme preference.
 ///
 /// A value of 0 indicates apps should use dark mode. A non-zero or missing
@@ -150,7 +157,17 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  ShowWindow(window_handle_, SW_SHOWNORMAL);
+  return UpdateWindow(window_handle_) != 0;
+}
+
+void Win32Window::ShowSplashImmediately() {
+  ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // Paint the splash right now, not when the message loop eventually runs.
+  // UpdateWindow synchronously delivers WM_PAINT to the window proc, so the
+  // logo is visible while the Flutter engine is still booting.
+  RedrawWindow(window_handle_, nullptr, nullptr,
+               RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW);
 }
 
 // static
@@ -212,6 +229,23 @@ Win32Window::MessageHandler(HWND hwnd,
         SetFocus(child_content_);
       }
       return 0;
+
+    case WM_ERASEBKGND:
+      // We paint the full splash in WM_PAINT (below) to avoid flicker while
+      // the Flutter view is not attached yet.
+      if (child_content_ == nullptr) {
+        return 1;
+      }
+      break;
+
+    case WM_PAINT:
+      // Draw the brand splash over the otherwise blank window until the first
+      // Flutter frame is attached as the child content.
+      if (child_content_ == nullptr) {
+        PaintSplash(hwnd);
+        return 0;
+      }
+      break;
 
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);
@@ -285,4 +319,106 @@ void Win32Window::UpdateTheme(HWND const window) {
     DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
                           &enable_dark_mode, sizeof(enable_dark_mode));
   }
+}
+
+void Win32Window::PaintSplash(HWND window) {
+  PAINTSTRUCT ps;
+  HDC hdc = BeginPaint(window, &ps);
+
+  RECT rc;
+  GetClientRect(window, &rc);
+  const int width = rc.right - rc.left;
+  const int height = rc.bottom - rc.top;
+
+  // Deep navy background.
+  HBRUSH bg = CreateSolidBrush(kSplashDark);
+  FillRect(hdc, &rc, bg);
+  DeleteObject(bg);
+
+  // Scale proportions relative to a 1280x720 reference window.
+  double f = static_cast<double>(height) / 720.0;
+  if (f < 0.6) f = 0.6;
+  if (f > 2.0) f = 2.0;
+
+  const int cx = width / 2;
+  const int cy = height / 2;
+  const int circleRadius = static_cast<int>(78 * f);
+  const int centerCy = cy - static_cast<int>(28 * f);
+
+  // Indigo accent circle behind the graduation cap.
+  HBRUSH accent = CreateSolidBrush(kSplashAccent);
+  HGDIOBJ oldBrush = SelectObject(hdc, accent);
+  HGDIOBJ oldPen = SelectObject(hdc, CreatePen(PS_SOLID, 0, kSplashAccent));
+  Ellipse(hdc, cx - circleRadius, centerCy - circleRadius,
+          cx + circleRadius, centerCy + circleRadius);
+
+  // Graduation cap: a rotated square ("diamond") board.
+  const int dx = static_cast<int>(circleRadius * 0.62);
+  const int topDy = static_cast<int>(circleRadius * 0.42);
+  const int botDy = static_cast<int>(circleRadius * 0.16);
+  POINT cap[4] = {
+      {cx, centerCy - topDy},
+      {cx + dx, centerCy},
+      {cx, centerCy + botDy},
+      {cx - dx, centerCy},
+  };
+  HBRUSH white = CreateSolidBrush(kSplashWhite);
+  HPEN whitePen = CreatePen(PS_SOLID, 0, kSplashWhite);
+  oldBrush = SelectObject(hdc, white);
+  oldPen = SelectObject(hdc, whitePen);
+  Polygon(hdc, cap, 4);
+
+  // Cap tassel: a short cord from the front edge with a small knot.
+  const int knotR = static_cast<int>(2.5 * f);
+  const int tasselLen = static_cast<int>(14 * f);
+  const int tasselX = cx + dx - static_cast<int>(6 * f);
+  const int tasselTop = centerCy + botDy + 1;
+  HPEN tasselPen =
+      CreatePen(PS_SOLID, static_cast<int>(f < 1.0 ? 1 : 2), kSplashWhite);
+  HGDIOBJ prevPen = SelectObject(hdc, tasselPen);
+  MoveToEx(hdc, tasselX, tasselTop, nullptr);
+  LineTo(hdc, tasselX, tasselTop + tasselLen);
+  SelectObject(hdc, prevPen);
+  DeleteObject(tasselPen);
+  Ellipse(hdc, tasselX - knotR, tasselTop + tasselLen - knotR,
+          tasselX + knotR, tasselTop + tasselLen + knotR);
+  SelectObject(hdc, oldPen);
+  SelectObject(hdc, oldBrush);
+  DeleteObject(whitePen);
+  DeleteObject(white);
+
+  // App name.
+  HFONT titleFont = CreateFontW(
+      static_cast<int>(40 * f), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+      DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+      CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+  if (titleFont != nullptr) {
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, kSplashWhite);
+    HFONT oldFont = static_cast<HFONT>(SelectObject(hdc, titleFont));
+    RECT titleRect = {0, centerCy + static_cast<int>(134 * f), width,
+                      centerCy + static_cast<int>(186 * f)};
+    DrawTextW(hdc, L"StudentHub", -1, &titleRect,
+              DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
+    SelectObject(hdc, oldFont);
+    DeleteObject(titleFont);
+  }
+
+  // Tagline.
+  HFONT subFont = CreateFontW(
+      static_cast<int>(14 * f), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+      DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+      CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+  if (subFont != nullptr) {
+    SetTextColor(hdc, kSplashGrey);
+    HFONT old = static_cast<HFONT>(SelectObject(hdc, subFont));
+    RECT subRect = {0, centerCy + static_cast<int>(196 * f), width,
+                    centerCy + static_cast<int>(242 * f)};
+    DrawTextW(hdc, L"Next-Gen Digital Campus", -1, &subRect,
+              DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
+    SelectObject(hdc, old);
+    DeleteObject(subFont);
+  }
+
+  EndPaint(window, &ps);
 }

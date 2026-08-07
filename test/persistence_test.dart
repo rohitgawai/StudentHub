@@ -13,8 +13,9 @@ Future<MockDataService> _createService(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('profile and last active role persist across app restarts',
-      (WidgetTester tester) async {
+  testWidgets('profile and last active role persist across app restarts', (
+    WidgetTester tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
 
     // Session 1: edit profile and switch active perspective to Event Host.
@@ -26,8 +27,8 @@ void main() {
         year: 'Final Year',
       );
       s1.switchActiveRole(UserRole.eventHost);
-      // Let the fire-and-forget snapshot save flush to the mocked store.
-      await tester.pump(const Duration(milliseconds: 100));
+      // Deterministically flush the debounced snapshot to the mocked store.
+      await s1.flushLocalSave();
     } finally {
       s1.dispose();
     }
@@ -45,7 +46,9 @@ void main() {
     }
   });
 
-  testWidgets('no stored state falls back to defaults', (WidgetTester tester) async {
+  testWidgets('no stored state falls back to defaults', (
+    WidgetTester tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     final service = await _createService(tester);
     try {

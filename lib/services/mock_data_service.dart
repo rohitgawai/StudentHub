@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_config.dart';
 import '../models/user_model.dart';
@@ -25,13 +25,42 @@ class MockDataService extends ChangeNotifier {
 
   Timer? _expiryTimer;
 
-  List<PostModel> get posts => List.unmodifiable(_posts);
-  List<RoleRequestModel> get roleRequests => List.unmodifiable(_roleRequests);
-  List<NotificationModel> get notifications => List.unmodifiable(_notifications);
-  List<ActiveAnnouncement> get activeAnnouncements =>
-      List.unmodifiable(_announcements.where((a) => !a.isExpired));
+  // --- Rebuild caches -------------------------------------------------------
+  //
+  // The data lists are mutated in place, so widget-level `context.select`
+  // subscriptions need a stable *instance* whose identity changes exactly when
+  // the underlying data changes. These caches provide that, and also memoize
+  // the personalized feed so builds don't re-copy/re-sort unless inputs change.
+  int _dataVersion = 0;
+  List<PostModel> _cachePosts = const [];
+  List<RoleRequestModel> _cacheRoleRequests = const [];
+  List<NotificationModel> _cacheNotifications = const [];
+  List<ActiveAnnouncement> _cacheAnnouncements = const [];
+  String? _feedCacheKey;
+  List<PostModel>? _feedCacheValue;
+
+  void _invalidateDataCaches() {
+    _dataVersion++;
+    _feedCacheKey = null;
+    _feedCacheValue = null;
+    _cachePosts = List.unmodifiable(_posts);
+    _cacheRoleRequests = List.unmodifiable(_roleRequests);
+    _cacheNotifications = List.unmodifiable(_notifications);
+    _cacheAnnouncements = List.unmodifiable(
+      _announcements.where((a) => !a.isExpired),
+    );
+  }
+
+  List<PostModel> get posts => _cachePosts;
+  List<RoleRequestModel> get roleRequests => _cacheRoleRequests;
+  List<NotificationModel> get notifications => _cacheNotifications;
+  List<ActiveAnnouncement> get activeAnnouncements => _cacheAnnouncements;
 
   MockDataService({AppConfig? initialConfig}) {
+    config = initialConfig ?? AppConfig.defaultConfig();
+    _seedDefaults();
+    _isLoading = false;
+    _invalidateDataCaches();
     _initData(initialConfig);
   }
   @override
@@ -41,33 +70,43 @@ class MockDataService extends ChangeNotifier {
   }
 
   Future<void> _initData(AppConfig? initialConfig) async {
-    config = initialConfig ?? await AppConfig.loadFromAssets();
+    if (initialConfig == null) {
+      AppConfig.loadFromAssets().then((c) {
+        config = c;
+        _invalidateDataCaches();
+        notifyListeners();
+      });
+    }
 
     final restored = await _loadLocalState();
 
     if (restored != null) {
       currentUser = restored.currentUser;
-      activeRole = restored.activeRole ??
-          (currentUser.roles.isNotEmpty ? currentUser.roles.first : UserRole.student);
+      activeRole =
+          restored.activeRole ??
+          (currentUser.roles.isNotEmpty
+              ? currentUser.roles.first
+              : UserRole.student);
       _posts = restored.posts;
       _notifications = restored.notifications;
       _roleRequests = restored.roleRequests;
       _announcements = restored.announcements;
-    } else {
-      // First launch on this device: show the seed dataset.
-      await _seedDefaults();
+      checkForExpiredRoles();
+      _invalidateDataCaches();
+      notifyListeners();
     }
-
-    checkForExpiredRoles();
-
-    await _syncFromBackend();
 
     _expiryTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       checkForExpiredRoles();
       _clearExpiredAnnouncements();
     });
+  }
 
-    _isLoading = false;
+  /// Merges the Supabase mirror into the device state (background; safe to
+  /// call repeatedly).
+  Future<void> syncNow() async {
+    await _syncFromBackend();
+    _invalidateDataCaches();
     notifyListeners();
   }
 
@@ -81,7 +120,8 @@ class MockDataService extends ChangeNotifier {
       department: 'Computer Science & Engineering',
       year: 'Third Year',
       mobileNumber: '+91 98765 12345',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256',
+      avatarUrl:
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256',
       roles: [UserRole.student, UserRole.eventHost],
       savedPostIds: ['pst_002', 'pst_004'],
       registeredEventIds: ['pst_002'],
@@ -102,9 +142,52 @@ class MockDataService extends ChangeNotifier {
 
   final bool _localPersistEnabled = true;
 
+  Timer? _saveDebounce;
+  bool _saving = false;
+  bool _saveDirty = false;
+
+  /// Schedules the on-device snapshot. Debounced so rapid mutations (role
+  /// switches, save toggles, typing) collapse into a single disk write, and
+  /// serialized so overlapping saves can't pile up on the event loop.
+  void _scheduleLocalSave() {
+    if (!_localPersistEnabled) return;
+    _saveDirty = true;
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 400), _flushLocalSave);
+  }
+
+  /// Cancels any pending debounce and persists immediately. Exposed so tests
+  /// (and lifecycle teardown) can deterministically flush state without
+  /// leaving a dangling timer behind.
+  Future<void> flushLocalSave() async {
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
+    await _flushLocalSave();
+  }
+
+  Future<void> _flushLocalSave() async {
+    if (_saving) return;
+    _saveDebounce = null;
+    _saving = true;
+    _saveDirty = false;
+    try {
+      await _saveLocalState();
+    } finally {
+      _saving = false;
+      if (_saveDirty) {
+        _saveDebounce?.cancel();
+        _saveDebounce = Timer(
+          const Duration(milliseconds: 200),
+          _flushLocalSave,
+        );
+      }
+    }
+  }
+
   /// Persists everything that must survive a restart (profile incl. avatar,
   /// assigned + active role, and all posts/notifications/requests) as a JSON
-  /// snapshot plus local blob files for any uploaded PDF/image.
+  /// snapshot plus local blob files for any uploaded PDF/image. Blobs already
+  /// stored as `local://` refs are left untouched, so repeated saves are cheap.
   Future<void> _saveLocalState() async {
     if (!_localPersistEnabled) return;
     try {
@@ -114,6 +197,9 @@ class MockDataService extends ChangeNotifier {
         'avatar',
         _extFromDataUri(currentUser.avatarUrl),
       );
+      if (imageUrl != currentUser.avatarUrl) {
+        currentUser = currentUser.copyWith(avatarUrl: imageUrl);
+      }
 
       final postsJson = <Map<String, dynamic>>[];
       for (final post in _posts) {
@@ -138,8 +224,9 @@ class MockDataService extends ChangeNotifier {
           'registeredEventIds': currentUser.registeredEventIds,
           'isVerified': currentUser.isVerified,
           'hasChangedUniqueId': currentUser.hasChangedUniqueId,
-          'roleExpirations': currentUser.roleExpirations
-              .map((role, expiry) => MapEntry(role.name, expiry.toIso8601String())),
+          'roleExpirations': currentUser.roleExpirations.map(
+            (role, expiry) => MapEntry(role.name, expiry.toIso8601String()),
+          ),
         },
         'posts': postsJson,
         'notifications': _notifications.map(_notificationToJson).toList(),
@@ -157,8 +244,11 @@ class MockDataService extends ChangeNotifier {
     final raw = await _localStore.loadSnapshot();
     if (raw == null || raw.isEmpty) return null;
     try {
-      final payload = jsonDecode(raw) as Map<String, dynamic>;
-      final user = _userFromJson(payload['currentUser'] as Map<String, dynamic>);
+      final payload = await compute(_parseJsonHelper, raw);
+      if (payload == null) return null;
+      final user = _userFromJson(
+        payload['currentUser'] as Map<String, dynamic>,
+      );
       final active = payload['activeRole'] == null
           ? null
           : _roleFromName(payload['activeRole'].toString());
@@ -195,9 +285,9 @@ class MockDataService extends ChangeNotifier {
   }
 
   UserRole _roleFromName(String name) => UserRole.values.firstWhere(
-        (r) => r.name == name,
-        orElse: () => UserRole.student,
-      );
+    (r) => r.name == name,
+    orElse: () => UserRole.student,
+  );
 
   String _extFromDataUri(String? url) {
     if (url == null || !url.startsWith('data:')) return 'jpg';
@@ -210,13 +300,19 @@ class MockDataService extends ChangeNotifier {
 
   Future<Map<String, dynamic>> _localRowFromPost(PostModel p) async {
     final row = _rowFromPost(p);
-    row['image_url'] = await _localStore.persistDataUri(
+    final localImage = await _localStore.persistDataUri(
       p.imageUrl,
       p.id,
       'cover',
       _extFromDataUri(p.imageUrl),
     );
+    var changed = false;
+    if (localImage != p.imageUrl) {
+      changed = true;
+      row['image_url'] = localImage;
+    }
     final attachments = <Map<String, dynamic>>[];
+    final localAttachments = <PostAttachment>[];
     var i = 0;
     for (final att in p.attachments) {
       final url = await _localStore.persistDataUri(
@@ -224,6 +320,15 @@ class MockDataService extends ChangeNotifier {
         p.id,
         'att$i',
         att.fileType == 'pdf' ? 'pdf' : _extFromDataUri(att.url),
+      );
+      if (url != att.url) changed = true;
+      localAttachments.add(
+        PostAttachment(
+          title: att.title,
+          fileType: att.fileType,
+          url: url,
+          fileSize: att.fileSize,
+        ),
       );
       attachments.add({
         'title': att.title,
@@ -234,6 +339,17 @@ class MockDataService extends ChangeNotifier {
       i++;
     }
     row['attachments'] = attachments;
+    // Swap the in-memory post to `local://` refs so later saves skip the
+    // expensive base64 decode + disk write entirely.
+    if (changed) {
+      final idx = _posts.indexWhere((x) => x.id == p.id);
+      if (idx != -1) {
+        _posts[idx] = _posts[idx].copyWith(
+          imageUrl: localImage,
+          attachments: localAttachments,
+        );
+      }
+    }
     return row;
   }
 
@@ -258,9 +374,12 @@ class MockDataService extends ChangeNotifier {
           .whereType<String>()
           .map(_roleFromName)
           .toList(),
-      savedPostIds: ((m['savedPostIds'] as List?) ?? const []).whereType<String>().toList(),
-      registeredEventIds:
-          ((m['registeredEventIds'] as List?) ?? const []).whereType<String>().toList(),
+      savedPostIds: ((m['savedPostIds'] as List?) ?? const [])
+          .whereType<String>()
+          .toList(),
+      registeredEventIds: ((m['registeredEventIds'] as List?) ?? const [])
+          .whereType<String>()
+          .toList(),
       isVerified: m['isVerified'] as bool? ?? true,
       roleExpirations: expirations,
       hasChangedUniqueId: m['hasChangedUniqueId'] as bool? ?? false,
@@ -268,14 +387,14 @@ class MockDataService extends ChangeNotifier {
   }
 
   Map<String, dynamic> _notificationToJson(NotificationModel n) => {
-        'id': n.id,
-        'title': n.title,
-        'body': n.body,
-        'category': n.category.name,
-        'timestamp': n.timestamp.toIso8601String(),
-        'isRead': n.isRead,
-        'relatedPostId': n.relatedPostId,
-      };
+    'id': n.id,
+    'title': n.title,
+    'body': n.body,
+    'category': n.category.name,
+    'timestamp': n.timestamp.toIso8601String(),
+    'isRead': n.isRead,
+    'relatedPostId': n.relatedPostId,
+  };
 
   NotificationModel _notificationFromJson(Map<String, dynamic> m) =>
       NotificationModel(
@@ -286,27 +405,29 @@ class MockDataService extends ChangeNotifier {
           (c) => c.name == m['category'],
           orElse: () => NotificationCategory.general,
         ),
-        timestamp: DateTime.tryParse(m['timestamp']?.toString() ?? '') ?? DateTime.now(),
+        timestamp:
+            DateTime.tryParse(m['timestamp']?.toString() ?? '') ??
+            DateTime.now(),
         isRead: m['isRead'] as bool? ?? false,
         relatedPostId: m['relatedPostId'] as String?,
       );
 
   Map<String, dynamic> _roleRequestToJson(RoleRequestModel r) => {
-        'id': r.id,
-        'userId': r.userId,
-        'userName': r.userName,
-        'userEmail': r.userEmail,
-        'department': r.department,
-        'studentId': r.studentId,
-        'requestedRole': r.requestedRole.name,
-        'reason': r.reason,
-        'phoneNumber': r.phoneNumber,
-        'status': r.status.name,
-        'submittedAt': r.submittedAt.toIso8601String(),
-        'adminNotes': r.adminNotes,
-        'isLimitedAccess': r.isLimitedAccess,
-        'durationDays': r.durationDays,
-      };
+    'id': r.id,
+    'userId': r.userId,
+    'userName': r.userName,
+    'userEmail': r.userEmail,
+    'department': r.department,
+    'studentId': r.studentId,
+    'requestedRole': r.requestedRole.name,
+    'reason': r.reason,
+    'phoneNumber': r.phoneNumber,
+    'status': r.status.name,
+    'submittedAt': r.submittedAt.toIso8601String(),
+    'adminNotes': r.adminNotes,
+    'isLimitedAccess': r.isLimitedAccess,
+    'durationDays': r.durationDays,
+  };
 
   RoleRequestModel _roleRequestFromJson(Map<String, dynamic> m) =>
       RoleRequestModel(
@@ -324,39 +445,42 @@ class MockDataService extends ChangeNotifier {
           orElse: () => RoleRequestStatus.pending,
         ),
         submittedAt:
-            DateTime.tryParse(m['submittedAt']?.toString() ?? '') ?? DateTime.now(),
+            DateTime.tryParse(m['submittedAt']?.toString() ?? '') ??
+            DateTime.now(),
         adminNotes: m['adminNotes'] as String?,
         isLimitedAccess: m['isLimitedAccess'] as bool? ?? false,
         durationDays: m['durationDays'] as int?,
       );
 
   Map<String, dynamic> _announcementToJson(ActiveAnnouncement a) => {
-        'id': a.id,
-        'title': a.title,
-        'description': a.description,
-        'authorName': a.authorName,
-        'authorRole': a.authorRole.name,
-        'department': a.department,
-        'postedAt': a.postedAt.toIso8601String(),
-        'expiresAt': a.expiresAt.toIso8601String(),
-      };
+    'id': a.id,
+    'title': a.title,
+    'description': a.description,
+    'authorName': a.authorName,
+    'authorRole': a.authorRole.name,
+    'department': a.department,
+    'postedAt': a.postedAt.toIso8601String(),
+    'expiresAt': a.expiresAt.toIso8601String(),
+  };
 
-  ActiveAnnouncement _announcementFromJson(Map<String, dynamic> m) =>
-      ActiveAnnouncement(
-        id: m['id']?.toString() ?? 'ann_local',
-        title: m['title']?.toString() ?? '',
-        description: m['description']?.toString() ?? '',
-        authorName: m['authorName']?.toString() ?? '',
-        authorRole: _roleFromName(m['authorRole']?.toString() ?? ''),
-        department: m['department']?.toString() ?? '',
-        postedAt:
-            DateTime.tryParse(m['postedAt']?.toString() ?? '') ?? DateTime.now(),
-        expiresAt:
-            DateTime.tryParse(m['expiresAt']?.toString() ?? '') ?? DateTime.now(),
-      );
+  ActiveAnnouncement _announcementFromJson(
+    Map<String, dynamic> m,
+  ) => ActiveAnnouncement(
+    id: m['id']?.toString() ?? 'ann_local',
+    title: m['title']?.toString() ?? '',
+    description: m['description']?.toString() ?? '',
+    authorName: m['authorName']?.toString() ?? '',
+    authorRole: _roleFromName(m['authorRole']?.toString() ?? ''),
+    department: m['department']?.toString() ?? '',
+    postedAt:
+        DateTime.tryParse(m['postedAt']?.toString() ?? '') ?? DateTime.now(),
+    expiresAt:
+        DateTime.tryParse(m['expiresAt']?.toString() ?? '') ?? DateTime.now(),
+  );
 
   void updateConfig(AppConfig newConfig) {
     config = newConfig;
+    _invalidateDataCaches();
     notifyListeners();
   }
 
@@ -389,15 +513,16 @@ class MockDataService extends ChangeNotifier {
       isVerified: true,
     );
     activeRole = UserRole.student;
+    _invalidateDataCaches();
     notifyListeners();
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
   }
 
   void switchActiveRole(UserRole newRole) {
     if (currentUser.roles.contains(newRole) || activeRole != newRole) {
       activeRole = newRole;
       notifyListeners();
-      unawaited(_saveLocalState());
+      _scheduleLocalSave();
     }
   }
 
@@ -411,7 +536,8 @@ class MockDataService extends ChangeNotifier {
   }
 
   /// Loads posts from Supabase when available; merges them with device-local
-  /// posts so nothing saved on this device is ever dropped.
+  /// posts so nothing saved on this device is ever dropped. Bounded by a
+  /// timeout so a dead/slow network can never block the UI.
   Future<void> _syncFromBackend() async {
     final client = _client;
     if (client == null) return;
@@ -420,15 +546,15 @@ class MockDataService extends ChangeNotifier {
           .from('posts')
           .select()
           .order('created_at', ascending: false)
-          .limit(100);
+          .limit(100)
+          .timeout(const Duration(seconds: 5));
       final fetched = rows.map(_postFromRow).whereType<PostModel>().toList();
       if (fetched.isEmpty) {
         await _pushSeedPostsToBackend(client);
         return;
       }
       final remoteIds = fetched.map((p) => p.id).toSet();
-      final localOnly =
-          _posts.where((p) => !remoteIds.contains(p.id)).toList();
+      final localOnly = _posts.where((p) => !remoteIds.contains(p.id)).toList();
       _posts = [...localOnly, ...fetched];
       // Re-push posts that only exist on this device (created while offline or
       // backend write failed) so the remote mirror catches up.
@@ -450,12 +576,14 @@ class MockDataService extends ChangeNotifier {
     if (row['id'] == null) return null;
     final attachments = (row['attachments'] as List? ?? const [])
         .whereType<Map>()
-        .map((a) => PostAttachment(
-              title: a['title']?.toString() ?? '',
-              fileType: a['fileType']?.toString() ?? 'pdf',
-              url: a['url']?.toString() ?? '',
-              fileSize: a['fileSize']?.toString() ?? '',
-            ))
+        .map(
+          (a) => PostAttachment(
+            title: a['title']?.toString() ?? '',
+            fileType: a['fileType']?.toString() ?? 'pdf',
+            url: a['url']?.toString() ?? '',
+            fileSize: a['fileSize']?.toString() ?? '',
+          ),
+        )
         .toList();
     return PostModel(
       id: row['id']!.toString(),
@@ -483,40 +611,42 @@ class MockDataService extends ChangeNotifier {
       eventDate: _parseDate(row['event_date']),
       registrationDeadline: _parseDate(row['registration_deadline']),
       maxParticipants: row['max_participants'] as int?,
-      registeredUserIds:
-          ((row['registered_user_ids'] as List?) ?? const []).cast<String>(),
+      registeredUserIds: ((row['registered_user_ids'] as List?) ?? const [])
+          .cast<String>(),
     );
   }
 
   Map<String, dynamic> _rowFromPost(PostModel p) => {
-        'id': p.id,
-        'title': p.title,
-        'description': p.description,
-        'category': p.category.name,
-        'department': p.department,
-        'target_year': p.targetYear,
-        'author_name': p.authorName,
-        'author_role': p.authorRole.name,
-        'author_id': p.authorId,
-        'image_url': p.imageUrl,
-        'is_urgent': p.isUrgent,
-        'is_pinned': p.isPinned,
-        'save_count': p.saveCount,
-        'venue': p.venue,
-        'event_date': p.eventDate?.toIso8601String(),
-        'registration_deadline': p.registrationDeadline?.toIso8601String(),
-        'max_participants': p.maxParticipants,
-        'registered_user_ids': p.registeredUserIds,
-        'attachments': p.attachments
-            .map((a) => {
-                  'title': a.title,
-                  'fileType': a.fileType,
-                  'url': a.url,
-                  'fileSize': a.fileSize,
-                })
-            .toList(),
-        'created_at': p.timestamp.toIso8601String(),
-      };
+    'id': p.id,
+    'title': p.title,
+    'description': p.description,
+    'category': p.category.name,
+    'department': p.department,
+    'target_year': p.targetYear,
+    'author_name': p.authorName,
+    'author_role': p.authorRole.name,
+    'author_id': p.authorId,
+    'image_url': p.imageUrl,
+    'is_urgent': p.isUrgent,
+    'is_pinned': p.isPinned,
+    'save_count': p.saveCount,
+    'venue': p.venue,
+    'event_date': p.eventDate?.toIso8601String(),
+    'registration_deadline': p.registrationDeadline?.toIso8601String(),
+    'max_participants': p.maxParticipants,
+    'registered_user_ids': p.registeredUserIds,
+    'attachments': p.attachments
+        .map(
+          (a) => {
+            'title': a.title,
+            'fileType': a.fileType,
+            'url': a.url,
+            'fileSize': a.fileSize,
+          },
+        )
+        .toList(),
+    'created_at': p.timestamp.toIso8601String(),
+  };
 
   DateTime? _parseDate(dynamic value) {
     if (value is String && value.isNotEmpty) {
@@ -531,7 +661,7 @@ class MockDataService extends ChangeNotifier {
   Future<void> _persistPost(PostModel post) async {
     final client = _client;
     if (client == null) {
-      unawaited(_saveLocalState());
+      _scheduleLocalSave();
       return;
     }
     try {
@@ -566,13 +696,18 @@ class MockDataService extends ChangeNotifier {
 
     try {
       final bytes = url.startsWith('data:')
-          ? base64Decode(url.substring(url.indexOf(',') + 1))
+          ? await compute(
+              _decodeBase64Helper,
+              url.substring(url.indexOf(',') + 1),
+            )
           : await _localStore.readLocalBlob(url);
       if (bytes == null || bytes.isEmpty) return post;
 
       final ext = _extFromDataUri(url);
       final path = 'posts/${post.id}_cover.$ext';
-      await client.storage.from('documents').uploadBinary(
+      await client.storage
+          .from('documents')
+          .uploadBinary(
             path,
             bytes,
             fileOptions: FileOptions(
@@ -594,13 +729,17 @@ class MockDataService extends ChangeNotifier {
     if (!url.startsWith('data:') && !_localStore.isLocalRef(url)) return att;
     try {
       final bytes = url.startsWith('data:')
-          ? base64Decode(url.substring(url.indexOf(',') + 1))
+          ? await compute(
+              _decodeBase64Helper,
+              url.substring(url.indexOf(',') + 1),
+            )
           : await _localStore.readLocalBlob(url);
       if (bytes == null || bytes.isEmpty) return att;
-      final safeName =
-          att.title.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final safeName = att.title.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
       final path = 'docs/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-      await client.storage.from('documents').uploadBinary(
+      await client.storage
+          .from('documents')
+          .uploadBinary(
             path,
             bytes,
             fileOptions: const FileOptions(
@@ -626,24 +765,42 @@ class MockDataService extends ChangeNotifier {
     String? searchQuery,
     bool savedOnly = false,
   }) {
+    // Memoized: identical filter inputs at the same data version return the
+    // cached result, so rebuilds triggered by unrelated changes (or typing in
+    // search bars) don't re-copy/re-sort the feed.
+    final key = '$savedOnly|$categoryFilter|$searchQuery|$_dataVersion';
+    final cached = _feedCacheValue;
+    if (key == _feedCacheKey && cached != null) return cached;
+
     List<PostModel> list = List.from(_posts);
 
     if (savedOnly) {
-      list = list.where((p) => currentUser.savedPostIds.contains(p.id)).toList();
+      list = list
+          .where((p) => currentUser.savedPostIds.contains(p.id))
+          .toList();
     }
 
     if (categoryFilter != null && categoryFilter != 'All') {
-      list = list.where((p) => p.category.displayName.toLowerCase() == categoryFilter.toLowerCase()).toList();
+      list = list
+          .where(
+            (p) =>
+                p.category.displayName.toLowerCase() ==
+                categoryFilter.toLowerCase(),
+          )
+          .toList();
     }
 
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
       final q = searchQuery.toLowerCase();
-      list = list.where((p) =>
-        p.title.toLowerCase().contains(q) ||
-        p.description.toLowerCase().contains(q) ||
-        p.department.toLowerCase().contains(q) ||
-        p.authorName.toLowerCase().contains(q)
-      ).toList();
+      list = list
+          .where(
+            (p) =>
+                p.title.toLowerCase().contains(q) ||
+                p.description.toLowerCase().contains(q) ||
+                p.department.toLowerCase().contains(q) ||
+                p.authorName.toLowerCase().contains(q),
+          )
+          .toList();
     }
 
     // Sort by priority logic (PRD Section 10):
@@ -655,18 +812,22 @@ class MockDataService extends ChangeNotifier {
     list.sort((a, b) {
       if (a.isUrgent != b.isUrgent) return a.isUrgent ? -1 : 1;
       if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-      
+
       final aDeptMatch = a.department == currentUser.department;
       final bDeptMatch = b.department == currentUser.department;
       if (aDeptMatch != bDeptMatch) return aDeptMatch ? -1 : 1;
 
-      final aYearMatch = a.targetYear == null || a.targetYear == currentUser.year;
-      final bYearMatch = b.targetYear == null || b.targetYear == currentUser.year;
+      final aYearMatch =
+          a.targetYear == null || a.targetYear == currentUser.year;
+      final bYearMatch =
+          b.targetYear == null || b.targetYear == currentUser.year;
       if (aYearMatch != bYearMatch) return aYearMatch ? -1 : 1;
 
       return b.timestamp.compareTo(a.timestamp);
     });
 
+    _feedCacheKey = key;
+    _feedCacheValue = list;
     return list;
   }
 
@@ -679,18 +840,23 @@ class MockDataService extends ChangeNotifier {
       updatedSaved.remove(postId);
       if (postIndex != -1) {
         final currentCount = _posts[postIndex].saveCount;
-        _posts[postIndex] = _posts[postIndex].copyWith(saveCount: (currentCount > 0 ? currentCount - 1 : 0));
+        _posts[postIndex] = _posts[postIndex].copyWith(
+          saveCount: (currentCount > 0 ? currentCount - 1 : 0),
+        );
       }
     } else {
       updatedSaved.add(postId);
       if (postIndex != -1) {
-        _posts[postIndex] = _posts[postIndex].copyWith(saveCount: _posts[postIndex].saveCount + 1);
+        _posts[postIndex] = _posts[postIndex].copyWith(
+          saveCount: _posts[postIndex].saveCount + 1,
+        );
       }
     }
 
     currentUser = currentUser.copyWith(savedPostIds: updatedSaved);
+    _invalidateDataCaches();
     notifyListeners();
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
   }
 
   void toggleEventRegistration(String postId) {
@@ -705,43 +871,50 @@ class MockDataService extends ChangeNotifier {
       regUsers.remove(currentUser.id);
       userRegEvents.remove(postId);
     } else {
-      if (post.maxParticipants != null && regUsers.length >= post.maxParticipants!) {
+      if (post.maxParticipants != null &&
+          regUsers.length >= post.maxParticipants!) {
         return; // Full
       }
       regUsers.add(currentUser.id);
       userRegEvents.add(postId);
 
       // Add event registration notification
-      _notifications.insert(0, NotificationModel(
-        id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Registration Confirmed! 🎉',
-        body: 'You have registered for ${post.title}. Keep an eye on updates.',
-        category: NotificationCategory.events,
-        timestamp: DateTime.now(),
-        relatedPostId: post.id,
-      ));
+      _notifications.insert(
+        0,
+        NotificationModel(
+          id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Registration Confirmed! 🎉',
+          body:
+              'You have registered for ${post.title}. Keep an eye on updates.',
+          category: NotificationCategory.events,
+          timestamp: DateTime.now(),
+          relatedPostId: post.id,
+        ),
+      );
     }
 
     _posts[index] = post.copyWith(registeredUserIds: regUsers);
     currentUser = currentUser.copyWith(registeredEventIds: userRegEvents);
+    _invalidateDataCaches();
     notifyListeners();
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
   }
 
   void addPost(PostModel newPost) {
     _posts.insert(0, newPost);
     notifyListeners();
     _persistPost(newPost);
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
   }
 
   void updatePost(PostModel updatedPost) {
     final idx = _posts.indexWhere((p) => p.id == updatedPost.id);
     if (idx != -1) {
       _posts[idx] = updatedPost;
+      _invalidateDataCaches();
       notifyListeners();
       _persistPost(updatedPost);
-      unawaited(_saveLocalState());
+      _scheduleLocalSave();
     }
   }
 
@@ -755,8 +928,9 @@ class MockDataService extends ChangeNotifier {
         _localStore.deleteLocalBlob(att.url);
       }
     }
+    _invalidateDataCaches();
     notifyListeners();
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
   }
 
   Future<void> refreshFeed() async {
@@ -788,11 +962,14 @@ class MockDataService extends ChangeNotifier {
       year: year,
       studentOrEmployeeId: finalId,
       hasChangedUniqueId: hasChanged,
-      avatarUrl: (avatarUrl != null && avatarUrl.trim().isNotEmpty) ? avatarUrl.trim() : currentUser.avatarUrl,
+      avatarUrl: (avatarUrl != null && avatarUrl.trim().isNotEmpty)
+          ? avatarUrl.trim()
+          : currentUser.avatarUrl,
     );
 
+    _invalidateDataCaches();
     notifyListeners();
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
   }
 
   // --- Header Announcement (Time-limited, one per department) ---
@@ -801,7 +978,9 @@ class MockDataService extends ChangeNotifier {
     if (active.isEmpty) return null;
 
     // Prefer an announcement targeting the user's own department.
-    final deptMatches = active.where((a) => a.department == userDepartment).toList();
+    final deptMatches = active
+        .where((a) => a.department == userDepartment)
+        .toList();
     if (deptMatches.isNotEmpty) {
       deptMatches.sort((a, b) => b.expiresAt.compareTo(a.expiresAt));
       return deptMatches.first;
@@ -819,7 +998,9 @@ class MockDataService extends ChangeNotifier {
 
   Duration? canPostAnnouncement(String department) {
     // Blocking is per-department only; the campus-wide seed does not lock slots.
-    final matches = activeAnnouncements.where((a) => a.department == department).toList();
+    final matches = activeAnnouncements
+        .where((a) => a.department == department)
+        .toList();
     if (matches.isEmpty) return null;
     return matches.first.remaining;
   }
@@ -835,26 +1016,33 @@ class MockDataService extends ChangeNotifier {
     if (canPostAnnouncement(department) != null) return false;
 
     _announcements.removeWhere((a) => a.department == department);
-    _announcements.insert(0, ActiveAnnouncement(
-      id: 'ann_${DateTime.now().millisecondsSinceEpoch}',
-      title: title.trim(),
-      description: description.trim(),
-      authorName: authorName,
-      authorRole: authorRole,
-      department: department,
-      postedAt: DateTime.now(),
-      expiresAt: DateTime.now().add(duration),
-    ));
+    _announcements.insert(
+      0,
+      ActiveAnnouncement(
+        id: 'ann_${DateTime.now().millisecondsSinceEpoch}',
+        title: title.trim(),
+        description: description.trim(),
+        authorName: authorName,
+        authorRole: authorRole,
+        department: department,
+        postedAt: DateTime.now(),
+        expiresAt: DateTime.now().add(duration),
+      ),
+    );
 
+    _invalidateDataCaches();
     notifyListeners();
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
     return true;
   }
 
   void _clearExpiredAnnouncements() {
     final before = _announcements.length;
     _announcements.removeWhere((a) => a.isExpired);
-    if (_announcements.length != before) notifyListeners();
+    if (_announcements.length != before) {
+      _invalidateDataCaches();
+      notifyListeners();
+    }
   }
 
   void _seedDefaultAnnouncement() {
@@ -898,23 +1086,31 @@ class MockDataService extends ChangeNotifier {
     );
 
     _roleRequests.insert(0, newReq);
-    
-    // Add notification for user
-    _notifications.insert(0, NotificationModel(
-      id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
-      title: 'Role Application Submitted',
-      body: isLimitedAccess
-          ? 'Your request for ${requestedRole.displayName} status (temporary, until ${_formatDate(newReq.expiresAt!)}) has been sent to Admin for review.'
-          : 'Your request for ${requestedRole.displayName} status has been sent to Admin for review.',
-      category: NotificationCategory.personal,
-      timestamp: DateTime.now(),
-    ));
 
+    // Add notification for user
+    _notifications.insert(
+      0,
+      NotificationModel(
+        id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
+        title: 'Role Application Submitted',
+        body: isLimitedAccess
+            ? 'Your request for ${requestedRole.displayName} status (temporary, until ${_formatDate(newReq.expiresAt!)}) has been sent to Admin for review.'
+            : 'Your request for ${requestedRole.displayName} status has been sent to Admin for review.',
+        category: NotificationCategory.personal,
+        timestamp: DateTime.now(),
+      ),
+    );
+
+    _invalidateDataCaches();
     notifyListeners();
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
   }
 
-  void updateRoleRequestStatus(String requestId, RoleRequestStatus status, String? notes) {
+  void updateRoleRequestStatus(
+    String requestId,
+    RoleRequestStatus status,
+    String? notes,
+  ) {
     int idx = _roleRequests.indexWhere((r) => r.id == requestId);
     if (idx == -1) return;
 
@@ -924,7 +1120,9 @@ class MockDataService extends ChangeNotifier {
     if (status == RoleRequestStatus.approved) {
       if (req.userId == currentUser.id) {
         List<UserRole> updatedRoles = List.from(currentUser.roles);
-        Map<UserRole, DateTime> updatedExpirations = Map.from(currentUser.roleExpirations);
+        Map<UserRole, DateTime> updatedExpirations = Map.from(
+          currentUser.roleExpirations,
+        );
         if (!updatedRoles.contains(req.requestedRole)) {
           updatedRoles.add(req.requestedRole);
           if (req.requestedRole == UserRole.faculty) {
@@ -939,42 +1137,54 @@ class MockDataService extends ChangeNotifier {
           );
         }
       }
-      _notifications.insert(0, NotificationModel(
-        id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Role Approved! 🎖️',
-        body: req.isLimitedAccess && req.expiresAt != null
-            ? 'Congratulations! Your temporary ${req.requestedRole.displayName} access is approved until ${_formatDate(req.expiresAt!)}.'
-            : 'Congratulations! Your application for ${req.requestedRole.displayName} was approved.',
-        category: NotificationCategory.personal,
-        timestamp: DateTime.now(),
-      ));
+      _notifications.insert(
+        0,
+        NotificationModel(
+          id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Role Approved! 🎖️',
+          body: req.isLimitedAccess && req.expiresAt != null
+              ? 'Congratulations! Your temporary ${req.requestedRole.displayName} access is approved until ${_formatDate(req.expiresAt!)}.'
+              : 'Congratulations! Your application for ${req.requestedRole.displayName} was approved.',
+          category: NotificationCategory.personal,
+          timestamp: DateTime.now(),
+        ),
+      );
     } else if (status == RoleRequestStatus.rejected) {
-      _notifications.insert(0, NotificationModel(
-        id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
-        title: 'Role Application Update',
-        body: 'Your application for ${req.requestedRole.displayName} was reviewed.',
-        category: NotificationCategory.personal,
-        timestamp: DateTime.now(),
-      ));
+      _notifications.insert(
+        0,
+        NotificationModel(
+          id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
+          title: 'Role Application Update',
+          body:
+              'Your application for ${req.requestedRole.displayName} was reviewed.',
+          category: NotificationCategory.personal,
+          timestamp: DateTime.now(),
+        ),
+      );
     }
 
+    _invalidateDataCaches();
     notifyListeners();
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
   }
 
   void markNotificationRead(String notifId) {
     int idx = _notifications.indexWhere((n) => n.id == notifId);
     if (idx != -1) {
       _notifications[idx] = _notifications[idx].copyWith(isRead: true);
+      _invalidateDataCaches();
       notifyListeners();
-      unawaited(_saveLocalState());
+      _scheduleLocalSave();
     }
   }
 
   void markAllNotificationsRead() {
-    _notifications = _notifications.map((n) => n.copyWith(isRead: true)).toList();
+    _notifications = _notifications
+        .map((n) => n.copyWith(isRead: true))
+        .toList();
+    _invalidateDataCaches();
     notifyListeners();
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
   }
 
   void checkForExpiredRoles() {
@@ -989,8 +1199,10 @@ class MockDataService extends ChangeNotifier {
 
     if (expiredRoles.isEmpty) return;
 
-    List<UserRole> updatedRoles = List.from(currentUser.roles)..removeWhere(expiredRoles.contains);
-    Map<UserRole, DateTime> updatedExpirations = Map.from(expirations)..removeWhere((role, _) => expiredRoles.contains(role));
+    List<UserRole> updatedRoles = List.from(currentUser.roles)
+      ..removeWhere(expiredRoles.contains);
+    Map<UserRole, DateTime> updatedExpirations = Map.from(expirations)
+      ..removeWhere((role, _) => expiredRoles.contains(role));
 
     currentUser = currentUser.copyWith(
       roles: updatedRoles,
@@ -998,21 +1210,28 @@ class MockDataService extends ChangeNotifier {
     );
 
     if (expiredRoles.contains(activeRole)) {
-      activeRole = currentUser.roles.isNotEmpty ? currentUser.roles.first : UserRole.student;
+      activeRole = currentUser.roles.isNotEmpty
+          ? currentUser.roles.first
+          : UserRole.student;
     }
 
     for (final role in expiredRoles) {
-      _notifications.insert(0, NotificationModel(
-        id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
-        title: '${role.displayName} Access Expired ⏳',
-        body: 'Your temporary ${role.displayName} access period has ended. You are now back to Student view. Your hosted events remain on the campus feed.',
-        category: NotificationCategory.personal,
-        timestamp: now,
-      ));
+      _notifications.insert(
+        0,
+        NotificationModel(
+          id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
+          title: '${role.displayName} Access Expired ⏳',
+          body:
+              'Your temporary ${role.displayName} access period has ended. You are now back to Student view. Your hosted events remain on the campus feed.',
+          category: NotificationCategory.personal,
+          timestamp: now,
+        ),
+      );
     }
 
+    _invalidateDataCaches();
     notifyListeners();
-    unawaited(_saveLocalState());
+    _scheduleLocalSave();
   }
 
   String _formatDate(DateTime dt) {
@@ -1026,7 +1245,8 @@ class MockDataService extends ChangeNotifier {
       PostModel(
         id: 'pst_001',
         title: '🔥 Urgent: Mid-Semester Exam Schedule Revision (Autumn 2026)',
-        description: 'All 3rd and 4th year CSE & IT students must review the revised examination timetable. Exams start on Monday at 09:00 AM in Block C.',
+        description:
+            'All 3rd and 4th year CSE & IT students must review the revised examination timetable. Exams start on Monday at 09:00 AM in Block C.',
         category: PostCategory.urgent,
         department: 'Computer Science & Engineering',
         targetYear: 'Third Year',
@@ -1049,14 +1269,16 @@ class MockDataService extends ChangeNotifier {
       PostModel(
         id: 'pst_002',
         title: '🚀 HackCampus 2026: 24-Hour Flagship Hackathon',
-        description: 'Join over 500+ student developers, designers, and innovators! Build groundbreaking AI & Campus IoT solutions with prize pools up to \$5,000.',
+        description:
+            'Join over 500+ student developers, designers, and innovators! Build groundbreaking AI & Campus IoT solutions with prize pools up to \$5,000.',
         category: PostCategory.event,
         department: 'Computer Science & Engineering',
         authorName: 'Dev Society (Host: Aarav S.)',
         authorRole: UserRole.eventHost,
         authorId: 'usr_101',
         timestamp: now.subtract(const Duration(hours: 5)),
-        imageUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=800',
+        imageUrl:
+            'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=800',
         venue: 'Main Auditorium & Innovation Lab',
         eventDate: now.add(const Duration(days: 4)),
         registrationDeadline: now.add(const Duration(days: 2)),
@@ -1066,8 +1288,10 @@ class MockDataService extends ChangeNotifier {
       ),
       PostModel(
         id: 'pst_003',
-        title: '📚 Academic Notice: Elective Selection Guidelines for Final Year',
-        description: 'Please submit your preferences for Open Elective Course III before Friday 5:00 PM. Access the student portal to review syllabus descriptions.',
+        title:
+            '📚 Academic Notice: Elective Selection Guidelines for Final Year',
+        description:
+            'Please submit your preferences for Open Elective Course III before Friday 5:00 PM. Access the student portal to review syllabus descriptions.',
         category: PostCategory.academic,
         department: 'Information Technology',
         targetYear: 'Final Year',
@@ -1088,14 +1312,16 @@ class MockDataService extends ChangeNotifier {
       PostModel(
         id: 'pst_004',
         title: '🤖 Hands-on Workshop: Flutter & Mobile AI Apps',
-        description: 'Learn to build modern cross-platform mobile apps with Flutter, Supabase backend, and local AI model integration. Prerequisites: Basic OOP concepts.',
+        description:
+            'Learn to build modern cross-platform mobile apps with Flutter, Supabase backend, and local AI model integration. Prerequisites: Basic OOP concepts.',
         category: PostCategory.workshop,
         department: 'Computer Science & Engineering',
         authorName: 'Mobile Dev Club',
         authorRole: UserRole.eventHost,
         authorId: 'host_202',
         timestamp: now.subtract(const Duration(days: 1, hours: 4)),
-        imageUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=800',
+        imageUrl:
+            'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=800',
         venue: 'CS Lab 302',
         eventDate: now.add(const Duration(days: 6)),
         registrationDeadline: now.add(const Duration(days: 3)),
@@ -1106,20 +1332,23 @@ class MockDataService extends ChangeNotifier {
       PostModel(
         id: 'pst_005',
         title: '🏆 Campus Sports Squad Wins Inter-College Basketball Trophy!',
-        description: 'Hearty congratulations to the MIT Eagles Basketball team for taking 1st place in the State Inter-University Championship 2026!',
+        description:
+            'Hearty congratulations to the MIT Eagles Basketball team for taking 1st place in the State Inter-University Championship 2026!',
         category: PostCategory.achievement,
         department: 'Management Studies',
         authorName: 'Sports Directorate',
         authorRole: UserRole.admin,
         authorId: 'adm_001',
         timestamp: now.subtract(const Duration(days: 2)),
-        imageUrl: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&q=80&w=800',
+        imageUrl:
+            'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&q=80&w=800',
         saveCount: 156,
       ),
       PostModel(
         id: 'pst_006',
         title: '💼 Campus Placement Drive: Google Cloud & Microsoft Tech Roles',
-        description: 'Eligible 4th year CSE, IT, and ECE students can register for upcoming technical interviews. Minimum CGPA required: 7.5.',
+        description:
+            'Eligible 4th year CSE, IT, and ECE students can register for upcoming technical interviews. Minimum CGPA required: 7.5.',
         category: PostCategory.placement,
         department: 'Electronics & Communication',
         targetYear: 'Final Year',
@@ -1136,7 +1365,7 @@ class MockDataService extends ChangeNotifier {
           ),
         ],
         saveCount: 210,
-      )
+      ),
     ];
   }
 
@@ -1150,7 +1379,8 @@ class MockDataService extends ChangeNotifier {
         department: 'Electronics & Communication',
         studentId: 'MIT/EC/2024/019',
         requestedRole: UserRole.eventHost,
-        reason: 'I am the president of Robotics Club and need permissions to post robotics competitions and workshops for students.',
+        reason:
+            'I am the president of Robotics Club and need permissions to post robotics competitions and workshops for students.',
         phoneNumber: '+91 99887 76655',
         submittedAt: DateTime.now().subtract(const Duration(days: 1)),
       ),
@@ -1162,10 +1392,11 @@ class MockDataService extends ChangeNotifier {
         department: 'Management Studies',
         studentId: 'EMP/FAC/704',
         requestedRole: UserRole.faculty,
-        reason: 'Need faculty access to publish official departmental seminar notices and guest speaker updates.',
+        reason:
+            'Need faculty access to publish official departmental seminar notices and guest speaker updates.',
         phoneNumber: '+91 91234 56789',
         submittedAt: DateTime.now().subtract(const Duration(hours: 8)),
-      )
+      ),
     ];
   }
 
@@ -1194,7 +1425,7 @@ class MockDataService extends ChangeNotifier {
         body: 'Personalized updates for CS Third Year loaded.',
         category: NotificationCategory.general,
         timestamp: now.subtract(const Duration(days: 3)),
-      )
+      ),
     ];
   }
 }
@@ -1217,4 +1448,14 @@ class _LocalState {
   final List<NotificationModel> notifications;
   final List<RoleRequestModel> roleRequests;
   final List<ActiveAnnouncement> announcements;
+}
+
+Uint8List _decodeBase64Helper(String base64) => base64Decode(base64);
+
+Map<String, dynamic>? _parseJsonHelper(String raw) {
+  try {
+    return jsonDecode(raw) as Map<String, dynamic>?;
+  } catch (_) {
+    return null;
+  }
 }
