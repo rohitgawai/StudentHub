@@ -8,6 +8,7 @@ import '../widgets/post_card.dart';
 import '../widgets/role_request_modal.dart';
 import '../widgets/profile_avatar_zoom_dialog.dart';
 import '../widgets/edit_profile_modal.dart';
+import '../widgets/app_image.dart';
 import 'dashboards/admin_dashboard_screen.dart';
 import 'dashboards/faculty_dashboard_screen.dart';
 import 'dashboards/event_host_dashboard_screen.dart';
@@ -101,7 +102,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         children: [
                           CircleAvatar(
                             radius: 36,
-                            backgroundImage: user.avatarUrl.isNotEmpty ? NetworkImage(user.avatarUrl) : null,
+                            backgroundImage: resolveImageProvider(user.avatarUrl),
                             child: user.avatarUrl.isEmpty ? const Icon(Icons.person, size: 36) : null,
                           ),
                           Positioned(

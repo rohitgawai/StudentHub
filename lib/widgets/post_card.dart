@@ -6,6 +6,7 @@ import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
 import 'role_badge.dart';
 import 'pdf_viewer_modal.dart';
+import 'app_image.dart';
 
 class PostCard extends StatelessWidget {
   final PostModel post;
@@ -218,20 +219,25 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                         ),
                       ),
                       // Category Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: categoryColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: categoryColor.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          post.category.displayName.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: categoryColor,
-                            letterSpacing: 0.5,
+                      Flexible(
+                        flex: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: categoryColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: categoryColor.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            post.category.displayName.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: categoryColor,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
                       ),
@@ -267,18 +273,11 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                     const SizedBox(height: 12),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        post.imageUrl!,
+                      child: AppImage(
+                        source: post.imageUrl,
                         height: 180,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (ctx, err, stack) => Container(
-                          height: 120,
-                          color: Colors.grey.shade200,
-                          child: const Center(
-                            child: Icon(Icons.image, size: 48, color: Colors.grey),
-                          ),
-                        ),
                       ),
                     ),
                   ],

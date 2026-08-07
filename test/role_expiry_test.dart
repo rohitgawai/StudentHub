@@ -1,10 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:student_hub/models/role_request_model.dart';
 import 'package:student_hub/models/user_model.dart';
 import 'package:student_hub/services/mock_data_service.dart';
 
 void main() {
   testWidgets('limited-time Event Host role auto-expires', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
     final service = MockDataService();
     try {
       while (service.isLoading) {

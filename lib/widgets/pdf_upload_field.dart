@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/post_model.dart';
-import 'device_file_picker_dialog.dart';
+import '../services/device_file_service.dart';
 
 class PdfUploadField extends StatefulWidget {
   final ValueChanged<List<PostAttachment>> onAttachmentChanged;
@@ -15,36 +15,37 @@ class PdfUploadField extends StatefulWidget {
 }
 
 class _PdfUploadFieldState extends State<PdfUploadField> {
-  String? selectedDocTitle = 'Official_Department_Syllabus_2026.pdf';
-  String fileSize = '1.4 MB';
-
-  @override
-  void initState() {
-    super.initState();
-    _updateAttachment();
-  }
+  String? selectedDocTitle;
+  String? fileSize;
+  String? selectedDocUrl;
 
   Future<void> _pickPdfFromDevice() async {
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (ctx) => const DeviceFilePickerDialog(
-        isPdfOnly: true,
-        title: 'Upload PDF Document from Device Storage',
-      ),
-    );
-
-    if (result != null && result['name'] != null) {
-      setState(() {
-        selectedDocTitle = result['name'];
-        fileSize = result['size'] ?? '1.5 MB';
-      });
-      _updateAttachment();
+    try {
+      final picked = await pickPdfFromDevice();
+      if (picked != null) {
+        if (!mounted) return;
+        setState(() {
+          selectedDocTitle = picked.name;
+          fileSize = picked.sizeLabel;
+          selectedDocUrl = picked.source;
+        });
+        _updateAttachment();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Could not open file picker. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   void _clearPdf() {
     setState(() {
       selectedDocTitle = null;
+      selectedDocUrl = null;
     });
     widget.onAttachmentChanged([]);
   }
@@ -58,8 +59,8 @@ class _PdfUploadFieldState extends State<PdfUploadField> {
     final attachment = PostAttachment(
       title: selectedDocTitle!,
       fileType: 'pdf',
-      url: 'official_document.pdf',
-      fileSize: fileSize,
+      url: selectedDocUrl ?? 'official_document.pdf',
+      fileSize: fileSize ?? 'Size unknown',
     );
     widget.onAttachmentChanged([attachment]);
   }
@@ -124,7 +125,7 @@ class _PdfUploadFieldState extends State<PdfUploadField> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          'Size: $fileSize • Ready for student feeds',
+                          'Size: ${fileSize ?? 'Unknown'} • Ready for student feeds',
                           style: const TextStyle(fontSize: 10, color: Colors.grey),
                         ),
                       ],

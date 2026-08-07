@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/mock_data_service.dart';
-import '../models/user_model.dart';
 
 class AuthScreen extends StatefulWidget {
   final VoidCallback onLoginComplete;
@@ -189,7 +188,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         if (!_formKey.currentState!.validate()) return;
 
                         if (isSignUp) {
-                          dataService.currentUser = UserModel(
+                          dataService.initializeNewUser(
                             id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
                             name: nameController.text.trim(),
                             email: emailController.text.trim(),
@@ -198,9 +197,6 @@ class _AuthScreenState extends State<AuthScreen> {
                             year: selectedYear,
                             mobileNumber: mobileController.text.trim(),
                             avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256',
-                            roles: [UserRole.student],
-                            savedPostIds: [],
-                            registeredEventIds: [],
                           );
                         }
 

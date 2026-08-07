@@ -1,0 +1,62 @@
+-- StudentHub Supabase setup
+-- Run this in the Supabase Dashboard > SQL Editor once.
+-- Creates the posts table, Storage bucket `documents`, and demo-permissive RLS
+-- (anon read+write) so the app works end-to-end without real auth turned on yet.
+
+create table if not exists public.posts (
+  id text primary key,
+  title text not null default '',
+  description text not null default '',
+  category text not null default 'announcement',
+  department text not null default '',
+  target_year text,
+  author_name text not null default '',
+  author_role text not null default 'student',
+  author_id text not null default '',
+  image_url text,
+  is_urgent boolean not null default false,
+  is_pinned boolean not null default false,
+  save_count integer not null default 0,
+  venue text,
+  event_date timestamptz,
+  registration_deadline timestamptz,
+  max_participants integer,
+  registered_user_ids text[] not null default '{}',
+  attachments jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table public.posts enable row level security;
+
+drop policy if exists "posts_select_anon" on public.posts;
+create policy "posts_select_anon" on public.posts
+  for select using (true);
+
+drop policy if exists "posts_insert_anon" on public.posts;
+create policy "posts_insert_anon" on public.posts
+  for insert with check (true);
+
+drop policy if exists "posts_update_anon" on public.posts;
+create policy "posts_update_anon" on public.posts
+  for update using (true);
+
+drop policy if exists "posts_delete_anon" on public.posts;
+create policy "posts_delete_anon" on public.posts
+  for delete using (true);
+
+-- Storage bucket for PDF attachments (public read, anon upload)
+insert into storage.buckets (id, name, public)
+values ('documents', 'documents', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "documents_insert_anon" on storage.objects;
+create policy "documents_insert_anon" on storage.objects
+  for insert with check (bucket_id = 'documents');
+
+drop policy if exists "documents_select_anon" on storage.objects;
+create policy "documents_select_anon" on storage.objects
+  for select using (bucket_id = 'documents');
+
+drop policy if exists "documents_delete_anon" on storage.objects;
+create policy "documents_delete_anon" on storage.objects
+  for delete using (bucket_id = 'documents');

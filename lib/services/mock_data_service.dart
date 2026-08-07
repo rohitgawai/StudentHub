@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_config.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../models/role_request_model.dart';
 import '../models/notification_model.dart';
 import '../models/active_announcement_model.dart';
+import 'local_store_service.dart';
 
 class MockDataService extends ChangeNotifier {
   late AppConfig config;
@@ -40,6 +43,35 @@ class MockDataService extends ChangeNotifier {
   Future<void> _initData(AppConfig? initialConfig) async {
     config = initialConfig ?? await AppConfig.loadFromAssets();
 
+    final restored = await _loadLocalState();
+
+    if (restored != null) {
+      currentUser = restored.currentUser;
+      activeRole = restored.activeRole ??
+          (currentUser.roles.isNotEmpty ? currentUser.roles.first : UserRole.student);
+      _posts = restored.posts;
+      _notifications = restored.notifications;
+      _roleRequests = restored.roleRequests;
+      _announcements = restored.announcements;
+    } else {
+      // First launch on this device: show the seed dataset.
+      await _seedDefaults();
+    }
+
+    checkForExpiredRoles();
+
+    await _syncFromBackend();
+
+    _expiryTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      checkForExpiredRoles();
+      _clearExpiredAnnouncements();
+    });
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> _seedDefaults() async {
     // Default Current User (Student with Event Host capability or standard student)
     currentUser = UserModel(
       id: 'usr_101',
@@ -62,27 +94,529 @@ class MockDataService extends ChangeNotifier {
     _generateMockRoleRequests();
     _generateMockNotifications();
     _seedDefaultAnnouncement();
+  }
 
-    checkForExpiredRoles();
+  // --- On-device persistence ---
 
-    _expiryTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      checkForExpiredRoles();
-      _clearExpiredAnnouncements();
+  LocalStoreService get _localStore => LocalStoreService.instance;
+
+  final bool _localPersistEnabled = true;
+
+  /// Persists everything that must survive a restart (profile incl. avatar,
+  /// assigned + active role, and all posts/notifications/requests) as a JSON
+  /// snapshot plus local blob files for any uploaded PDF/image.
+  Future<void> _saveLocalState() async {
+    if (!_localPersistEnabled) return;
+    try {
+      final imageUrl = await _localStore.persistDataUri(
+        currentUser.avatarUrl,
+        currentUser.id,
+        'avatar',
+        _extFromDataUri(currentUser.avatarUrl),
+      );
+
+      final postsJson = <Map<String, dynamic>>[];
+      for (final post in _posts) {
+        postsJson.add(await _localRowFromPost(post));
+      }
+
+      final payload = {
+        'version': 1,
+        'savedAt': DateTime.now().toIso8601String(),
+        'activeRole': activeRole.name,
+        'currentUser': {
+          'id': currentUser.id,
+          'name': currentUser.name,
+          'email': currentUser.email,
+          'studentOrEmployeeId': currentUser.studentOrEmployeeId,
+          'department': currentUser.department,
+          'year': currentUser.year,
+          'mobileNumber': currentUser.mobileNumber,
+          'avatarUrl': imageUrl,
+          'roles': currentUser.roles.map((r) => r.name).toList(),
+          'savedPostIds': currentUser.savedPostIds,
+          'registeredEventIds': currentUser.registeredEventIds,
+          'isVerified': currentUser.isVerified,
+          'hasChangedUniqueId': currentUser.hasChangedUniqueId,
+          'roleExpirations': currentUser.roleExpirations
+              .map((role, expiry) => MapEntry(role.name, expiry.toIso8601String())),
+        },
+        'posts': postsJson,
+        'notifications': _notifications.map(_notificationToJson).toList(),
+        'roleRequests': _roleRequests.map(_roleRequestToJson).toList(),
+        'announcements': _announcements.map(_announcementToJson).toList(),
+      };
+
+      await _localStore.saveSnapshot(jsonEncode(payload));
+    } catch (_) {
+      // Best-effort: ignore persistence failures.
+    }
+  }
+
+  Future<_LocalState?> _loadLocalState() async {
+    final raw = await _localStore.loadSnapshot();
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final payload = jsonDecode(raw) as Map<String, dynamic>;
+      final user = _userFromJson(payload['currentUser'] as Map<String, dynamic>);
+      final active = payload['activeRole'] == null
+          ? null
+          : _roleFromName(payload['activeRole'].toString());
+
+      final posts = ((payload['posts'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((r) => _postFromRow(r.cast<String, dynamic>()))
+          .whereType<PostModel>()
+          .toList();
+      final notifications = ((payload['notifications'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((m) => _notificationFromJson(m.cast<String, dynamic>()))
+          .toList();
+      final roleRequests = ((payload['roleRequests'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((m) => _roleRequestFromJson(m.cast<String, dynamic>()))
+          .toList();
+      final announcements = ((payload['announcements'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((m) => _announcementFromJson(m.cast<String, dynamic>()))
+          .toList();
+
+      return _LocalState(
+        currentUser: user,
+        activeRole: active,
+        posts: posts,
+        notifications: notifications,
+        roleRequests: roleRequests,
+        announcements: announcements,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  UserRole _roleFromName(String name) => UserRole.values.firstWhere(
+        (r) => r.name == name,
+        orElse: () => UserRole.student,
+      );
+
+  String _extFromDataUri(String? url) {
+    if (url == null || !url.startsWith('data:')) return 'jpg';
+    final mimeMatch = RegExp(r'data:([^;,]+)').firstMatch(url);
+    final mime = mimeMatch?.group(1)?.toLowerCase() ?? '';
+    if (mime.contains('/pdf')) return 'pdf';
+    final ext = mime.split('/').last;
+    return ext.replaceAll(RegExp(r'[^a-z0-9.]'), '');
+  }
+
+  Future<Map<String, dynamic>> _localRowFromPost(PostModel p) async {
+    final row = _rowFromPost(p);
+    row['image_url'] = await _localStore.persistDataUri(
+      p.imageUrl,
+      p.id,
+      'cover',
+      _extFromDataUri(p.imageUrl),
+    );
+    final attachments = <Map<String, dynamic>>[];
+    var i = 0;
+    for (final att in p.attachments) {
+      final url = await _localStore.persistDataUri(
+        att.url,
+        p.id,
+        'att$i',
+        att.fileType == 'pdf' ? 'pdf' : _extFromDataUri(att.url),
+      );
+      attachments.add({
+        'title': att.title,
+        'fileType': att.fileType,
+        'url': url,
+        'fileSize': att.fileSize,
+      });
+      i++;
+    }
+    row['attachments'] = attachments;
+    return row;
+  }
+
+  UserModel _userFromJson(Map<String, dynamic> m) {
+    final expirationsJson = (m['roleExpirations'] as Map?) ?? const {};
+    final expirations = <UserRole, DateTime>{};
+    expirationsJson.forEach((role, expiry) {
+      final parsed = DateTime.tryParse(expiry?.toString() ?? '');
+      if (parsed != null) expirations[_roleFromName(role.toString())] = parsed;
     });
 
-    _isLoading = false;
-    notifyListeners();
+    return UserModel(
+      id: m['id']?.toString() ?? 'usr_local',
+      name: m['name']?.toString() ?? '',
+      email: m['email']?.toString() ?? '',
+      studentOrEmployeeId: m['studentOrEmployeeId']?.toString() ?? '',
+      department: m['department']?.toString() ?? '',
+      year: m['year']?.toString() ?? '',
+      mobileNumber: m['mobileNumber']?.toString() ?? '',
+      avatarUrl: m['avatarUrl']?.toString() ?? '',
+      roles: ((m['roles'] as List?) ?? const [])
+          .whereType<String>()
+          .map(_roleFromName)
+          .toList(),
+      savedPostIds: ((m['savedPostIds'] as List?) ?? const []).whereType<String>().toList(),
+      registeredEventIds:
+          ((m['registeredEventIds'] as List?) ?? const []).whereType<String>().toList(),
+      isVerified: m['isVerified'] as bool? ?? true,
+      roleExpirations: expirations,
+      hasChangedUniqueId: m['hasChangedUniqueId'] as bool? ?? false,
+    );
   }
+
+  Map<String, dynamic> _notificationToJson(NotificationModel n) => {
+        'id': n.id,
+        'title': n.title,
+        'body': n.body,
+        'category': n.category.name,
+        'timestamp': n.timestamp.toIso8601String(),
+        'isRead': n.isRead,
+        'relatedPostId': n.relatedPostId,
+      };
+
+  NotificationModel _notificationFromJson(Map<String, dynamic> m) =>
+      NotificationModel(
+        id: m['id']?.toString() ?? 'notif_local',
+        title: m['title']?.toString() ?? '',
+        body: m['body']?.toString() ?? '',
+        category: NotificationCategory.values.firstWhere(
+          (c) => c.name == m['category'],
+          orElse: () => NotificationCategory.general,
+        ),
+        timestamp: DateTime.tryParse(m['timestamp']?.toString() ?? '') ?? DateTime.now(),
+        isRead: m['isRead'] as bool? ?? false,
+        relatedPostId: m['relatedPostId'] as String?,
+      );
+
+  Map<String, dynamic> _roleRequestToJson(RoleRequestModel r) => {
+        'id': r.id,
+        'userId': r.userId,
+        'userName': r.userName,
+        'userEmail': r.userEmail,
+        'department': r.department,
+        'studentId': r.studentId,
+        'requestedRole': r.requestedRole.name,
+        'reason': r.reason,
+        'phoneNumber': r.phoneNumber,
+        'status': r.status.name,
+        'submittedAt': r.submittedAt.toIso8601String(),
+        'adminNotes': r.adminNotes,
+        'isLimitedAccess': r.isLimitedAccess,
+        'durationDays': r.durationDays,
+      };
+
+  RoleRequestModel _roleRequestFromJson(Map<String, dynamic> m) =>
+      RoleRequestModel(
+        id: m['id']?.toString() ?? '',
+        userId: m['userId']?.toString() ?? '',
+        userName: m['userName']?.toString() ?? '',
+        userEmail: m['userEmail']?.toString() ?? '',
+        department: m['department']?.toString() ?? '',
+        studentId: m['studentId']?.toString() ?? '',
+        requestedRole: _roleFromName(m['requestedRole']?.toString() ?? ''),
+        reason: m['reason']?.toString() ?? '',
+        phoneNumber: m['phoneNumber']?.toString() ?? '',
+        status: RoleRequestStatus.values.firstWhere(
+          (s) => s.name == m['status'],
+          orElse: () => RoleRequestStatus.pending,
+        ),
+        submittedAt:
+            DateTime.tryParse(m['submittedAt']?.toString() ?? '') ?? DateTime.now(),
+        adminNotes: m['adminNotes'] as String?,
+        isLimitedAccess: m['isLimitedAccess'] as bool? ?? false,
+        durationDays: m['durationDays'] as int?,
+      );
+
+  Map<String, dynamic> _announcementToJson(ActiveAnnouncement a) => {
+        'id': a.id,
+        'title': a.title,
+        'description': a.description,
+        'authorName': a.authorName,
+        'authorRole': a.authorRole.name,
+        'department': a.department,
+        'postedAt': a.postedAt.toIso8601String(),
+        'expiresAt': a.expiresAt.toIso8601String(),
+      };
+
+  ActiveAnnouncement _announcementFromJson(Map<String, dynamic> m) =>
+      ActiveAnnouncement(
+        id: m['id']?.toString() ?? 'ann_local',
+        title: m['title']?.toString() ?? '',
+        description: m['description']?.toString() ?? '',
+        authorName: m['authorName']?.toString() ?? '',
+        authorRole: _roleFromName(m['authorRole']?.toString() ?? ''),
+        department: m['department']?.toString() ?? '',
+        postedAt:
+            DateTime.tryParse(m['postedAt']?.toString() ?? '') ?? DateTime.now(),
+        expiresAt:
+            DateTime.tryParse(m['expiresAt']?.toString() ?? '') ?? DateTime.now(),
+      );
 
   void updateConfig(AppConfig newConfig) {
     config = newConfig;
     notifyListeners();
   }
 
+  /// Used by the sign-up flow: swaps in a brand-new student account and resets
+  /// the active perspective, persisted on-device for future sessions.
+  void initializeNewUser({
+    required String id,
+    required String name,
+    required String email,
+    required String studentOrEmployeeId,
+    required String department,
+    required String year,
+    required String mobileNumber,
+    String avatarUrl = '',
+    List<String> savedPostIds = const [],
+    List<String> registeredEventIds = const [],
+  }) {
+    currentUser = UserModel(
+      id: id,
+      name: name,
+      email: email,
+      studentOrEmployeeId: studentOrEmployeeId,
+      department: department,
+      year: year,
+      mobileNumber: mobileNumber,
+      avatarUrl: avatarUrl,
+      roles: const [UserRole.student],
+      savedPostIds: savedPostIds,
+      registeredEventIds: registeredEventIds,
+      isVerified: true,
+    );
+    activeRole = UserRole.student;
+    notifyListeners();
+    unawaited(_saveLocalState());
+  }
+
   void switchActiveRole(UserRole newRole) {
     if (currentUser.roles.contains(newRole) || activeRole != newRole) {
       activeRole = newRole;
       notifyListeners();
+      unawaited(_saveLocalState());
+    }
+  }
+
+  // --- Supabase persistence ---
+  SupabaseClient? get _client {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Loads posts from Supabase when available; merges them with device-local
+  /// posts so nothing saved on this device is ever dropped.
+  Future<void> _syncFromBackend() async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      final rows = await client
+          .from('posts')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(100);
+      final fetched = rows.map(_postFromRow).whereType<PostModel>().toList();
+      if (fetched.isEmpty) {
+        await _pushSeedPostsToBackend(client);
+        return;
+      }
+      final remoteIds = fetched.map((p) => p.id).toSet();
+      final localOnly =
+          _posts.where((p) => !remoteIds.contains(p.id)).toList();
+      _posts = [...localOnly, ...fetched];
+      // Re-push posts that only exist on this device (created while offline or
+      // backend write failed) so the remote mirror catches up.
+      for (final post in localOnly) {
+        _persistPost(post);
+      }
+    } catch (_) {
+      // Table missing / offline: keep the in-memory seeds.
+    }
+  }
+
+  Future<void> _pushSeedPostsToBackend(SupabaseClient client) async {
+    await client
+        .from('posts')
+        .upsert(_posts.map(_rowFromPost).toList(), onConflict: 'id');
+  }
+
+  PostModel? _postFromRow(Map<String, dynamic> row) {
+    if (row['id'] == null) return null;
+    final attachments = (row['attachments'] as List? ?? const [])
+        .whereType<Map>()
+        .map((a) => PostAttachment(
+              title: a['title']?.toString() ?? '',
+              fileType: a['fileType']?.toString() ?? 'pdf',
+              url: a['url']?.toString() ?? '',
+              fileSize: a['fileSize']?.toString() ?? '',
+            ))
+        .toList();
+    return PostModel(
+      id: row['id']!.toString(),
+      title: row['title']?.toString() ?? '',
+      description: row['description']?.toString() ?? '',
+      category: PostCategory.values.firstWhere(
+        (c) => c.name == row['category'],
+        orElse: () => PostCategory.announcement,
+      ),
+      department: row['department']?.toString() ?? '',
+      targetYear: row['target_year'] as String?,
+      authorName: row['author_name']?.toString() ?? '',
+      authorRole: UserRole.values.firstWhere(
+        (r) => r.name == row['author_role'],
+        orElse: () => UserRole.student,
+      ),
+      authorId: row['author_id']?.toString() ?? '',
+      timestamp: _parseDate(row['created_at']) ?? DateTime.now(),
+      imageUrl: row['image_url'] as String?,
+      attachments: attachments,
+      isUrgent: row['is_urgent'] as bool? ?? false,
+      isPinned: row['is_pinned'] as bool? ?? false,
+      saveCount: row['save_count'] as int? ?? 0,
+      venue: row['venue'] as String?,
+      eventDate: _parseDate(row['event_date']),
+      registrationDeadline: _parseDate(row['registration_deadline']),
+      maxParticipants: row['max_participants'] as int?,
+      registeredUserIds:
+          ((row['registered_user_ids'] as List?) ?? const []).cast<String>(),
+    );
+  }
+
+  Map<String, dynamic> _rowFromPost(PostModel p) => {
+        'id': p.id,
+        'title': p.title,
+        'description': p.description,
+        'category': p.category.name,
+        'department': p.department,
+        'target_year': p.targetYear,
+        'author_name': p.authorName,
+        'author_role': p.authorRole.name,
+        'author_id': p.authorId,
+        'image_url': p.imageUrl,
+        'is_urgent': p.isUrgent,
+        'is_pinned': p.isPinned,
+        'save_count': p.saveCount,
+        'venue': p.venue,
+        'event_date': p.eventDate?.toIso8601String(),
+        'registration_deadline': p.registrationDeadline?.toIso8601String(),
+        'max_participants': p.maxParticipants,
+        'registered_user_ids': p.registeredUserIds,
+        'attachments': p.attachments
+            .map((a) => {
+                  'title': a.title,
+                  'fileType': a.fileType,
+                  'url': a.url,
+                  'fileSize': a.fileSize,
+                })
+            .toList(),
+        'created_at': p.timestamp.toIso8601String(),
+      };
+
+  DateTime? _parseDate(dynamic value) {
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+    if (value is DateTime) return value;
+    return null;
+  }
+
+  /// Pushes a post to Postgres in the background, uploading any base64 PDF
+  /// attachments (and post images) to Supabase Storage first.
+  Future<void> _persistPost(PostModel post) async {
+    final client = _client;
+    if (client == null) {
+      unawaited(_saveLocalState());
+      return;
+    }
+    try {
+      var stored = post;
+      var changed = false;
+      final uploaded = <PostAttachment>[];
+      for (final att in post.attachments) {
+        final resolved = await _uploadAttachmentIfNeeded(att);
+        uploaded.add(resolved);
+        if (resolved.url != att.url) changed = true;
+      }
+      if (changed) {
+        stored = post.copyWith(attachments: uploaded);
+      }
+      stored = await _uploadPostImageIfNeeded(stored);
+      await client.from('posts').upsert(_rowFromPost(stored), onConflict: 'id');
+      final idx = _posts.indexWhere((p) => p.id == post.id);
+      if (idx != -1) _posts[idx] = stored;
+    } catch (_) {
+      // Keep local state; the next sync may still push this post.
+    }
+  }
+
+  /// Uploads a post's cover image (data URI or local file ref) to Supabase
+  /// Storage and returns the post with the public URL. Remote/empty images are
+  /// left untouched.
+  Future<PostModel> _uploadPostImageIfNeeded(PostModel post) async {
+    final client = _client;
+    final url = post.imageUrl;
+    if (client == null || url == null || url.isEmpty) return post;
+    if (!url.startsWith('data:') && !_localStore.isLocalRef(url)) return post;
+
+    try {
+      final bytes = url.startsWith('data:')
+          ? base64Decode(url.substring(url.indexOf(',') + 1))
+          : await _localStore.readLocalBlob(url);
+      if (bytes == null || bytes.isEmpty) return post;
+
+      final ext = _extFromDataUri(url);
+      final path = 'posts/${post.id}_cover.$ext';
+      await client.storage.from('documents').uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: ext == 'png' ? 'image/png' : 'image/jpeg',
+              upsert: true,
+            ),
+          );
+      final publicUrl = client.storage.from('documents').getPublicUrl(path);
+      return post.copyWith(imageUrl: publicUrl);
+    } catch (_) {
+      return post;
+    }
+  }
+
+  Future<PostAttachment> _uploadAttachmentIfNeeded(PostAttachment att) async {
+    final client = _client;
+    final url = att.url;
+    if (client == null) return att;
+    if (!url.startsWith('data:') && !_localStore.isLocalRef(url)) return att;
+    try {
+      final bytes = url.startsWith('data:')
+          ? base64Decode(url.substring(url.indexOf(',') + 1))
+          : await _localStore.readLocalBlob(url);
+      if (bytes == null || bytes.isEmpty) return att;
+      final safeName =
+          att.title.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final path = 'docs/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+      await client.storage.from('documents').uploadBinary(
+            path,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'application/pdf',
+              upsert: true,
+            ),
+          );
+      final publicUrl = client.storage.from('documents').getPublicUrl(path);
+      return PostAttachment(
+        title: att.title,
+        fileType: att.fileType,
+        url: publicUrl,
+        fileSize: att.fileSize,
+      );
+    } catch (_) {
+      return att;
     }
   }
 
@@ -156,6 +690,7 @@ class MockDataService extends ChangeNotifier {
 
     currentUser = currentUser.copyWith(savedPostIds: updatedSaved);
     notifyListeners();
+    unawaited(_saveLocalState());
   }
 
   void toggleEventRegistration(String postId) {
@@ -190,11 +725,14 @@ class MockDataService extends ChangeNotifier {
     _posts[index] = post.copyWith(registeredUserIds: regUsers);
     currentUser = currentUser.copyWith(registeredEventIds: userRegEvents);
     notifyListeners();
+    unawaited(_saveLocalState());
   }
 
   void addPost(PostModel newPost) {
     _posts.insert(0, newPost);
     notifyListeners();
+    _persistPost(newPost);
+    unawaited(_saveLocalState());
   }
 
   void updatePost(PostModel updatedPost) {
@@ -202,12 +740,23 @@ class MockDataService extends ChangeNotifier {
     if (idx != -1) {
       _posts[idx] = updatedPost;
       notifyListeners();
+      _persistPost(updatedPost);
+      unawaited(_saveLocalState());
     }
   }
 
   void deletePost(String postId) {
+    final removed = _posts.where((p) => p.id == postId).toList();
     _posts.removeWhere((p) => p.id == postId);
+    _client?.from('posts').delete().eq('id', postId);
+    for (final post in removed) {
+      _localStore.deleteLocalBlob(post.imageUrl);
+      for (final att in post.attachments) {
+        _localStore.deleteLocalBlob(att.url);
+      }
+    }
     notifyListeners();
+    unawaited(_saveLocalState());
   }
 
   Future<void> refreshFeed() async {
@@ -243,6 +792,7 @@ class MockDataService extends ChangeNotifier {
     );
 
     notifyListeners();
+    unawaited(_saveLocalState());
   }
 
   // --- Header Announcement (Time-limited, one per department) ---
@@ -297,6 +847,7 @@ class MockDataService extends ChangeNotifier {
     ));
 
     notifyListeners();
+    unawaited(_saveLocalState());
     return true;
   }
 
@@ -360,6 +911,7 @@ class MockDataService extends ChangeNotifier {
     ));
 
     notifyListeners();
+    unawaited(_saveLocalState());
   }
 
   void updateRoleRequestStatus(String requestId, RoleRequestStatus status, String? notes) {
@@ -407,6 +959,7 @@ class MockDataService extends ChangeNotifier {
     }
 
     notifyListeners();
+    unawaited(_saveLocalState());
   }
 
   void markNotificationRead(String notifId) {
@@ -414,12 +967,14 @@ class MockDataService extends ChangeNotifier {
     if (idx != -1) {
       _notifications[idx] = _notifications[idx].copyWith(isRead: true);
       notifyListeners();
+      unawaited(_saveLocalState());
     }
   }
 
   void markAllNotificationsRead() {
     _notifications = _notifications.map((n) => n.copyWith(isRead: true)).toList();
     notifyListeners();
+    unawaited(_saveLocalState());
   }
 
   void checkForExpiredRoles() {
@@ -457,6 +1012,7 @@ class MockDataService extends ChangeNotifier {
     }
 
     notifyListeners();
+    unawaited(_saveLocalState());
   }
 
   String _formatDate(DateTime dt) {
@@ -484,7 +1040,7 @@ class MockDataService extends ChangeNotifier {
           PostAttachment(
             title: 'Mid_Sem_Exam_Schedule_Autumn2026.pdf',
             fileType: 'pdf',
-            url: 'mock_pdf_exam.pdf',
+            url: 'assets/pdfs/mid_sem_exam_schedule.pdf',
             fileSize: '1.4 MB',
           ),
         ],
@@ -523,7 +1079,7 @@ class MockDataService extends ChangeNotifier {
           PostAttachment(
             title: 'Open_Elective_Syllabus_2026.pdf',
             fileType: 'pdf',
-            url: 'mock_pdf_elective.pdf',
+            url: 'assets/pdfs/open_elective_syllabus.pdf',
             fileSize: '2.8 MB',
           ),
         ],
@@ -575,7 +1131,7 @@ class MockDataService extends ChangeNotifier {
           PostAttachment(
             title: 'Placement_Drive_Eligibility_Details.pdf',
             fileType: 'pdf',
-            url: 'placement_details.pdf',
+            url: 'assets/pdfs/placement_eligibility.pdf',
             fileSize: '890 KB',
           ),
         ],
@@ -641,4 +1197,24 @@ class MockDataService extends ChangeNotifier {
       )
     ];
   }
+}
+
+/// Snapshot of everything that must be restored from the device between app
+/// sessions.
+class _LocalState {
+  _LocalState({
+    required this.currentUser,
+    required this.activeRole,
+    required this.posts,
+    required this.notifications,
+    required this.roleRequests,
+    required this.announcements,
+  });
+
+  final UserModel currentUser;
+  final UserRole? activeRole;
+  final List<PostModel> posts;
+  final List<NotificationModel> notifications;
+  final List<RoleRequestModel> roleRequests;
+  final List<ActiveAnnouncement> announcements;
 }

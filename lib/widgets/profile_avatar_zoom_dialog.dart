@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../services/device_file_service.dart';
 import '../services/mock_data_service.dart';
-import 'device_file_picker_dialog.dart';
+import 'app_image.dart';
 
 class ProfileAvatarZoomDialog extends StatefulWidget {
   final String avatarUrl;
@@ -26,16 +27,20 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
   }
 
   Future<void> _pickAvatarFromDevice() async {
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (ctx) => const DeviceFilePickerDialog(
-        isPdfOnly: false,
-        title: 'Upload Profile Picture from Device',
-      ),
-    );
-
-    if (result != null && result['url'] != null) {
-      _updateAvatar(result['url']!);
+    try {
+      final picked = await pickImageFromDevice();
+      if (picked != null && picked.source != null) {
+        if (!mounted) return;
+        _updateAvatar(picked.source!);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Could not open device gallery. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -105,10 +110,10 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: currentAvatar.isNotEmpty
-                      ? Image.network(
-                          currentAvatar,
+                      ? AppImage(
+                          source: currentAvatar,
                           fit: BoxFit.contain,
-                          errorBuilder: (ctx, err, stack) => const Icon(
+                          errorChild: const Icon(
                             Icons.person,
                             size: 160,
                             color: Colors.white54,

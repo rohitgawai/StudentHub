@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'config/supabase_config.dart';
 import 'services/mock_data_service.dart';
+import 'services/local_store_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_screen.dart';
 import 'screens/splash_screen.dart';
@@ -10,8 +13,18 @@ import 'screens/explore_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/notifications_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LocalStoreService.instance.warmUp();
+  try {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      publishableKey: SupabaseConfig.anonKey,
+    );
+  } catch (_) {
+    // Backend unavailable (offline / not set up): the app continues with
+    // the in-memory mock dataset.
+  }
   runApp(
     ChangeNotifierProvider(
       create: (_) => MockDataService(),

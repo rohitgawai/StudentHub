@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'device_file_picker_dialog.dart';
+import '../services/device_file_service.dart';
+import 'app_image.dart';
 
 class ImagePickerField extends StatefulWidget {
   final String? initialUrl;
@@ -31,20 +32,24 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
   }
 
   Future<void> _pickImageFromDevice() async {
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (ctx) => const DeviceFilePickerDialog(
-        isPdfOnly: false,
-        title: 'Upload Image from Device Storage',
-      ),
-    );
-
-    if (result != null && result['url'] != null) {
-      setState(() {
-        selectedUrl = result['url'];
-        selectedFileName = result['name'] ?? 'Device_Photo.jpg';
-      });
-      widget.onImageSelected(selectedUrl);
+    try {
+      final picked = await pickImageFromDevice();
+      if (picked != null) {
+        if (!mounted) return;
+        setState(() {
+          selectedUrl = picked.source;
+          selectedFileName = picked.name;
+        });
+        widget.onImageSelected(selectedUrl);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Could not open file picker. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -101,8 +106,8 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
               borderRadius: BorderRadius.circular(10),
               child: Stack(
                 children: [
-                  Image.network(
-                    selectedUrl!,
+                  AppImage(
+                    source: selectedUrl,
                     height: 140,
                     width: double.infinity,
                     fit: BoxFit.cover,
