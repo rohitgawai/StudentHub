@@ -26,13 +26,17 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   Future<void> _handleRefresh(MockDataService dataService) async {
     setState(() => isRefreshing = true);
-    await dataService.refreshFeed();
+    final success = await dataService.refreshFeed();
     if (mounted) {
       setState(() => isRefreshing = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✨ Campus feed refreshed!'),
-          duration: Duration(seconds: 1),
+        SnackBar(
+          content: Text(
+            success
+                ? '✨ Campus feed refreshed!'
+                : '⚠️ No network · Connect to the internet to refresh',
+          ),
+          duration: const Duration(seconds: 1),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -106,10 +110,13 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       (MockDataService s) => s.currentUser.department,
     );
 
-    final categories = ['All', ...cfg.postCategories];
+    final categories = ['All', ...cfg.postCategories]
+        .where((c) => c != 'Event' && c != 'Workshop')
+        .toList();
     final posts = dataService.getPersonalizedFeed(
       categoryFilter: selectedCategory,
       searchQuery: searchQuery,
+      excludeEvents: true,
     );
 
     final headerAnnouncement = dataService.activeAnnouncementFor(userDept);

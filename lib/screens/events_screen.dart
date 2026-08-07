@@ -17,11 +17,31 @@ class EventsScreen extends StatefulWidget {
 class _EventsScreenState extends State<EventsScreen>
     with SingleTickerProviderStateMixin {
   late TabController tabController;
+  bool isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
     tabController = TabController(length: 3, vsync: this);
+  }
+
+  Future<void> _handleRefresh(MockDataService dataService) async {
+    setState(() => isRefreshing = true);
+    final success = await dataService.refreshFeed();
+    if (mounted) {
+      setState(() => isRefreshing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? '✨ Events refreshed!'
+                : '⚠️ No network · Connect to the internet to refresh',
+          ),
+          duration: const Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -89,14 +109,38 @@ class _EventsScreenState extends State<EventsScreen>
               children: [
                 Icon(Icons.filter_alt, size: 16, color: cfg.eventColor),
                 const SizedBox(width: 8),
-                Text(
-                  'Filtered from campus feed · Events & Workshops',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: cfg.eventColor,
+                Expanded(
+                  child: Text(
+                    'Filtered from campus feed · Events & Workshops',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: cfg.eventColor,
+                    ),
                   ),
                 ),
+                if (isRefreshing)
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: cfg.eventColor,
+                      ),
+                    ),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded),
+                    color: cfg.eventColor,
+                    iconSize: 20,
+                    tooltip: 'Refresh Events',
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () => _handleRefresh(dataService),
+                  ),
               ],
             ),
           ),
@@ -113,6 +157,7 @@ class _EventsScreenState extends State<EventsScreen>
                   congratulatedIds: congratulatedIds,
                   userYear: user.year,
                   dataService: dataService,
+                  onRefresh: () => _handleRefresh(dataService),
                 ),
                 _buildEventList(
                   context,
@@ -154,6 +199,7 @@ class _EventsScreenState extends State<EventsScreen>
     required String userYear,
     required MockDataService dataService,
     String emptyMessage = 'No upcoming events found.',
+    Future<void> Function()? onRefresh,
   }) {
     if (events.isEmpty) {
       return Center(
@@ -168,7 +214,7 @@ class _EventsScreenState extends State<EventsScreen>
       );
     }
 
-    return ListView.builder(
+    Widget list = ListView.builder(
       padding: const EdgeInsets.only(top: 8, bottom: 96),
       itemCount: events.length,
       itemBuilder: (context, index) {
@@ -189,6 +235,15 @@ class _EventsScreenState extends State<EventsScreen>
         );
       },
     );
+
+    if (onRefresh != null) {
+      list = RefreshIndicator(
+        color: cfg.eventColor,
+        onRefresh: onRefresh,
+        child: list,
+      );
+    }
+    return list;
   }
 
   void _handleToggleRegister(MockDataService dataService, PostModel post) {

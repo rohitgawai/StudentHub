@@ -547,10 +547,12 @@ class MockDataService extends ChangeNotifier {
 
   /// Loads posts from Supabase when available; merges them with device-local
   /// posts so nothing saved on this device is ever dropped. Bounded by a
-  /// timeout so a dead/slow network can never block the UI.
-  Future<void> _syncFromBackend() async {
+  /// timeout so a dead/slow network can never block the UI. Returns whether
+  /// the backend was actually reached, so callers can require an online
+  /// connection (e.g. for manual refresh).
+  Future<bool> _syncFromBackend() async {
     final client = _client;
-    if (client == null) return;
+    if (client == null) return false;
     try {
       final rows = await client
           .from('posts')
@@ -561,19 +563,21 @@ class MockDataService extends ChangeNotifier {
       final fetched = rows.map(_postFromRow).whereType<PostModel>().toList();
       if (fetched.isEmpty) {
         await _pushSeedPostsToBackend(client);
-        return;
+        return true;
       }
       final remoteIds = fetched.map((p) => p.id).toSet();
       final localOnly = _posts.where((p) => !remoteIds.contains(p.id)).toList();
       _posts = [...localOnly, ...fetched];
-      // Re-push posts that only exist on this device (created while offline or
+      // Re-push posts that only exist on local (created while offline or
       // backend write failed) so the remote mirror catches up.
       for (final post in localOnly) {
         _persistPost(post);
       }
+      return true;
     } catch (e) {
       // Table missing / offline: keep the in-memory seeds.
       debugPrint('StudentHub: backend sync failed: $e');
+      return false;
     }
   }
 
@@ -782,15 +786,21 @@ class MockDataService extends ChangeNotifier {
     String? categoryFilter,
     String? searchQuery,
     bool savedOnly = false,
+    bool excludeEvents = false,
   }) {
     // Memoized: identical filter inputs at the same data version return the
     // cached result, so rebuilds triggered by unrelated changes (or typing in
     // search bars) don't re-copy/re-sort the feed.
-    final key = '$savedOnly|$categoryFilter|$searchQuery|$_dataVersion';
+    final key =
+        '$savedOnly|$categoryFilter|$searchQuery|$excludeEvents|$_dataVersion';
     final cached = _feedCacheValue;
     if (key == _feedCacheKey && cached != null) return cached;
 
     List<PostModel> list = List.from(_posts);
+
+    if (excludeEvents) {
+      list = list.where((p) => !p.isEvent).toList();
+    }
 
     if (savedOnly) {
       list = list
@@ -985,9 +995,17 @@ class MockDataService extends ChangeNotifier {
     _scheduleLocalSave();
   }
 
-  Future<void> refreshFeed() async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    notifyListeners();
+  /// Pulls the latest data from the backend. Network is mandatory: when the
+  /// backend cannot be reached this returns false so the caller can prompt the
+  /// user instead of showing stale content.
+  Future<bool> refreshFeed() async {
+    final success = await _syncFromBackend();
+    if (success) {
+      _invalidateDataCaches();
+      notifyListeners();
+      _scheduleLocalSave();
+    }
+    return success;
   }
 
   void updateUserProfile({
