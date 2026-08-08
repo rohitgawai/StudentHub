@@ -583,14 +583,16 @@ class MockDataService extends ChangeNotifier {
     }
   }
 
-  /// Loads posts from Supabase when available; merges them with device-local
-  /// posts so nothing saved on this device is ever dropped. Bounded by a
-  /// timeout so a dead/slow network can never block the UI. Returns whether
-  /// the backend was actually reached and whether the merge changed anything
-  /// (so periodic polls stay silent when the feed is unchanged).
+  /// Loads posts, the device user's profile and every role request from
+  /// Supabase when available; merges them with device-local state so nothing
+  /// saved on this device is ever dropped. Bounded by a timeout so a dead/slow
+  /// network can never block the UI. Returns whether the backend was actually
+  /// reached and whether the merge changed anything (so periodic polls stay
+  /// silent when nothing changed).
   Future<({bool success, bool changed})> _syncFromBackend() async {
     final client = _client;
     if (client == null) return (success: false, changed: false);
+    var changed = false;
     try {
       final rows = await client
           .from('posts')
@@ -601,59 +603,462 @@ class MockDataService extends ChangeNotifier {
       final fetched = rows.map(_postFromRow).whereType<PostModel>().toList();
       if (fetched.isEmpty) {
         await _pushSeedPostsToBackend(client);
-        return (success: true, changed: false);
-      }
-      final remoteIds = fetched.map((p) => p.id).toSet();
-      _serverKnownIds.addAll(remoteIds);
+      } else {
+        final remoteIds = fetched.map((p) => p.id).toSet();
+        _serverKnownIds.addAll(remoteIds);
 
-      // Posts this device once confirmed on the server but the server no
-      // longer returns were deleted elsewhere — drop them from the local feed.
-      final disappeared = _posts
-          .where(
-            (p) =>
-                _serverKnownIds.contains(p.id) && !remoteIds.contains(p.id),
-          )
-          .map((p) => p.id)
-          .toSet();
+        // Posts this device once confirmed on the server but the server no
+        // longer returns were deleted elsewhere — drop them from the local feed.
+        final disappeared = _posts
+            .where(
+              (p) =>
+                  _serverKnownIds.contains(p.id) && !remoteIds.contains(p.id),
+            )
+            .map((p) => p.id)
+            .toSet();
 
-      // Only posts never confirmed by the server (created offline / failed
-      // write) count as "local only"; server-known posts must never be
-      // re-uploaded from a stale copy, or deleted posts come back to life.
-      final localOnly = _posts
-          .where(
-            (p) => !remoteIds.contains(p.id) && !_serverKnownIds.contains(p.id),
-          )
-          .toList();
-      final newRemote = fetched
-          .where((p) => !_posts.any((local) => local.id == p.id))
-          .toList();
-      // In-app notification for every post published by another device.
-      for (final post in newRemote) {
-        if (_notifications.any((n) => n.relatedPostId == post.id)) continue;
-        _notifications.insert(0, _postNotification(post));
-      }
-      _posts = [...localOnly, ...fetched];
-      for (final post in localOnly) {
-        _persistPost(post);
-      }
-      return (
-        success: true,
-        changed:
+        // Only posts never confirmed by the server (created offline / failed
+        // write) count as "local only"; server-known posts must never be
+        // re-uploaded from a stale copy, or deleted posts come back to life.
+        final localOnly = _posts
+            .where(
+              (p) => !remoteIds.contains(p.id) && !_serverKnownIds.contains(p.id),
+            )
+            .toList();
+        final newRemote = fetched
+            .where((p) => !_posts.any((local) => local.id == p.id))
+            .toList();
+        // In-app notification for every post published by another device.
+        for (final post in newRemote) {
+          if (_notifications.any((n) => n.relatedPostId == post.id)) continue;
+          _notifications.insert(0, _postNotification(post));
+        }
+        _posts = [...localOnly, ...fetched];
+        for (final post in localOnly) {
+          _persistPost(post);
+        }
+        changed =
             disappeared.isNotEmpty ||
             localOnly.isNotEmpty ||
-            newRemote.isNotEmpty,
-      );
+            newRemote.isNotEmpty;
+      }
     } catch (e) {
       // Table missing / offline: keep the in-memory seeds.
       debugPrint('StudentHub: backend sync failed: $e');
       return (success: false, changed: false);
     }
+
+    // Profile (server-granted roles) and role requests are best-effort
+    // extras: a failure here never blocks the posts sync above.
+    try {
+      if (await _syncOwnProfile(client)) changed = true;
+    } catch (e) {
+      debugPrint('StudentHub: profile sync failed: $e');
+    }
+    try {
+      if (await _syncRoleRequests(client)) changed = true;
+    } catch (e) {
+      debugPrint('StudentHub: role request sync failed: $e');
+    }
+    return (success: true, changed: changed);
   }
 
   Future<void> _pushSeedPostsToBackend(SupabaseClient client) async {
     await client
         .from('posts')
         .upsert(_posts.map(_rowFromPost).toList(), onConflict: 'id');
+  }
+
+  /// Pulls the device user's `profiles` row and unions in any roles the server
+  /// granted (e.g. a role request approved on another device). Never clobbers
+  /// locally edited display fields, and never removes locally-held roles.
+  Future<bool> _syncOwnProfile(SupabaseClient client) async {
+    final rows = await client
+        .from('profiles')
+        .select('user_id, roles, is_verified')
+        .eq('user_id', currentUser.id)
+        .limit(1)
+        .timeout(const Duration(seconds: 5));
+    if (rows.isEmpty) {
+      // Fresh DB: mirror the local profile once (including roles), matching
+      // the seed-posts behavior for a brand-new project.
+      await _pushSeedProfileToBackend(client);
+      return false;
+    }
+    final serverRoles = ((rows.first['roles'] as List?) ?? const [])
+        .whereType<String>()
+        .map(_roleFromName)
+        .toList();
+    final granted = serverRoles
+        .where((r) => !currentUser.roles.contains(r))
+        .toList();
+    if (granted.isEmpty) return false;
+    currentUser = currentUser.copyWith(
+      roles: [...currentUser.roles, ...granted],
+      isVerified: rows.first['is_verified'] as bool? ?? currentUser.isVerified,
+    );
+    _scheduleLocalSave();
+    return true;
+  }
+
+  /// One-time seed of the demo profile (first sync on a fresh backend).
+  Future<void> _pushSeedProfileToBackend(SupabaseClient client) async {
+    final avatar = await _uploadAvatarIfNeeded(client, currentUser.avatarUrl);
+    if (avatar != currentUser.avatarUrl) {
+      currentUser = currentUser.copyWith(avatarUrl: avatar);
+    }
+    await client.from('profiles').upsert({
+      'user_id': currentUser.id,
+      'name': currentUser.name,
+      'email': currentUser.email,
+      'student_or_employee_id': currentUser.studentOrEmployeeId,
+      'department': currentUser.department,
+      'year': currentUser.year,
+      'mobile_number': currentUser.mobileNumber,
+      'avatar_url': avatar,
+      'roles': currentUser.roles.map((r) => r.name).toList(),
+      'saved_post_ids': currentUser.savedPostIds,
+      'registered_event_ids': currentUser.registeredEventIds,
+      'congratulated_post_ids': currentUser.congratulatedPostIds,
+      'is_verified': currentUser.isVerified,
+    }, onConflict: 'user_id');
+  }
+
+  /// Upserts the current user's profile after an edit. Display fields only:
+  /// `roles` are seeded server-side by `review-role-request` and must never be
+  /// overwritten from a possibly stale local snapshot.
+  Future<void> _persistProfile() async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      final avatar = await _uploadAvatarIfNeeded(client, currentUser.avatarUrl);
+      if (avatar != currentUser.avatarUrl) {
+        currentUser = currentUser.copyWith(avatarUrl: avatar);
+      }
+      await client.from('profiles').upsert({
+        'user_id': currentUser.id,
+        'name': currentUser.name,
+        'email': currentUser.email,
+        'student_or_employee_id': currentUser.studentOrEmployeeId,
+        'department': currentUser.department,
+        'year': currentUser.year,
+        'mobile_number': currentUser.mobileNumber,
+        'avatar_url': avatar,
+        'saved_post_ids': currentUser.savedPostIds,
+        'registered_event_ids': currentUser.registeredEventIds,
+        'congratulated_post_ids': currentUser.congratulatedPostIds,
+        'is_verified': currentUser.isVerified,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'user_id');
+    } catch (e) {
+      // Keep local state; retried on the next sync.
+      debugPrint('StudentHub: profile not persisted: $e');
+    }
+  }
+
+  /// Uploads the avatar (data URI or `local://` blob) to Storage and returns
+  /// the public URL. Remote URLs are left untouched.
+  Future<String> _uploadAvatarIfNeeded(
+    SupabaseClient client,
+    String url,
+  ) async {
+    if (url.isEmpty || (!url.startsWith('data:') && !_localStore.isLocalRef(url))) {
+      return url;
+    }
+    try {
+      final bytes = url.startsWith('data:')
+          ? await compute(
+              _decodeBase64Helper,
+              url.substring(url.indexOf(',') + 1),
+            )
+          : await _localStore.readLocalBlob(url);
+      if (bytes == null || bytes.isEmpty) return url;
+      final ext = _extFromDataUri(url);
+      final path = 'avatars/${currentUser.id}.$ext';
+      await client.storage
+          .from('documents')
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: ext == 'png' ? 'image/png' : 'image/jpeg',
+              upsert: true,
+            ),
+          );
+      return client.storage.from('documents').getPublicUrl(path);
+    } catch (_) {
+      return url;
+    }
+  }
+
+  Map<String, dynamic> _roleRequestRow(RoleRequestModel r) => {
+        'id': r.id,
+        'user_id': r.userId,
+        'user_name': r.userName,
+        'user_email': r.userEmail,
+        'department': r.department,
+        'student_id': r.studentId,
+        'requested_role': r.requestedRole.name,
+        'reason': r.reason,
+        'phone_number': r.phoneNumber,
+        'status': r.status.name,
+        'admin_notes': r.adminNotes,
+        'is_limited_access': r.isLimitedAccess,
+        'duration_days': r.durationDays,
+        'submitted_at': r.submittedAt.toIso8601String(),
+      };
+
+  RoleRequestModel _roleRequestFromRow(Map<String, dynamic> m) =>
+      RoleRequestModel(
+        id: m['id']?.toString() ?? '',
+        userId: m['user_id']?.toString() ?? '',
+        userName: m['user_name']?.toString() ?? '',
+        userEmail: m['user_email']?.toString() ?? '',
+        department: m['department']?.toString() ?? '',
+        studentId: m['student_id']?.toString() ?? '',
+        requestedRole: _roleFromName(m['requested_role']?.toString() ?? ''),
+        reason: m['reason']?.toString() ?? '',
+        phoneNumber: m['phone_number']?.toString() ?? '',
+        status: RoleRequestStatus.values.firstWhere(
+          (s) => s.name == m['status'],
+          orElse: () => RoleRequestStatus.pending,
+        ),
+        submittedAt:
+            DateTime.tryParse(m['submitted_at']?.toString() ?? '') ??
+            DateTime.now(),
+        adminNotes: m['admin_notes'] as String?,
+        isLimitedAccess: m['is_limited_access'] as bool? ?? false,
+        durationDays: m['duration_days'] as int?,
+      );
+
+  /// Merges every `role_requests` row into the device list. The server status
+  /// is authoritative: local-only requests (created offline) are pushed up,
+  /// and when one of MY requests flips to approved/rejected the role is granted
+  /// (or a rejection notice shown) locally with an in-app bell notification.
+  /// Returns whether anything changed.
+  Future<bool> _syncRoleRequests(SupabaseClient client) async {
+    final rows = await client
+        .from('role_requests')
+        .select()
+        .order('submitted_at', ascending: false)
+        .limit(200)
+        .timeout(const Duration(seconds: 5));
+    final fetched = rows.map(_roleRequestFromRow).toList();
+    if (fetched.isEmpty) {
+      // Fresh backend: mirror the seeded requests once.
+      for (final r in _roleRequests) {
+        await _persistRoleRequest(r);
+      }
+      return false;
+    }
+
+    final remoteById = {for (final r in fetched) r.id: r};
+    var changed = false;
+
+    // Local-only requests (submitted offline) get pushed upstream.
+    final localOnly = _roleRequests
+        .where((r) => !remoteById.containsKey(r.id))
+        .toList();
+    for (final r in localOnly) {
+      await _persistRoleRequest(r);
+      changed = true;
+    }
+
+    final merged = <RoleRequestModel>[...localOnly];
+    for (final remote in fetched) {
+      RoleRequestModel? local;
+      for (final l in _roleRequests) {
+        if (l.id == remote.id) {
+          local = l;
+          break;
+        }
+      }
+      // Adopt the server state as the source of truth.
+      final effective = local == null
+          ? remote
+          : local.copyWith(
+              status: remote.status,
+              adminNotes: remote.adminNotes,
+              isLimitedAccess: remote.isLimitedAccess,
+              durationDays: remote.durationDays,
+            );
+      merged.add(effective);
+
+      // A decision reached on another device for MY request: grant/reject
+      // locally so the bell + roles update instantly.
+      if (remote.userId == currentUser.id &&
+          (local == null || local.status != remote.status)) {
+        if (remote.status == RoleRequestStatus.approved) {
+          if (_grantRoleFromRemote(remote)) changed = true;
+        } else if (remote.status == RoleRequestStatus.rejected &&
+            !_notifications.any(
+              (n) =>
+                  n.title == 'Role Application Update' &&
+                  n.body ==
+                      'Your application for ${remote.requestedRole.displayName} was reviewed.',
+            )) {
+          _notifications.insert(
+            0,
+            NotificationModel(
+              id: 'notif_${DateTime.now().microsecondsSinceEpoch}_${remote.id}_rev',
+              title: 'Role Application Update',
+              body:
+                  'Your application for ${remote.requestedRole.displayName} was reviewed.',
+              category: NotificationCategory.personal,
+              timestamp: DateTime.now(),
+              relatedPostId: remote.id,
+            ),
+          );
+          changed = true;
+        }
+      }
+    }
+
+    _roleRequests
+      ..clear()
+      ..addAll(merged);
+    return changed;
+  }
+
+  /// Grants a server-approved role to the device user and emits the in-app
+  /// "Role Approved" notification. Returns whether anything changed.
+  bool _grantRoleFromRemote(RoleRequestModel req) {
+    if (!currentUser.roles.contains(req.requestedRole)) {
+      final updatedRoles = List<UserRole>.from(currentUser.roles)
+        ..add(req.requestedRole);
+      final updatedExpirations = Map<UserRole, DateTime>.from(
+        currentUser.roleExpirations,
+      );
+      if (req.requestedRole == UserRole.faculty) {
+        updatedRoles.remove(UserRole.student);
+      }
+      if (req.isLimitedAccess && req.expiresAt != null) {
+        updatedExpirations[req.requestedRole] = req.expiresAt!;
+      }
+      currentUser = currentUser.copyWith(
+        roles: updatedRoles,
+        roleExpirations: updatedExpirations,
+      );
+    }
+    if (_notifications.any((n) => n.relatedPostId == req.id)) return false;
+    _notifications.insert(
+      0,
+      NotificationModel(
+        id: 'notif_${DateTime.now().microsecondsSinceEpoch}_${req.id}_appr',
+        title: 'Role Approved! 🎖️',
+        body: req.isLimitedAccess && req.expiresAt != null
+            ? 'Congratulations! Your temporary ${req.requestedRole.displayName} access is approved until ${_formatDate(req.expiresAt!)}.'
+            : 'Congratulations! Your application for ${req.requestedRole.displayName} was approved.',
+        category: NotificationCategory.personal,
+        timestamp: DateTime.now(),
+        relatedPostId: req.id,
+      ),
+    );
+    _scheduleLocalSave();
+    return true;
+  }
+
+  /// Upserts a role application to `role_requests` (offline-safe; retried via
+  /// the next sync).
+  Future<void> _persistRoleRequest(RoleRequestModel req) async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      await client
+          .from('role_requests')
+          .upsert(_roleRequestRow(req), onConflict: 'id');
+    } catch (e) {
+      debugPrint('StudentHub: role request ${req.id} not persisted: $e');
+    }
+  }
+
+  /// Server-side review of a role application via the `review-role-request`
+  /// edge function (the caller must hold admin in `profiles`). Best-effort:
+  /// a failure keeps the local decision and is retried on the next review.
+  Future<void> _reviewRoleOnServer({
+    required String requestId,
+    required RoleRequestStatus status,
+    String? notes,
+  }) async {
+    if (status == RoleRequestStatus.pending) return;
+    final client = _client;
+    if (client == null) return;
+    try {
+      final res = await http
+          .post(
+            Uri.parse(SupabaseConfig.reviewRoleFunctionUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Push-Secret': SupabaseConfig.pushSecret,
+            },
+            body: jsonEncode({
+              'request_id': requestId,
+              'admin_user_id': currentUser.id,
+              'status': status.name,
+              'notes': notes,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        // The applicant (and every device) picks up the decision via sync.
+        unawaited(syncNow());
+        final req = _roleRequests.where((r) => r.id == requestId).toList();
+        if (req.isNotEmpty) {
+          _pushRoleDecision(
+            request: req.first,
+            status: status,
+          );
+        }
+      } else {
+        debugPrint(
+          'StudentHub: role review rejected: ${res.statusCode} ${res.body}',
+        );
+      }
+    } catch (e) {
+      debugPrint('StudentHub: role review failed: $e');
+    }
+  }
+
+  /// OS push to the applicant's device ("Role Approved / Reviewed") via the
+  /// send-push function, targeted by user id. Best-effort.
+  Future<void> _pushRoleDecision({
+    required RoleRequestModel request,
+    required RoleRequestStatus status,
+  }) async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      final deviceId = await LocalStoreService.instance.getDeviceId();
+      final approved = status == RoleRequestStatus.approved;
+      final res = await http
+          .post(
+            Uri.parse(SupabaseConfig.pushFunctionUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Push-Secret': SupabaseConfig.pushSecret,
+            },
+            body: jsonEncode({
+              'type': 'role_update',
+              'recipient_user_id': request.userId,
+              'device_id': deviceId,
+              'title': approved ? '🎖️ Role Approved!' : 'Role Request Update',
+              'body': approved
+                  ? 'Congratulations! You are now '
+                        '${request.requestedRole.displayName}.'
+                  : 'Your application for '
+                        '${request.requestedRole.displayName} was reviewed.',
+              'category': 'announcement',
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        debugPrint(
+          'StudentHub: role push rejected: ${res.statusCode} ${res.body}',
+        );
+      }
+    } catch (e) {
+      debugPrint('StudentHub: role push failed: $e');
+    }
   }
 
   PostModel? _postFromRow(Map<String, dynamic> row) {
@@ -1124,6 +1529,10 @@ class MockDataService extends ChangeNotifier {
               body: jsonEncode({
                 'post_id': postId,
                 'author_id': currentUser.id,
+                // Admins may moderate any post; the edge function verifies the
+                // admin role before falling back to the author-only check.
+                if (currentUser.hasRole(UserRole.admin))
+                  'admin_user_id': currentUser.id,
               }),
             )
             .timeout(const Duration(seconds: 8));
@@ -1304,6 +1713,7 @@ class MockDataService extends ChangeNotifier {
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
+    unawaited(_persistProfile());
   }
 
   // --- Header Announcement (Time-limited, one per department) ---
@@ -1438,6 +1848,7 @@ class MockDataService extends ChangeNotifier {
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
+    unawaited(_persistRoleRequest(newReq));
   }
 
   void updateRoleRequestStatus(
@@ -1500,6 +1911,13 @@ class MockDataService extends ChangeNotifier {
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
+    unawaited(
+      _reviewRoleOnServer(
+        requestId: requestId,
+        status: status,
+        notes: notes,
+      ),
+    );
   }
 
   void markNotificationRead(String notifId) {

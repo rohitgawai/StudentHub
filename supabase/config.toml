@@ -415,3 +415,9 @@ enabled = true
 
 [functions.send-push]
 verify_jwt = false
+
+[functions.delete-post]
+verify_jwt = false
+
+[functions.review-role-request]
+verify_jwt = false

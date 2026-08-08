@@ -25,11 +25,21 @@ class SupabaseConfig {
   );
 
   /// Server-side post deletion. The function verifies the caller is the post's
-  /// author before deleting, so deletions survive refreshes across devices.
+  /// author (or an admin, for moderation) before deleting, so deletions survive
+  /// refreshes across devices.
   static const String deleteFunctionUrl = String.fromEnvironment(
     'DELETE_FUNCTION_URL',
     defaultValue:
         'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/delete-post',
+  );
+
+  /// Server-side role application review. The function verifies the caller is
+  /// an admin, updates the request status, and seeds the granted role into the
+  /// applicant's `profiles` row so every device picks it up via sync.
+  static const String reviewRoleFunctionUrl = String.fromEnvironment(
+    'REVIEW_ROLE_FUNCTION_URL',
+    defaultValue:
+        'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/review-role-request',
   );
 
   /// Shared secret gate for the send-push function. Must equal the

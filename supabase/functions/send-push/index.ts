@@ -21,17 +21,26 @@ Deno.serve(async (req) => {
     device_id?: string
     type?: string
     registrant_name?: string
+    recipient_user_id?: string
   }
   try {
     payload = await req.json()
   } catch {
     return new Response('Bad request', { status: 400 })
   }
-  const { post_id, title, body, category, author_id, device_id, registrant_name } =
-    payload
+  const {
+    post_id,
+    title,
+    body,
+    category,
+    author_id,
+    device_id,
+    registrant_name,
+    recipient_user_id,
+  } = payload
   const type = payload.type ?? 'new_post'
-  if (!title || !post_id) {
-    return new Response('Missing post_id/title', { status: 400 })
+  if (!title) {
+    return new Response('Missing title', { status: 400 })
   }
   const log = async (fields: Record<string, unknown>) => {
     const { error: e } = await supabase.from('push_log').insert({
@@ -63,10 +72,15 @@ Deno.serve(async (req) => {
     return new Response('Internal error', { status: 500 })
   }
 
-  // Broadcast to every registered device except the uploader's own. Devices
-  // are matched by device_id (per-install, stable); when the client sends none,
-  // fall back to skipping the author's user_id.
+  // Broadcast to every registered device except the uploader's own. When a
+  // recipient_user_id is given (e.g. a role decision), only that user's devices
+  // are targeted. Devices are matched by device_id (per-install, stable); when
+  // the client sends none, fall back to skipping the author's user_id.
   const targets = (devices ?? [])
+    .filter((d) =>
+      recipient_user_id
+        ? String(d.user_id ?? '') === recipient_user_id
+        : true)
     .filter((d) =>
       device_id
         ? String(d.device_id ?? '') !== device_id
@@ -107,7 +121,7 @@ Deno.serve(async (req) => {
         notification: { title, body: (body ?? title).slice(0, 200) },
         data: {
           type,
-          post_id,
+          post_id: post_id ?? '',
           category: category ?? 'announcement',
           author_id: author_id ?? '',
           registrant_name: registrant_name ?? '',
