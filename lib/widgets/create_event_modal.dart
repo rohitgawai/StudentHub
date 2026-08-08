@@ -40,6 +40,66 @@ class _CreateEventModalState extends State<CreateEventModal> {
     super.dispose();
   }
 
+  Future<void> _publishEvent() async {
+    final dataService = Provider.of<MockDataService>(context, listen: false);
+
+    if (!_formKey.currentState!.validate()) return;
+
+    final online = await dataService.checkBackendReachable();
+    if (!mounted) return;
+    if (!online) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          icon: const Icon(Icons.wifi_off, color: Colors.red, size: 40),
+          title: const Text('No Internet Connection'),
+          content: const Text(
+            'Please turn on your internet and try again. Your event was not published.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final maxCap = int.tryParse(maxSeatsController.text.trim()) ?? 100;
+
+    final newEvent = PostModel(
+      id: 'pst_${DateTime.now().millisecondsSinceEpoch}',
+      title: titleController.text.trim(),
+      description: descController.text.trim(),
+      category: PostCategory.event,
+      department: department,
+      authorName: dataService.currentUser.name,
+      authorRole: dataService.activeRole,
+      authorId: dataService.currentUser.id,
+      timestamp: DateTime.now(),
+      imageUrl: selectedImageUrl ?? 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80&w=800',
+      venue: venueController.text.trim(),
+      eventDate: eventDate,
+      registrationDeadline: regDeadline,
+      maxParticipants: maxCap,
+      registeredUserIds: const [],
+    );
+
+    dataService.addPost(newEvent);
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('🚀 Event published to Campus Feed & Events Hub!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
@@ -189,38 +249,12 @@ class _CreateEventModalState extends State<CreateEventModal> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
-                if (!_formKey.currentState!.validate()) return;
-
-                final maxCap = int.tryParse(maxSeatsController.text.trim()) ?? 100;
-
-                final newEvent = PostModel(
-                  id: 'pst_${DateTime.now().millisecondsSinceEpoch}',
-                  title: titleController.text.trim(),
-                  description: descController.text.trim(),
-                  category: PostCategory.event,
-                  department: department,
-                  authorName: dataService.currentUser.name,
-                  authorRole: dataService.activeRole,
-                  authorId: dataService.currentUser.id,
-                  timestamp: DateTime.now(),
-                  imageUrl: selectedImageUrl ?? 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80&w=800',
-                  venue: venueController.text.trim(),
-                  eventDate: eventDate,
-                  registrationDeadline: regDeadline,
-                  maxParticipants: maxCap,
-                  registeredUserIds: [dataService.currentUser.id],
-                );
-
-                dataService.addPost(newEvent);
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('🚀 Event published to Campus Feed & Events Hub!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
+                _publishEvent();
               },
-              child: const Text('Publish Event', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Publish Event',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),

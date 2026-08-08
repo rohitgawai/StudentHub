@@ -28,6 +28,12 @@ class MockDataService extends ChangeNotifier {
   /// returning one it is removed from the local feed.
   final Set<String> _serverKnownIds = {};
 
+  /// Posts created while the backend was unreachable. They stay on-device
+  /// ONLY: they are never uploaded on a later sync, so an offline draft can
+  /// never resurface on the server (and on other devices' feeds).
+  /// Persisted with the snapshot so the guarantee survives restarts.
+  final Set<String> _deviceOnlyPostIds = {};
+
   bool _isLoading = true;
   bool get isLoading => _isLoading;
 
@@ -104,6 +110,9 @@ class MockDataService extends ChangeNotifier {
       _serverKnownIds
         ..clear()
         ..addAll(restored.serverKnownIds);
+      _deviceOnlyPostIds
+        ..clear()
+        ..addAll(restored.deviceOnlyPostIds);
       checkForExpiredRoles();
       _invalidateDataCaches();
       notifyListeners();
@@ -271,6 +280,7 @@ class MockDataService extends ChangeNotifier {
         'roleRequests': _roleRequests.map(_roleRequestToJson).toList(),
         'announcements': _announcements.map(_announcementToJson).toList(),
         'serverKnownIds': _serverKnownIds.toList(),
+        'deviceOnlyPostIds': _deviceOnlyPostIds.toList(),
       };
 
       await _localStore.saveSnapshot(jsonEncode(payload));
@@ -312,6 +322,10 @@ class MockDataService extends ChangeNotifier {
       final serverKnownIds = ((payload['serverKnownIds'] as List?) ?? const [])
           .whereType<String>()
           .toSet();
+      final deviceOnlyPostIds =
+          ((payload['deviceOnlyPostIds'] as List?) ?? const [])
+              .whereType<String>()
+              .toSet();
 
       return _LocalState(
         currentUser: user,
@@ -321,6 +335,7 @@ class MockDataService extends ChangeNotifier {
         roleRequests: roleRequests,
         announcements: announcements,
         serverKnownIds: serverKnownIds,
+        deviceOnlyPostIds: deviceOnlyPostIds,
       );
     } catch (_) {
       return null;
@@ -583,6 +598,19 @@ class MockDataService extends ChangeNotifier {
     }
   }
 
+  /// Cached backend reachability verdict (see [checkBackendReachable]) so
+  /// publish flows fail instantly while offline instead of waiting out the
+  /// probe timeout, which can be several seconds when the network is dead.
+  static const _reachabilityOnlineWindow = Duration(seconds: 15);
+  static const _reachabilityOfflineWindow = Duration(seconds: 45);
+  DateTime? _lastReachabilityCheck;
+  bool _backendReachable = false;
+
+  void _recordReachability(bool reachable) {
+    _backendReachable = reachable;
+    _lastReachabilityCheck = DateTime.now();
+  }
+
   /// Loads posts, the device user's profile and every role request from
   /// Supabase when available; merges them with device-local state so nothing
   /// saved on this device is ever dropped. Bounded by a timeout so a dead/slow
@@ -591,7 +619,10 @@ class MockDataService extends ChangeNotifier {
   /// silent when nothing changed).
   Future<({bool success, bool changed})> _syncFromBackend() async {
     final client = _client;
-    if (client == null) return (success: false, changed: false);
+    if (client == null) {
+      _recordReachability(false);
+      return (success: false, changed: false);
+    }
     var changed = false;
     try {
       final rows = await client
@@ -645,6 +676,7 @@ class MockDataService extends ChangeNotifier {
     } catch (e) {
       // Table missing / offline: keep the in-memory seeds.
       debugPrint('StudentHub: backend sync failed: $e');
+      _recordReachability(false);
       return (success: false, changed: false);
     }
 
@@ -660,13 +692,53 @@ class MockDataService extends ChangeNotifier {
     } catch (e) {
       debugPrint('StudentHub: role request sync failed: $e');
     }
+    _recordReachability(true);
     return (success: true, changed: changed);
   }
 
   Future<void> _pushSeedPostsToBackend(SupabaseClient client) async {
+    // Device-only posts must never be seeded to a fresh backend either.
     await client
         .from('posts')
-        .upsert(_posts.map(_rowFromPost).toList(), onConflict: 'id');
+        .upsert(
+          _posts
+              .where((p) => !_deviceOnlyPostIds.contains(p.id))
+              .map(_rowFromPost)
+              .toList(),
+          onConflict: 'id',
+        );
+  }
+
+  /// Quick reachability probe so publish flows can refuse to upload while
+  /// offline instead of silently queueing a post that may never sync.
+  ///
+  /// An earlier verdict (any sync or probe) is believed for a short window —
+  /// longer after a failure, since being offline tends to persist — so
+  /// offline publishes fail instantly instead of waiting out the probe
+  /// timeout (3s+) with no network.
+  Future<bool> checkBackendReachable() async {
+    final client = _client;
+    if (client == null) return false;
+    final last = _lastReachabilityCheck;
+    if (last != null) {
+      final age = DateTime.now().difference(last);
+      final window =
+          _backendReachable ? _reachabilityOnlineWindow : _reachabilityOfflineWindow;
+      if (age < window) return _backendReachable;
+    }
+    var reachable = false;
+    try {
+      await client
+          .from('posts')
+          .select('id')
+          .limit(1)
+          .timeout(const Duration(seconds: 3));
+      reachable = true;
+    } catch (_) {
+      reachable = false;
+    }
+    _recordReachability(reachable);
+    return reachable;
   }
 
   /// Pulls the device user's `profiles` row and unions in any roles the server
@@ -1151,9 +1223,14 @@ class MockDataService extends ChangeNotifier {
     return null;
   }
 
-  /// Pushes a post to Postgres in the background, uploading any base64 PDF
-  /// attachments (and post images) to Supabase Storage first.
+/// Pushes a post to Postgres in the background, uploading any base64 PDF
+  /// attachments (and post images) to Supabase Storage first. Device-only posts
+  /// (created offline) are permanently exempt: they never reach the server.
   Future<void> _persistPost(PostModel post) async {
+    if (_deviceOnlyPostIds.contains(post.id)) {
+      _scheduleLocalSave();
+      return;
+    }
     final client = _client;
     if (client == null) {
       _scheduleLocalSave();
@@ -1176,7 +1253,11 @@ class MockDataService extends ChangeNotifier {
       final idx = _posts.indexWhere((p) => p.id == post.id);
       if (idx != -1) _posts[idx] = stored;
     } catch (e) {
-      // Keep local state; the next sync may still push this post.
+      // Never sent to the server: keep the post local and permanently
+      // device-only so a later sync cannot silently publish it.
+      if (!_serverKnownIds.contains(post.id)) {
+        _deviceOnlyPostIds.add(post.id);
+      }
       debugPrint('StudentHub: post ${post.id} not persisted: $e');
     }
   }
@@ -1459,12 +1540,19 @@ class MockDataService extends ChangeNotifier {
     _notifications.insert(0, _postNotification(newPost, publishedByMe: true));
     _invalidateDataCaches();
     notifyListeners();
-    _persistPost(newPost);
-    _pushBroadcast(
-      newPost,
-      title: newPost.isEvent ? '🎉 New event posted' : '📢 New announcement posted',
-      body: newPost.title,
-    );
+    if (_client == null) {
+      // No backend reachable at publish time: the post stays on this device
+      // only and is never uploaded on a later sync.
+      _deviceOnlyPostIds.add(newPost.id);
+    } else {
+      _persistPost(newPost);
+      _pushBroadcast(
+        newPost,
+        title:
+            newPost.isEvent ? '🎉 New event posted' : '📢 New announcement posted',
+        body: newPost.title,
+      );
+    }
     _scheduleLocalSave();
   }
 
@@ -2193,6 +2281,7 @@ class _LocalState {
     required this.roleRequests,
     required this.announcements,
     required this.serverKnownIds,
+    required this.deviceOnlyPostIds,
   });
 
   final UserModel currentUser;
@@ -2202,6 +2291,7 @@ class _LocalState {
   final List<RoleRequestModel> roleRequests;
   final List<ActiveAnnouncement> announcements;
   final Set<String> serverKnownIds;
+  final Set<String> deviceOnlyPostIds;
 }
 
 Uint8List _decodeBase64Helper(String base64) => base64Decode(base64);

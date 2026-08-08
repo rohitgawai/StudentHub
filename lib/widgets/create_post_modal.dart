@@ -109,6 +109,69 @@ class _CreatePostModalState extends State<CreatePostModal> {
     return d.inMinutes <= 1 ? 'a minute' : '${d.inMinutes} minutes';
   }
 
+  Future<void> _publishPost() async {
+    final dataService = Provider.of<MockDataService>(context, listen: false);
+
+    if (!_formKey.currentState!.validate()) return;
+
+    // Header announcements are a local, time-limited feature: no backend.
+    if (category == PostCategory.urgentAnnouncement) {
+      _publishUrgentAnnouncement();
+      return;
+    }
+
+    final online = await dataService.checkBackendReachable();
+    if (!mounted) return;
+    if (!online) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          icon: const Icon(Icons.wifi_off, color: Colors.red, size: 40),
+          title: const Text('No Internet Connection'),
+          content: const Text(
+            'Please turn on your internet and try again. Your post was not published.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final newPost = PostModel(
+      id: 'pst_${DateTime.now().millisecondsSinceEpoch}',
+      title: titleController.text.trim(),
+      description: descController.text.trim(),
+      category: isUrgent ? PostCategory.urgent : category,
+      department: department,
+      targetYear: targetYear,
+      authorName: dataService.currentUser.name,
+      authorRole: dataService.activeRole,
+      authorId: dataService.currentUser.id,
+      timestamp: DateTime.now(),
+      imageUrl: selectedImageUrl,
+      isUrgent: isUrgent,
+      isPinned: isPinned,
+      attachments: attachPdfMock ? attachedPdfs : [],
+    );
+
+    dataService.addPost(newPost);
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('🎉 Post published to Campus Feed!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
@@ -260,40 +323,12 @@ class _CreatePostModalState extends State<CreatePostModal> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
-                if (!_formKey.currentState!.validate()) return;
-
-                if (category == PostCategory.urgentAnnouncement) {
-                  _publishUrgentAnnouncement();
-                  return;
-                }
-
-                final newPost = PostModel(
-                  id: 'pst_${DateTime.now().millisecondsSinceEpoch}',
-                  title: titleController.text.trim(),
-                  description: descController.text.trim(),
-                  category: isUrgent ? PostCategory.urgent : category,
-                  department: department,
-                  targetYear: targetYear,
-                  authorName: dataService.currentUser.name,
-                  authorRole: dataService.activeRole,
-                  authorId: dataService.currentUser.id,
-                  timestamp: DateTime.now(),
-                  imageUrl: selectedImageUrl,
-                  isUrgent: isUrgent,
-                  isPinned: isPinned,
-                  attachments: attachPdfMock ? attachedPdfs : [],
-                );
-
-                dataService.addPost(newPost);
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('🎉 Post published to Campus Feed!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
+                _publishPost();
               },
-              child: const Text('Publish Post', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Publish Post',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
