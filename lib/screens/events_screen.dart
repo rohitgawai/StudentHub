@@ -55,6 +55,12 @@ class _EventsScreenState extends State<EventsScreen>
     final dataService = context.read<MockDataService>();
     final cfg = context.select((MockDataService s) => s.config);
     final user = context.select((MockDataService s) => s.currentUser);
+    // The Host Dashboard is for the active elevated view only; a Student view
+    // never sees it even when elevated roles are held.
+    final canOpenHostDashboard = context.select(
+      (MockDataService s) =>
+          s.activeRole == UserRole.eventHost || s.activeRole == UserRole.admin,
+    );
     // Same underlying feed, filtered down to Events + Workshops.
     final allEvents = dataService.posts.where((p) => p.isEvent).toList();
     final registeredEvents = allEvents
@@ -83,7 +89,7 @@ class _EventsScreenState extends State<EventsScreen>
           ],
         ),
         actions: [
-          if (user.hasRole(UserRole.eventHost) || user.hasRole(UserRole.admin))
+          if (canOpenHostDashboard)
             IconButton(
               icon: const Icon(Icons.dashboard_outlined),
               tooltip: 'Host Management Dashboard',

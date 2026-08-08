@@ -395,16 +395,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ),
                     ),
 
-                  // Role Dashboards shortcuts if permitted
-                  if (user.hasRole(UserRole.admin) ||
-                      user.hasRole(UserRole.faculty) ||
-                      user.hasRole(UserRole.eventHost)) ...[
+                  // Role Dashboards shortcut: only for the ACTIVE role view.
+                  // A Student view never gets dashboard access, even when
+                  // elevated roles are held.
+                  if (activeRole != UserRole.student) ...[
                     const SizedBox(height: 10),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          if (user.hasRole(UserRole.admin))
+                          if (activeRole == UserRole.admin)
                             Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: ActionChip(
@@ -423,7 +423,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 ),
                               ),
                             ),
-                          if (user.hasRole(UserRole.faculty))
+                          if (activeRole == UserRole.faculty)
                             Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: ActionChip(
@@ -442,7 +442,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 ),
                               ),
                             ),
-                          if (user.hasRole(UserRole.eventHost))
+                          if (activeRole == UserRole.eventHost)
                             Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: ActionChip(

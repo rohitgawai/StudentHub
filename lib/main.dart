@@ -127,11 +127,10 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     final unreadNotifs = context.select(
       (MockDataService s) => s.notifications.where((n) => !n.isRead).length,
     );
-    final user = context.select((MockDataService s) => s.currentUser);
-    final canCreate =
-        user.hasRole(UserRole.eventHost) ||
-        user.hasRole(UserRole.admin) ||
-        user.hasRole(UserRole.faculty);
+    final activeRole = context.select((MockDataService s) => s.activeRole);
+    // Publishing is reserved for elevated roles: a pure Student view has no
+    // Create button (switch roles in Profile to publish).
+    final canCreate = activeRole != UserRole.student;
 
     return Scaffold(
       appBar: AppBar(
