@@ -329,6 +329,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                           isRegistered: registeredIds.contains(post.id),
                           isCongratulated: congratulatedIds.contains(post.id),
                           userYear: userYear,
+                          currentUserId: dataService.currentUser.id,
                           onToggleSave: () =>
                               _handleToggleSave(dataService, post),
                           onToggleRegister: () =>

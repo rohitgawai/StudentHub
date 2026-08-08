@@ -18,6 +18,7 @@ class PostCard extends StatefulWidget {
   final bool isRegistered;
   final bool isCongratulated;
   final String userYear;
+  final String? currentUserId;
   final VoidCallback? onToggleSave;
   final VoidCallback? onToggleRegister;
   final VoidCallback? onToggleCongratulate;
@@ -30,6 +31,7 @@ class PostCard extends StatefulWidget {
     required this.isRegistered,
     this.isCongratulated = false,
     required this.userYear,
+    this.currentUserId,
     this.onToggleSave,
     this.onToggleRegister,
     this.onToggleCongratulate,
@@ -577,15 +579,50 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
               Padding(padding: const EdgeInsets.only(right: 4), child: a),
         ),
         const Spacer(),
-        if (_isEvent)
-          _RegisterButton(
-            config: widget.config,
-            isRegistered: widget.isRegistered,
-            isFull: post.isRegistrationFull && !widget.isRegistered,
-            onPressed: post.isRegistrationFull && !widget.isRegistered
-                ? null
-                : widget.onToggleRegister,
-          ),
+        if (_isEvent) ...[
+          if (widget.currentUserId != null &&
+              widget.post.authorId == widget.currentUserId)
+            // The event host cannot register for their own event; show the
+            // current registrant count instead of a Register button.
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: widget.config.eventColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: widget.config.eventColor.withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.people_alt_outlined,
+                    size: 16,
+                    color: widget.config.eventColor,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    '${post.currentRegistrations} registered',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: widget.config.eventColor,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            _RegisterButton(
+              config: widget.config,
+              isRegistered: widget.isRegistered,
+              isFull: post.isRegistrationFull && !widget.isRegistered,
+              onPressed: post.isRegistrationFull && !widget.isRegistered
+                  ? null
+                  : widget.onToggleRegister,
+            ),
+        ],
       ],
     );
   }
@@ -774,7 +811,7 @@ class _RegisterButton extends StatelessWidget {
       label: Text(
         isRegistered
             ? 'Registered'
-            : (isFull ? 'Full' : 'Register Now'),
+            : (isFull ? 'Registrations closed' : 'Register Now'),
         style: const TextStyle(fontWeight: FontWeight.bold),
       ),
     );

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
@@ -20,6 +21,7 @@ class LocalStoreService {
 
   static const String _snapshotKey = 'studenthub.local_state.v1';
   static const String _splashKey = 'studenthub.has_seen_splash.v1';
+  static const String _deviceIdKey = 'studenthub.device_id.v1';
   static const String localPrefix = 'local://';
 
   Directory? _cachedDir;
@@ -54,6 +56,35 @@ class LocalStoreService {
       // Not a platform with a real filesystem (e.g. web): local refs are never
       // produced there, so caching is best-effort.
     }
+  }
+
+  /// Stable random ID for this install. The push pipeline uses it to tell the
+  /// uploader's device apart from every other device, even when several
+  /// installs share the same demo user account.
+  Future<String> getDeviceId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      var id = prefs.getString(_deviceIdKey);
+      if (id == null || id.isEmpty) {
+        id = _generateDeviceId();
+        await prefs.setString(_deviceIdKey, id);
+      }
+      return id;
+    } catch (_) {
+      return _generateDeviceId();
+    }
+  }
+
+  String _generateDeviceId() {
+    final rand = Random();
+    final sb = StringBuffer()
+      ..write('dev_')
+      ..write(DateTime.now().microsecondsSinceEpoch)
+      ..write('_');
+    for (var i = 0; i < 12; i++) {
+      sb.write(rand.nextInt(16).toRadixString(16));
+    }
+    return sb.toString();
   }
 
   /// Resolves a `local://` ref to an absolute path synchronously when the

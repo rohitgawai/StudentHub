@@ -67,3 +67,32 @@ create policy "documents_select_anon" on storage.objects
 drop policy if exists "documents_delete_anon" on storage.objects;
 create policy "documents_delete_anon" on storage.objects
   for delete using (bucket_id = 'documents');
+
+-- FCM push: every device registers its token here so the send-push Edge
+-- Function can broadcast new posts/events to the whole campus. device_id
+-- uniquely identifies the install so the uploader's own device is skipped.
+create table if not exists public.device_tokens (
+  token text primary key,
+  user_id text not null default '',
+  device_id text not null default '',
+  platform text not null default 'android',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Existing databases: add the column without touching rows.
+alter table public.device_tokens add column if not exists device_id text not null default '';
+
+alter table public.device_tokens enable row level security;
+
+drop policy if exists "device_tokens_insert_anon" on public.device_tokens;
+create policy "device_tokens_insert_anon" on public.device_tokens
+  for insert with check (true);
+
+drop policy if exists "device_tokens_update_anon" on public.device_tokens;
+create policy "device_tokens_update_anon" on public.device_tokens
+  for update using (true);
+
+drop policy if exists "device_tokens_select_anon" on public.device_tokens;
+create policy "device_tokens_select_anon" on public.device_tokens
+  for select using (true);

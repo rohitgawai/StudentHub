@@ -260,10 +260,17 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen> wit
                     TextButton.icon(
                       icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
                       label: const Text('Delete', style: TextStyle(color: Colors.red)),
-                      onPressed: () {
-                        dataService.deletePost(item.id);
+                      onPressed: () async {
+                        final deleted = await dataService.deletePost(item.id);
+                        if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('🗑️ Post deleted successfully.')),
+                          SnackBar(
+                            content: Text(
+                              deleted
+                                  ? '🗑️ Post deleted successfully.'
+                                  : '⚠️ Could not delete: only the author can delete a post.',
+                            ),
+                          ),
                         );
                       },
                     ),

@@ -662,6 +662,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             post.id,
           ),
           userYear: userYear,
+          currentUserId: dataService.currentUser.id,
           onToggleSave: () {
             dataService.toggleSavePost(post.id);
             ScaffoldMessenger.of(context).showSnackBar(

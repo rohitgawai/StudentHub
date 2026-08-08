@@ -110,6 +110,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   isRegistered: registeredIds.contains(post.id),
                   isCongratulated: congratulatedIds.contains(post.id),
                   userYear: userYear,
+                  currentUserId: dataService.currentUser.id,
                   onToggleSave: () => _handleToggleSave(dataService, post),
                   onToggleRegister: () =>
                       _handleToggleRegister(dataService, post),
@@ -324,6 +325,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   isRegistered: registeredIds.contains(post.id),
                   isCongratulated: congratulatedIds.contains(post.id),
                   userYear: userYear,
+                  currentUserId: dataService.currentUser.id,
                   onToggleSave: () => _handleToggleSave(dataService, post),
                   onToggleRegister: () =>
                       _handleToggleRegister(dataService, post),

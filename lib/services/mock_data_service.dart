@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_config.dart';
+import '../config/supabase_config.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../models/role_request_model.dart';
@@ -20,10 +22,18 @@ class MockDataService extends ChangeNotifier {
   List<NotificationModel> _notifications = [];
   List<ActiveAnnouncement> _announcements = [];
 
+  /// Post ids this device has confirmed exist on the server. The server is
+  /// authoritative for them: they are never re-uploaded from a stale local
+  /// copy (which resurrects deleted posts), and when the server stops
+  /// returning one it is removed from the local feed.
+  final Set<String> _serverKnownIds = {};
+
   bool _isLoading = true;
   bool get isLoading => _isLoading;
 
   Timer? _expiryTimer;
+  Timer? _syncTimer;
+  bool _syncInFlight = false;
 
   // --- Rebuild caches -------------------------------------------------------
   //
@@ -65,6 +75,7 @@ class MockDataService extends ChangeNotifier {
   @override
   void dispose() {
     _expiryTimer?.cancel();
+    _syncTimer?.cancel();
     super.dispose();
   }
 
@@ -90,6 +101,9 @@ class MockDataService extends ChangeNotifier {
       _notifications = restored.notifications;
       _roleRequests = restored.roleRequests;
       _announcements = restored.announcements;
+      _serverKnownIds
+        ..clear()
+        ..addAll(restored.serverKnownIds);
       checkForExpiredRoles();
       _invalidateDataCaches();
       notifyListeners();
@@ -100,17 +114,36 @@ class MockDataService extends ChangeNotifier {
       _clearExpiredAnnouncements();
     });
 
+    // Lightweight polling: keeps the in-app notification bell fresh with posts
+    // published by other devices without the user pulling to refresh.
+    _syncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      unawaited(_periodicSync());
+    });
+
     _isLoading = false;
     _invalidateDataCaches();
     notifyListeners();
   }
 
+  Future<void> _periodicSync() async {
+    if (_syncInFlight) return;
+    _syncInFlight = true;
+    try {
+      await syncNow();
+    } finally {
+      _syncInFlight = false;
+    }
+  }
+
   /// Merges the Supabase mirror into the device state (background; safe to
-  /// call repeatedly).
+  /// call repeatedly). Only notifies listeners when something actually
+  /// changed, so the periodic poll is silent when the feed is unchanged.
   Future<void> syncNow() async {
-    await _syncFromBackend();
-    _invalidateDataCaches();
-    notifyListeners();
+    final result = await _syncFromBackend();
+    if (result.changed) {
+      _invalidateDataCaches();
+      notifyListeners();
+    }
   }
 
   Future<void> _seedDefaults() async {
@@ -237,6 +270,7 @@ class MockDataService extends ChangeNotifier {
         'notifications': _notifications.map(_notificationToJson).toList(),
         'roleRequests': _roleRequests.map(_roleRequestToJson).toList(),
         'announcements': _announcements.map(_announcementToJson).toList(),
+        'serverKnownIds': _serverKnownIds.toList(),
       };
 
       await _localStore.saveSnapshot(jsonEncode(payload));
@@ -275,6 +309,9 @@ class MockDataService extends ChangeNotifier {
           .whereType<Map>()
           .map((m) => _announcementFromJson(m.cast<String, dynamic>()))
           .toList();
+      final serverKnownIds = ((payload['serverKnownIds'] as List?) ?? const [])
+          .whereType<String>()
+          .toSet();
 
       return _LocalState(
         currentUser: user,
@@ -283,6 +320,7 @@ class MockDataService extends ChangeNotifier {
         notifications: notifications,
         roleRequests: roleRequests,
         announcements: announcements,
+        serverKnownIds: serverKnownIds,
       );
     } catch (_) {
       return null;
@@ -548,11 +586,11 @@ class MockDataService extends ChangeNotifier {
   /// Loads posts from Supabase when available; merges them with device-local
   /// posts so nothing saved on this device is ever dropped. Bounded by a
   /// timeout so a dead/slow network can never block the UI. Returns whether
-  /// the backend was actually reached, so callers can require an online
-  /// connection (e.g. for manual refresh).
-  Future<bool> _syncFromBackend() async {
+  /// the backend was actually reached and whether the merge changed anything
+  /// (so periodic polls stay silent when the feed is unchanged).
+  Future<({bool success, bool changed})> _syncFromBackend() async {
     final client = _client;
-    if (client == null) return false;
+    if (client == null) return (success: false, changed: false);
     try {
       final rows = await client
           .from('posts')
@@ -563,21 +601,52 @@ class MockDataService extends ChangeNotifier {
       final fetched = rows.map(_postFromRow).whereType<PostModel>().toList();
       if (fetched.isEmpty) {
         await _pushSeedPostsToBackend(client);
-        return true;
+        return (success: true, changed: false);
       }
       final remoteIds = fetched.map((p) => p.id).toSet();
-      final localOnly = _posts.where((p) => !remoteIds.contains(p.id)).toList();
+      _serverKnownIds.addAll(remoteIds);
+
+      // Posts this device once confirmed on the server but the server no
+      // longer returns were deleted elsewhere — drop them from the local feed.
+      final disappeared = _posts
+          .where(
+            (p) =>
+                _serverKnownIds.contains(p.id) && !remoteIds.contains(p.id),
+          )
+          .map((p) => p.id)
+          .toSet();
+
+      // Only posts never confirmed by the server (created offline / failed
+      // write) count as "local only"; server-known posts must never be
+      // re-uploaded from a stale copy, or deleted posts come back to life.
+      final localOnly = _posts
+          .where(
+            (p) => !remoteIds.contains(p.id) && !_serverKnownIds.contains(p.id),
+          )
+          .toList();
+      final newRemote = fetched
+          .where((p) => !_posts.any((local) => local.id == p.id))
+          .toList();
+      // In-app notification for every post published by another device.
+      for (final post in newRemote) {
+        if (_notifications.any((n) => n.relatedPostId == post.id)) continue;
+        _notifications.insert(0, _postNotification(post));
+      }
       _posts = [...localOnly, ...fetched];
-      // Re-push posts that only exist on local (created while offline or
-      // backend write failed) so the remote mirror catches up.
       for (final post in localOnly) {
         _persistPost(post);
       }
-      return true;
+      return (
+        success: true,
+        changed:
+            disappeared.isNotEmpty ||
+            localOnly.isNotEmpty ||
+            newRemote.isNotEmpty,
+      );
     } catch (e) {
       // Table missing / offline: keep the in-memory seeds.
       debugPrint('StudentHub: backend sync failed: $e');
-      return false;
+      return (success: false, changed: false);
     }
   }
 
@@ -951,6 +1020,25 @@ class MockDataService extends ChangeNotifier {
           relatedPostId: post.id,
         ),
       );
+
+      // Let every other device know via push ("X registered for Event").
+      _pushBroadcast(
+        post,
+        type: 'event_registration',
+        title: '🎟️ New event registration',
+        body: '${currentUser.name} registered for "${post.title}"',
+        registrantName: currentUser.name,
+      );
+
+      // When the last seat gets taken, tell everyone registration closed.
+      if (post.isRegistrationFull) {
+        _pushBroadcast(
+          post,
+          type: 'registrations_closed',
+          title: '⛔ Registrations closed',
+          body: 'The event "${post.title}" is now full.',
+        );
+      }
     }
 
     _posts[index] = post.copyWith(registeredUserIds: regUsers);
@@ -963,10 +1051,43 @@ class MockDataService extends ChangeNotifier {
 
   void addPost(PostModel newPost) {
     _posts.insert(0, newPost);
+    _notifications.insert(0, _postNotification(newPost, publishedByMe: true));
     _invalidateDataCaches();
     notifyListeners();
     _persistPost(newPost);
+    _pushBroadcast(
+      newPost,
+      title: newPost.isEvent ? '🎉 New event posted' : '📢 New announcement posted',
+      body: newPost.title,
+    );
     _scheduleLocalSave();
+  }
+
+  /// Builds the in-app bell notification for a post. Used for posts this
+  /// device published (publishedByMe) and for posts synced from other devices.
+  NotificationModel _postNotification(
+    PostModel post, {
+    bool publishedByMe = false,
+  }) {
+    final isEvent = post.isEvent;
+    final category = isEvent
+        ? NotificationCategory.events
+        : post.category == PostCategory.urgent ||
+              post.category == PostCategory.urgentAnnouncement
+        ? NotificationCategory.academic
+        : NotificationCategory.general;
+    return NotificationModel(
+      id: 'notif_${DateTime.now().microsecondsSinceEpoch}_${post.id}',
+      title: publishedByMe
+          ? (isEvent ? '🎉 Your event is live!' : '📢 Your post is live!')
+          : (isEvent ? '🎉 New event posted' : '📢 New post: ${post.title}'),
+      body: publishedByMe
+          ? '"${post.title}" is now on the campus feed.'
+          : (post.description.isEmpty ? post.title : post.description),
+      category: category,
+      timestamp: post.timestamp,
+      relatedPostId: post.id,
+    );
   }
 
   void updatePost(PostModel updatedPost) {
@@ -980,32 +1101,175 @@ class MockDataService extends ChangeNotifier {
     }
   }
 
-  void deletePost(String postId) {
-    final removed = _posts.where((p) => p.id == postId).toList();
-    _posts.removeWhere((p) => p.id == postId);
-    _client?.from('posts').delete().eq('id', postId);
-    for (final post in removed) {
-      _localStore.deleteLocalBlob(post.imageUrl);
-      for (final att in post.attachments) {
-        _localStore.deleteLocalBlob(att.url);
+  /// Deletes a post from this device AND the server. The server refuses unless
+  /// the caller is the post's author, so a user can never delete a post they
+  /// did not publish. Returns false when the server delete failed (local state
+  /// is rolled back so the feed stays truthful).
+  Future<bool> deletePost(String postId) async {
+    final index = _posts.indexWhere((p) => p.id == postId);
+    if (index == -1) return true;
+    final removed = _posts[index];
+
+    var serverDeleted = true;
+    final client = _client;
+    if (client != null) {
+      try {
+        final res = await http
+            .post(
+              Uri.parse(SupabaseConfig.deleteFunctionUrl),
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Push-Secret': SupabaseConfig.pushSecret,
+              },
+              body: jsonEncode({
+                'post_id': postId,
+                'author_id': currentUser.id,
+              }),
+            )
+            .timeout(const Duration(seconds: 8));
+        serverDeleted = res.statusCode >= 200 && res.statusCode < 300;
+        if (!serverDeleted) {
+          debugPrint(
+            'StudentHub: server delete rejected: ${res.statusCode} ${res.body}',
+          );
+        }
+      } catch (e) {
+        debugPrint('StudentHub: server delete failed: $e');
+        serverDeleted = false;
       }
+    }
+
+    if (!serverDeleted) {
+      // Keep the post locally; the next refresh would resurrect it anyway.
+      return false;
+    }
+
+    _posts.removeWhere((p) => p.id == postId);
+    // Remember the deletion: even if this app is killed before the snapshot
+    // write, the id can never be re-pushed or resurrected by this device.
+    _serverKnownIds.add(postId);
+    _client?.from('posts').delete().eq('id', postId);
+    _localStore.deleteLocalBlob(removed.imageUrl);
+    for (final att in removed.attachments) {
+      _localStore.deleteLocalBlob(att.url);
     }
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
+    await flushLocalSave();
+    return true;
   }
 
   /// Pulls the latest data from the backend. Network is mandatory: when the
   /// backend cannot be reached this returns false so the caller can prompt the
   /// user instead of showing stale content.
   Future<bool> refreshFeed() async {
-    final success = await _syncFromBackend();
-    if (success) {
+    final result = await _syncFromBackend();
+    if (result.success && result.changed) {
       _invalidateDataCaches();
       notifyListeners();
       _scheduleLocalSave();
     }
-    return success;
+    return result.success;
+  }
+
+  /// Registers this device's FCM token so the backend can broadcast pushes to
+  /// it. Best-effort: the token is simply retried on the next launch when the
+  /// backend is unreachable.
+  Future<void> registerDeviceToken(String token) async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      final deviceId = await LocalStoreService.instance.getDeviceId();
+      await client.from('device_tokens').upsert({
+        'token': token,
+        'user_id': currentUser.id,
+        'device_id': deviceId,
+        'platform': 'android',
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'token');
+    } catch (_) {
+      // Backend offline: retried implicitly on next launch/token refresh.
+    }
+  }
+
+  /// Broadcasts a push to every registered device (except this one) via the
+  /// send-push Edge Function. Used for new posts, event registrations and
+  /// registration-closed updates.
+  Future<void> _pushBroadcast(
+    PostModel post, {
+    String type = 'new_post',
+    String? title,
+    String? body,
+    String? registrantName,
+  }) async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      final deviceId = await LocalStoreService.instance.getDeviceId();
+      final res = await http
+          .post(
+            Uri.parse(SupabaseConfig.pushFunctionUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Push-Secret': SupabaseConfig.pushSecret,
+            },
+            body: jsonEncode({
+              'post_id': post.id,
+              'title': title ?? post.title,
+              'body': body ?? post.description,
+              'category': post.category.name,
+              'author_id': post.authorId,
+              'device_id': deviceId,
+              'type': type,
+              'registrant_name': ?registrantName,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        debugPrint(
+          'StudentHub: push broadcast rejected: ${res.statusCode} ${res.body}',
+        );
+      }
+    } catch (e) {
+      // Push is best-effort; a failed broadcast never blocks publishing.
+      debugPrint('StudentHub: push broadcast failed: $e');
+    }
+  }
+
+  /// In-app bell entry for the event host when someone registers for their
+  /// event. Called from the push handler so it appears the moment the
+  /// registration happens, without waiting for a poll.
+  void addHostRegistrationNotification({
+    required String postId,
+    required String registrantName,
+  }) {
+    final post = _posts.where((p) => p.id == postId).toList();
+    if (post.isEmpty || post.first.authorId != currentUser.id) return;
+    final title = '🎟️ New registration';
+    final body = '$registrantName registered for "${post.first.title}"';
+    if (_notifications.any(
+      (n) =>
+          n.relatedPostId == postId &&
+          n.title == title &&
+          n.body == body,
+    )) {
+      return;
+    }
+    _notifications.insert(
+      0,
+      NotificationModel(
+        id: 'notif_${DateTime.now().microsecondsSinceEpoch}_${postId}_reg',
+        title: title,
+        body: body,
+        category: NotificationCategory.events,
+        timestamp: DateTime.now(),
+        relatedPostId: postId,
+      ),
+    );
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
   }
 
   void updateUserProfile({
@@ -1510,6 +1774,7 @@ class _LocalState {
     required this.notifications,
     required this.roleRequests,
     required this.announcements,
+    required this.serverKnownIds,
   });
 
   final UserModel currentUser;
@@ -1518,6 +1783,7 @@ class _LocalState {
   final List<NotificationModel> notifications;
   final List<RoleRequestModel> roleRequests;
   final List<ActiveAnnouncement> announcements;
+  final Set<String> serverKnownIds;
 }
 
 Uint8List _decodeBase64Helper(String base64) => base64Decode(base64);

@@ -226,6 +226,7 @@ class _EventsScreenState extends State<EventsScreen>
           isRegistered: registeredIds.contains(post.id),
           isCongratulated: congratulatedIds.contains(post.id),
           userYear: userYear,
+          currentUserId: dataService.currentUser.id,
           onToggleSave: () {
             dataService.toggleSavePost(post.id);
           },

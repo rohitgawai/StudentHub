@@ -8,6 +8,7 @@ import 'models/post_model.dart';
 import 'models/user_model.dart';
 import 'services/mock_data_service.dart';
 import 'services/local_store_service.dart';
+import 'services/push_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_feed_screen.dart';
@@ -49,6 +50,13 @@ Future<void> _initBackend(MockDataService dataService) async {
     return;
   }
   await dataService.syncNow();
+  // OS-level push: registers the device token and listens for new-post pushes.
+  // Safe to run even when Firebase config is present but the backend is down.
+  try {
+    await PushService.instance.init(dataService: dataService);
+  } catch (e) {
+    debugPrint('StudentHub: push init failed: $e');
+  }
 }
 
 class StudentHubApp extends StatelessWidget {
@@ -86,6 +94,26 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     DiscoverScreen(),
     ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    PushService.instance.openCategory.addListener(_handlePushTap);
+  }
+
+  @override
+  void dispose() {
+    PushService.instance.openCategory.removeListener(_handlePushTap);
+    super.dispose();
+  }
+
+  void _handlePushTap() {
+    final category = PushService.instance.openCategory.value;
+    final targetIndex = category == PostCategory.event ? 1 : 0;
+    if (currentIndex != targetIndex) {
+      setState(() => currentIndex = targetIndex);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -208,8 +236,8 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       body: IndexedStack(index: currentIndex, children: screens),
 
       // Global create FAB (Event Host / Faculty / Admin) — one entry point
-      // for every publish action, shown across the whole app.
-      floatingActionButton: canCreate
+      // for every publish action. Shown only on the Home and Events tabs.
+      floatingActionButton: canCreate && (currentIndex == 0 || currentIndex == 1)
           ? FloatingActionButton.extended(
               backgroundColor: cfg.primaryColor,
               foregroundColor: Colors.white,

@@ -94,6 +94,7 @@ class FacultyDashboardScreen extends StatelessWidget {
                 isCongratulated: dataService.currentUser.congratulatedPostIds
                     .contains(p.id),
                 userYear: dataService.currentUser.year,
+                currentUserId: dataService.currentUser.id,
               ),
             ),
         ],

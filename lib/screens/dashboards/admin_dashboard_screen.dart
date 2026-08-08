@@ -193,10 +193,17 @@ class AdminDashboardScreen extends StatelessWidget {
             trailing: IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),
               tooltip: 'Delete Inappropriate Post',
-              onPressed: () {
-                dataService.deletePost(p.id);
+              onPressed: () async {
+                final deleted = await dataService.deletePost(p.id);
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Post deleted by Admin moderation.')),
+                  SnackBar(
+                    content: Text(
+                      deleted
+                          ? 'Post deleted by Admin moderation.'
+                          : '⚠️ Could not delete: only the author can delete a post.',
+                    ),
+                  ),
                 );
               },
             ),
