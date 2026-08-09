@@ -1,5 +1,6 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/app_config.dart';
 import '../models/post_model.dart';
@@ -19,11 +20,13 @@ class PostCard extends StatefulWidget {
   final bool isSaved;
   final bool isRegistered;
   final bool isCongratulated;
+  final bool isLiked;
   final String userYear;
   final String? currentUserId;
   final VoidCallback? onToggleSave;
   final VoidCallback? onToggleRegister;
   final VoidCallback? onToggleCongratulate;
+  final VoidCallback? onToggleLike;
 
   const PostCard({
     super.key,
@@ -32,11 +35,13 @@ class PostCard extends StatefulWidget {
     required this.isSaved,
     required this.isRegistered,
     this.isCongratulated = false,
+    this.isLiked = false,
     required this.userYear,
     this.currentUserId,
     this.onToggleSave,
     this.onToggleRegister,
     this.onToggleCongratulate,
+    this.onToggleLike,
   });
 
   @override
@@ -66,69 +71,8 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
 📲 Shared via StudentHub: https://studenthub.edu/post/${post.id}
 ''';
 
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Share Post / Announcement',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  post.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFF25D366),
-                    child: Icon(Icons.share, color: Colors.white),
-                  ),
-                  title: const Text('Share via Apps (System Share Sheet)'),
-                  subtitle: const Text('WhatsApp, Telegram, Messages, Mail...'),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    Share.share(shareText, subject: post.title);
-                  },
-                ),
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.blue.shade100,
-                    child: const Icon(Icons.copy, color: Colors.blue),
-                  ),
-                  title: const Text('Copy Post Link & Details'),
-                  subtitle: const Text('Copy formatted text to clipboard'),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    Clipboard.setData(ClipboardData(text: shareText));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          '📋 Post details & link copied to clipboard!',
-                        ),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    // Directly opens the system share sheet — no in-app dialog.
+    Share.share(shareText, subject: post.title);
   }
 
   void _openFirstAttachment(BuildContext context) {
@@ -516,16 +460,31 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
 
     final List<Widget> actions = [];
 
+    // Like is available on every post.
+    actions.add(
+      _SmartAction(
+        icon: Icons.favorite_border,
+        activeIcon: Icons.favorite,
+        active: widget.isLiked,
+        label: widget.isLiked ? 'Liked' : 'Like',
+        count: '${post.likeCount}',
+        color: Colors.redAccent,
+        burstOnActivate: true,
+        onTap: widget.onToggleLike,
+      ),
+    );
+
     if (_isAchievement) {
       actions.add(
         _SmartAction(
-          icon: Icons.volunteer_activism_outlined,
-          activeIcon: Icons.volunteer_activism,
+          icon: Icons.celebration,
+          activeIcon: Icons.celebration,
           active: widget.isCongratulated,
           label: widget.isCongratulated ? 'Congratulated' : 'Congratulate',
           count: '${post.congratulateCount}',
           color: widget.config.achievementColor,
           burstOnActivate: true,
+          burstStyle: _BurstStyle.confetti,
           onTap: widget.onToggleCongratulate,
         ),
       );
@@ -551,6 +510,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
           count: '${post.saveCount}',
           color: widget.config.primaryColor,
           burstOnActivate: true,
+          burstIcon: Icons.bookmark_added,
           onTap: widget.onToggleSave,
         ),
       );
@@ -800,8 +760,35 @@ class _GalleryCarouselState extends State<_GalleryCarousel> {
   }
 }
 
+/// How a burst renders when an action transitions to active:
+/// a single rising icon, or an emoji-confetti explosion.
+enum _BurstStyle { single, confetti }
+
+const List<String> _confettiEmojis = ['🎉', '👏', '⭐', '🎊', '🏅'];
+
+/// A single confetti fragment thrown by a celebratory burst.
+class _ConfettiParticle {
+  final double angle; // radians, 0 = straight up
+  final double span; // travel distance in px at t=1
+  final double size; // px
+  final double spin; // total rotation in radians
+  final double delay; // 0..1 fraction of the burst
+  final String? emoji; // celebratory emoji particle
+  final IconData? icon; // icon particle
+
+  const _ConfettiParticle({
+    required this.angle,
+    required this.span,
+    required this.size,
+    required this.spin,
+    required this.delay,
+    this.emoji,
+    this.icon,
+  });
+}
+
 /// A labeled action chip with a springy pop animation and an optional
-/// "heart burst" that fires when the action transitions to active.
+/// celebratory burst that fires when the action transitions to active.
 class _SmartAction extends StatefulWidget {
   final IconData icon;
   final IconData activeIcon;
@@ -810,6 +797,8 @@ class _SmartAction extends StatefulWidget {
   final Color color;
   final bool active;
   final bool burstOnActivate;
+  final IconData burstIcon;
+  final _BurstStyle burstStyle;
   final VoidCallback? onTap;
 
   const _SmartAction({
@@ -820,6 +809,8 @@ class _SmartAction extends StatefulWidget {
     required this.color,
     required this.active,
     this.burstOnActivate = false,
+    this.burstIcon = Icons.favorite,
+    this.burstStyle = _BurstStyle.single,
     this.onTap,
   });
 
@@ -844,6 +835,8 @@ class _SmartActionState extends State<_SmartAction>
     curve: Curves.elasticOut,
   );
 
+  List<_ConfettiParticle> _particles = const [];
+
   @override
   void didUpdateWidget(_SmartAction old) {
     super.didUpdateWidget(old);
@@ -851,8 +844,61 @@ class _SmartActionState extends State<_SmartAction>
       _pop.forward(from: 0.35);
     }
     if (widget.burstOnActivate && widget.active && !old.active) {
+      if (widget.burstStyle == _BurstStyle.confetti) {
+        _burst.duration = const Duration(milliseconds: 750);
+        _particles = _makeConfetti();
+      } else {
+        _burst.duration = const Duration(milliseconds: 600);
+      }
       _burst.forward(from: 0);
     }
+  }
+
+  List<_ConfettiParticle> _makeConfetti() {
+    final rnd = math.Random();
+    return List.generate(
+      14,
+      (i) {
+        final fan = (rnd.nextDouble() - 0.5) * 2.1;
+        final isEmoji = i.isEven;
+        return _ConfettiParticle(
+          angle: -math.pi / 2 + fan,
+          span: 55 + rnd.nextDouble() * 95,
+          size: 11 + rnd.nextDouble() * 8,
+          spin: (rnd.nextDouble() - 0.5) * 2.4,
+          delay: rnd.nextDouble() * 0.25,
+          emoji: isEmoji
+              ? _confettiEmojis[(i ~/ 2) % _confettiEmojis.length]
+              : null,
+          icon: isEmoji
+              ? null
+              : (i ~/ 2).isEven
+                  ? Icons.celebration
+                  : Icons.auto_awesome,
+        );
+      },
+    );
+  }
+
+  Widget _confettiParticle(_ConfettiParticle p, double t) {
+    final progress = t <= p.delay ? 0.0 : (t - p.delay) / (1 - p.delay);
+    final eased = Curves.easeInCubic.transform(progress);
+    final size = p.size + 9 * Curves.easeOutCubic.transform(progress);
+    final dx = math.cos(p.angle) * p.span * eased;
+    final dy = -math.sin(p.angle) * p.span * eased;
+    return Positioned(
+      left: 70 + dx - size / 2,
+      top: 60 + dy - size / 2,
+      child: Opacity(
+        opacity: (1 - progress) * 0.95,
+        child: Transform.rotate(
+          angle: p.spin * progress,
+          child: p.emoji != null
+              ? Text(p.emoji!, style: TextStyle(fontSize: size))
+              : Icon(p.icon, size: size, color: widget.color),
+        ),
+      ),
+    );
   }
 
   @override
@@ -895,12 +941,32 @@ class _SmartActionState extends State<_SmartAction>
                     builder: (context, child) {
                       if (!_burst.isAnimating) return const SizedBox.shrink();
                       final t = _burst.value;
+                      if (widget.burstStyle == _BurstStyle.confetti) {
+                        return Positioned(
+                          left: -59,
+                          top: -49,
+                          child: IgnorePointer(
+                            child: SizedBox(
+                              width: 140,
+                              height: 120,
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                alignment: Alignment.center,
+                                children: [
+                                  for (final p in _particles)
+                                    _confettiParticle(p, t),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
                       return Positioned(
                         bottom: 8 + t * 30,
                         child: Opacity(
                           opacity: (1 - t) * 0.9,
                           child: Icon(
-                            Icons.favorite,
+                            widget.burstIcon,
                             size: 14 + t * 10,
                             color: widget.color,
                           ),

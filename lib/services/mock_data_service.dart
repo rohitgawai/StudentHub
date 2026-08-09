@@ -269,6 +269,7 @@ class MockDataService extends ChangeNotifier {
           'savedPostIds': currentUser.savedPostIds,
           'registeredEventIds': currentUser.registeredEventIds,
           'congratulatedPostIds': currentUser.congratulatedPostIds,
+          'likedPostIds': currentUser.likedPostIds,
           'isVerified': currentUser.isVerified,
           'hasChangedUniqueId': currentUser.hasChangedUniqueId,
           'roleExpirations': currentUser.roleExpirations.map(
@@ -460,6 +461,9 @@ class MockDataService extends ChangeNotifier {
       congratulatedPostIds: ((m['congratulatedPostIds'] as List?) ?? const [])
           .whereType<String>()
           .toList(),
+      likedPostIds: ((m['likedPostIds'] as List?) ?? const [])
+          .whereType<String>()
+          .toList(),
       isVerified: m['isVerified'] as bool? ?? true,
       roleExpirations: expirations,
       hasChangedUniqueId: m['hasChangedUniqueId'] as bool? ?? false,
@@ -578,6 +582,7 @@ class MockDataService extends ChangeNotifier {
     List<String> savedPostIds = const [],
     List<String> registeredEventIds = const [],
     List<String> congratulatedPostIds = const [],
+    List<String> likedPostIds = const [],
   }) {
     currentUser = UserModel(
       id: id,
@@ -592,6 +597,7 @@ class MockDataService extends ChangeNotifier {
       savedPostIds: savedPostIds,
       registeredEventIds: registeredEventIds,
       congratulatedPostIds: congratulatedPostIds,
+      likedPostIds: likedPostIds,
       isVerified: true,
     );
     activeRole = UserRole.student;
@@ -811,6 +817,7 @@ class MockDataService extends ChangeNotifier {
       'saved_post_ids': currentUser.savedPostIds,
       'registered_event_ids': currentUser.registeredEventIds,
       'congratulated_post_ids': currentUser.congratulatedPostIds,
+      'liked_post_ids': currentUser.likedPostIds,
       'is_verified': currentUser.isVerified,
     }, onConflict: 'user_id');
   }
@@ -838,6 +845,7 @@ class MockDataService extends ChangeNotifier {
         'saved_post_ids': currentUser.savedPostIds,
         'registered_event_ids': currentUser.registeredEventIds,
         'congratulated_post_ids': currentUser.congratulatedPostIds,
+        'liked_post_ids': currentUser.likedPostIds,
         'is_verified': currentUser.isVerified,
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'user_id');
@@ -1189,9 +1197,12 @@ class MockDataService extends ChangeNotifier {
       isPinned: row['is_pinned'] as bool? ?? false,
       saveCount: row['save_count'] as int? ?? 0,
       congratulateCount: row['congratulate_count'] as int? ?? 0,
+      likeCount: row['like_count'] as int? ?? 0,
       congratulatedUserIds: ((row['congratulated_user_ids'] as List?) ??
               const [])
           .cast<String>(),
+      likedUserIds: ((row['liked_user_ids'] as List?) ?? const []).cast<
+          String>(),
       venue: row['venue'] as String?,
       eventDate: _parseDate(row['event_date']),
       registrationDeadline: _parseDate(row['registration_deadline']),
@@ -1217,7 +1228,9 @@ class MockDataService extends ChangeNotifier {
     'is_pinned': p.isPinned,
     'save_count': p.saveCount,
     'congratulate_count': p.congratulateCount,
+    'like_count': p.likeCount,
     'congratulated_user_ids': p.congratulatedUserIds,
+    'liked_user_ids': p.likedUserIds,
     'venue': p.venue,
     'event_date': p.eventDate?.toIso8601String(),
     'registration_deadline': p.registrationDeadline?.toIso8601String(),
@@ -1522,26 +1535,56 @@ class MockDataService extends ChangeNotifier {
     if (index == -1) return;
 
     PostModel post = _posts[index];
-    List<String> congratulated = List.from(post.congratulatedUserIds);
+    List<String> postCongratulated = List.from(post.congratulatedUserIds);
     List<String> userCongratulated = List.from(
       currentUser.congratulatedPostIds,
     );
+    final wasCongratulated = userCongratulated.contains(postId);
 
-    if (congratulated.contains(currentUser.id)) {
-      congratulated.remove(currentUser.id);
+    if (wasCongratulated) {
+      postCongratulated.remove(currentUser.id);
       userCongratulated.remove(postId);
     } else {
-      congratulated.add(currentUser.id);
+      if (!postCongratulated.contains(currentUser.id)) {
+        postCongratulated.add(currentUser.id);
+      }
       userCongratulated.add(postId);
     }
 
     _posts[index] = post.copyWith(
-      congratulatedUserIds: congratulated,
-      congratulateCount: congratulated.length,
+      congratulatedUserIds: postCongratulated,
+      congratulateCount: postCongratulated.length,
     );
     currentUser = currentUser.copyWith(
       congratulatedPostIds: userCongratulated,
     );
+    _persistPost(_posts[index]);
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+  }
+
+  void toggleLikePost(String postId) {
+    int index = _posts.indexWhere((p) => p.id == postId);
+    if (index == -1) return;
+
+    PostModel post = _posts[index];
+    List<String> liked = List.from(post.likedUserIds);
+    List<String> userLiked = List.from(currentUser.likedPostIds);
+
+    if (liked.contains(currentUser.id)) {
+      liked.remove(currentUser.id);
+      userLiked.remove(postId);
+    } else {
+      liked.add(currentUser.id);
+      userLiked.add(postId);
+    }
+
+    _posts[index] = post.copyWith(
+      likedUserIds: liked,
+      likeCount: liked.length,
+    );
+    currentUser = currentUser.copyWith(likedPostIds: userLiked);
     _persistPost(_posts[index]);
     _invalidateDataCaches();
     notifyListeners();
@@ -2263,6 +2306,8 @@ class MockDataService extends ChangeNotifier {
         imageUrl:
             'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&q=80&w=800',
         saveCount: 156,
+        congratulatedUserIds: ['usr_101'],
+        congratulateCount: 1,
       ),
       PostModel(
         id: 'pst_006',

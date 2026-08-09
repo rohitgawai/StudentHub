@@ -19,7 +19,9 @@ create table if not exists public.posts (
   is_pinned boolean not null default false,
   save_count integer not null default 0,
   congratulate_count integer not null default 0,
+  like_count integer not null default 0,
   congratulated_user_ids text[] not null default '{}',
+  liked_user_ids text[] not null default '{}',
   venue text,
   event_date timestamptz,
   registration_deadline timestamptz,
@@ -34,6 +36,10 @@ create table if not exists public.posts (
 alter table public.posts add column if not exists congratulate_count integer not null default 0;
 alter table public.posts add column if not exists congratulated_user_ids text[] not null default '{}';
 alter table public.posts add column if not exists image_urls text[] not null default '{}';
+alter table public.posts add column if not exists like_count integer not null default 0;
+alter table public.posts add column if not exists liked_user_ids text[] not null default '{}';
+
+alter table public.profiles add column if not exists liked_post_ids text[] not null default '{}';
 
 alter table public.posts enable row level security;
 

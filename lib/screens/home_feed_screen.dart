@@ -67,6 +67,19 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     );
   }
 
+  void _handleToggleLike(MockDataService dataService, PostModel post) {
+    dataService.toggleLikePost(post.id);
+    final isLiked = dataService.currentUser.likedPostIds.contains(post.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isLiked ? '❤️ Liked!' : 'Removed like'),
+        backgroundColor: isLiked ? Colors.redAccent : Colors.orange,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
   void _handleToggleRegister(MockDataService dataService, PostModel post) {
     final wasRegistered = dataService.currentUser.registeredEventIds.contains(
       post.id,
@@ -105,6 +118,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     );
     final congratulatedIds = context.select(
       (MockDataService s) => s.currentUser.congratulatedPostIds,
+    );
+    final likedIds = context.select(
+      (MockDataService s) => s.currentUser.likedPostIds,
     );
     final userDept = context.select(
       (MockDataService s) => s.currentUser.department,
@@ -328,6 +344,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                           isSaved: savedIds.contains(post.id),
                           isRegistered: registeredIds.contains(post.id),
                           isCongratulated: congratulatedIds.contains(post.id),
+                          isLiked: likedIds.contains(post.id),
                           userYear: userYear,
                           currentUserId: dataService.currentUser.id,
                           onToggleSave: () =>
@@ -336,6 +353,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                               _handleToggleRegister(dataService, post),
                           onToggleCongratulate: () =>
                               _handleToggleCongratulate(dataService, post),
+                          onToggleLike: () => _handleToggleLike(dataService, post),
                         );
                       },
                     ),

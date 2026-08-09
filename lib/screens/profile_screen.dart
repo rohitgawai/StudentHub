@@ -661,6 +661,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           isCongratulated: dataService.currentUser.congratulatedPostIds.contains(
             post.id,
           ),
+          isLiked: dataService.currentUser.likedPostIds.contains(post.id),
           userYear: userYear,
           currentUserId: dataService.currentUser.id,
           onToggleSave: () {
@@ -669,6 +670,20 @@ class _ProfileScreenState extends State<ProfileScreen>
               const SnackBar(
                 content: Text('Saved!'),
                 duration: Duration(seconds: 1),
+              ),
+            );
+          },
+          onToggleLike: () {
+            dataService.toggleLikePost(post.id);
+            final isLiked =
+                dataService.currentUser.likedPostIds.contains(post.id);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(isLiked ? '❤️ Liked!' : 'Removed like'),
+                backgroundColor: isLiked
+                    ? Colors.redAccent
+                    : Colors.orange,
+                duration: const Duration(seconds: 1),
               ),
             );
           },

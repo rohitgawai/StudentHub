@@ -73,6 +73,7 @@ class _EventsScreenState extends State<EventsScreen>
     final savedIds = user.savedPostIds.toSet();
     final registeredIds = user.registeredEventIds.toSet();
     final congratulatedIds = user.congratulatedPostIds.toSet();
+    final likedIds = user.likedPostIds.toSet();
 
     return Scaffold(
       appBar: AppBar(
@@ -161,6 +162,7 @@ class _EventsScreenState extends State<EventsScreen>
                   savedIds: savedIds,
                   registeredIds: registeredIds,
                   congratulatedIds: congratulatedIds,
+                  likedIds: likedIds,
                   userYear: user.year,
                   dataService: dataService,
                   onRefresh: () => _handleRefresh(dataService),
@@ -172,6 +174,7 @@ class _EventsScreenState extends State<EventsScreen>
                   savedIds: savedIds,
                   registeredIds: registeredIds,
                   congratulatedIds: congratulatedIds,
+                  likedIds: likedIds,
                   userYear: user.year,
                   dataService: dataService,
                   emptyMessage: 'You have not registered for any events yet.',
@@ -183,6 +186,7 @@ class _EventsScreenState extends State<EventsScreen>
                   savedIds: savedIds,
                   registeredIds: registeredIds,
                   congratulatedIds: congratulatedIds,
+                  likedIds: likedIds,
                   userYear: user.year,
                   dataService: dataService,
                   emptyMessage: 'You have not hosted any events yet.',
@@ -202,6 +206,7 @@ class _EventsScreenState extends State<EventsScreen>
     required Set<String> savedIds,
     required Set<String> registeredIds,
     required Set<String> congratulatedIds,
+    required Set<String> likedIds,
     required String userYear,
     required MockDataService dataService,
     String emptyMessage = 'No upcoming events found.',
@@ -231,6 +236,7 @@ class _EventsScreenState extends State<EventsScreen>
           isSaved: savedIds.contains(post.id),
           isRegistered: registeredIds.contains(post.id),
           isCongratulated: congratulatedIds.contains(post.id),
+          isLiked: likedIds.contains(post.id),
           userYear: userYear,
           currentUserId: dataService.currentUser.id,
           onToggleSave: () {
@@ -239,6 +245,7 @@ class _EventsScreenState extends State<EventsScreen>
           onToggleRegister: () => _handleToggleRegister(dataService, post),
           onToggleCongratulate: () =>
               _handleToggleCongratulate(dataService, post),
+          onToggleLike: () => _handleToggleLike(dataService, post),
         );
       },
     );
@@ -289,6 +296,19 @@ class _EventsScreenState extends State<EventsScreen>
         backgroundColor: isCongratulated
             ? const Color(0xFF8E24AA)
             : Colors.orange,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _handleToggleLike(MockDataService dataService, PostModel post) {
+    dataService.toggleLikePost(post.id);
+    final isLiked = dataService.currentUser.likedPostIds.contains(post.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isLiked ? '❤️ Liked!' : 'Removed like'),
+        backgroundColor: isLiked ? Colors.redAccent : Colors.orange,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 1),
       ),

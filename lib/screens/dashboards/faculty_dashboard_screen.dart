@@ -93,8 +93,10 @@ class FacultyDashboardScreen extends StatelessWidget {
                     .contains(p.id),
                 isCongratulated: dataService.currentUser.congratulatedPostIds
                     .contains(p.id),
+                isLiked: dataService.currentUser.likedPostIds.contains(p.id),
                 userYear: dataService.currentUser.year,
                 currentUserId: dataService.currentUser.id,
+                onToggleLike: () => dataService.toggleLikePost(p.id),
               ),
             ),
         ],
