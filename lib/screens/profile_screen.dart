@@ -404,20 +404,30 @@ class _ProfileScreenState extends State<ProfileScreen>
                   // elevated roles are held.
                   if (activeRole != UserRole.student) ...[
                     const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          if (activeRole == UserRole.admin)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ActionChip(
-                                avatar: const Icon(
-                                  Icons.admin_panel_settings,
-                                  size: 16,
-                                  color: Colors.purple,
+                    Column(
+                      children: [
+                        if (activeRole == UserRole.admin)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF7B1FA2),
+                                  side: const BorderSide(
+                                    color: Color(0xFF7B1FA2),
+                                    width: 1.5,
+                                  ),
+                                  backgroundColor: const Color(
+                                    0xFF7B1FA2,
+                                  ).withValues(alpha: 0.08),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                 ),
-                                label: const Text('Admin Control Panel'),
                                 onPressed: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -425,18 +435,42 @@ class _ProfileScreenState extends State<ProfileScreen>
                                         const AdminDashboardScreen(),
                                   ),
                                 ),
+                                icon: const Icon(
+                                  Icons.admin_panel_settings,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'Admin Control Panel',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
-                          if (activeRole == UserRole.faculty)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ActionChip(
-                                avatar: const Icon(
-                                  Icons.menu_book,
-                                  size: 16,
-                                  color: Colors.blue,
+                          ),
+                        if (activeRole == UserRole.faculty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF0369A1),
+                                  side: const BorderSide(
+                                    color: Color(0xFF0369A1),
+                                    width: 1.5,
+                                  ),
+                                  backgroundColor: const Color(
+                                    0xFF0369A1,
+                                  ).withValues(alpha: 0.08),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                 ),
-                                label: const Text('Faculty Dashboard'),
                                 onPressed: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -444,18 +478,42 @@ class _ProfileScreenState extends State<ProfileScreen>
                                         const FacultyDashboardScreen(),
                                   ),
                                 ),
+                                icon: const Icon(
+                                  Icons.menu_book,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'Faculty Dashboard',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
-                          if (activeRole == UserRole.eventHost)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ActionChip(
-                                avatar: const Icon(
-                                  Icons.event,
-                                  size: 16,
-                                  color: Colors.orange,
+                          ),
+                        if (activeRole == UserRole.eventHost)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFC2410C),
+                                  side: const BorderSide(
+                                    color: Color(0xFFC2410C),
+                                    width: 1.5,
+                                  ),
+                                  backgroundColor: const Color(
+                                    0xFFC2410C,
+                                  ).withValues(alpha: 0.08),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                 ),
-                                label: const Text('Event Host Dashboard'),
                                 onPressed: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -463,10 +521,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                                         const EventHostDashboardScreen(),
                                   ),
                                 ),
+                                icon: const Icon(Icons.event, size: 16),
+                                label: const Text(
+                                  'Host Dashboard',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
                   ],
 

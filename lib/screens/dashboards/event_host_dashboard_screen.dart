@@ -2,23 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/post_model.dart';
 import '../../services/mock_data_service.dart';
-import '../../widgets/create_event_modal.dart';
-import '../../widgets/create_post_modal.dart';
+import '../../widgets/managed_post_card.dart';
 
 class EventHostDashboardScreen extends StatefulWidget {
   const EventHostDashboardScreen({super.key});
 
   @override
-  State<EventHostDashboardScreen> createState() => _EventHostDashboardScreenState();
+  State<EventHostDashboardScreen> createState() =>
+      _EventHostDashboardScreenState();
 }
 
-class _EventHostDashboardScreenState extends State<EventHostDashboardScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+/// A clean, feed-style dashboard for the Event Host. It shows only the host's
+/// own uploads (Events & Workshops · Notices · Galleries), each rendered as a
+/// full social card with like/save counts and images, plus Edit (title &
+/// description only) and Delete actions. Publishing lives in the global
+/// Create button, so no create controls clutter this screen.
+class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
+    with SingleTickerProviderStateMixin {
+  static const Color _accent = Color(0xFFC2410C);
+
+  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -27,37 +35,39 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen> wit
     super.dispose();
   }
 
-  void _showEditDialog(BuildContext context, MockDataService dataService, PostModel post) {
+  void _showEditDialog(
+    BuildContext context,
+    MockDataService dataService,
+    PostModel post,
+  ) {
     final titleCtrl = TextEditingController(text: post.title);
     final descCtrl = TextEditingController(text: post.description);
-    final venueCtrl = TextEditingController(text: post.venue ?? '');
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('✏️ Edit ${post.isEvent ? "Event" : "Post"} Details'),
+        title: Text('✏️ Edit ${post.isEvent ? 'Event' : 'Post'}'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: titleCtrl,
-                decoration: const InputDecoration(labelText: 'Title', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Title',
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: descCtrl,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
-              ),
-              if (post.isEvent) ...[
-                const SizedBox(height: 12),
-                TextField(
-                  controller: venueCtrl,
-                  decoration: const InputDecoration(labelText: 'Venue', border: OutlineInputBorder()),
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  border: OutlineInputBorder(),
                 ),
-              ],
+              ),
             ],
           ),
         ),
@@ -67,17 +77,22 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen> wit
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC2410C), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accent,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               final updated = post.copyWith(
                 title: titleCtrl.text.trim(),
                 description: descCtrl.text.trim(),
-                venue: post.isEvent ? venueCtrl.text.trim() : post.venue,
               );
               dataService.updatePost(updated);
               Navigator.of(ctx).pop();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('✅ Post updated successfully!'), backgroundColor: Colors.green),
+                const SnackBar(
+                  content: Text('✅ Post updated successfully!'),
+                  backgroundColor: Colors.green,
+                ),
               );
             },
             child: const Text('Save Changes'),
@@ -87,117 +102,107 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen> wit
     );
   }
 
+  Future<void> _confirmDelete(
+    BuildContext context,
+    MockDataService dataService,
+    PostModel post,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('🗑️ Delete Post?'),
+        content: Text('"${post.title}" will be removed from the campus feed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    final deleted = await dataService.deletePost(post.id);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          deleted
+              ? '🗑️ Post deleted successfully.'
+              : '⚠️ Could not delete: only the author can delete a post.',
+        ),
+        backgroundColor: deleted ? Colors.green : Colors.red,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
     final user = dataService.currentUser;
 
-    // Requirement 6: All uploaded posts and events by current host
-    final myPosts = dataService.posts.where((p) => p.authorId == user.id || p.authorName.contains(user.name)).toList();
+    final myPosts = dataService.posts
+        .where((p) => p.authorId == user.id || p.authorName.contains(user.name))
+        .toList();
     final myEvents = myPosts.where((p) => p.isEvent).toList();
-    final myNotices = myPosts.where((p) => !p.isEvent).toList();
+    final myNotices = myPosts
+        .where((p) => !p.isEvent && p.category != PostCategory.gallery)
+        .toList();
+    final myGalleries =
+        myPosts.where((p) => p.category == PostCategory.gallery).toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🎯 Event Host Dashboard'),
-        backgroundColor: const Color(0xFFC2410C),
+        title: const Text('🎯 Host Dashboard'),
+        centerTitle: false,
+        backgroundColor: _accent,
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_location_alt),
-            tooltip: 'Host New Event',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => const CreateEventModal(),
-              );
-            },
-          ),
-        ],
       ),
       body: Column(
         children: [
-          // Banner Header
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFFC2410C), Color(0xFFFB8C00)],
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Host Coordinator: ${user.name}',
-                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${myPosts.length} Total Uploaded Posts (${myEvents.length} Events, ${myNotices.length} Notices)',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFFC2410C),
-                      ),
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => const CreateEventModal(),
-                        );
-                      },
-                      icon: const Icon(Icons.event, size: 16),
-                      label: const Text('New Event'),
-                    ),
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white),
-                      ),
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => const CreatePostModal(),
-                        );
-                      },
-                      icon: const Icon(Icons.announcement, size: 16),
-                      label: const Text('New Notice'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          _StatsHeader(
+            name: user.name,
+            accent: _accent,
+            eventCount: myEvents.length,
+            noticeCount: myNotices.length,
+            galleryCount: myGalleries.length,
           ),
-
-          // Tabs
           Container(
             color: Theme.of(context).cardColor,
             child: TabBar(
               controller: _tabController,
-              labelColor: const Color(0xFFC2410C),
+              labelColor: _accent,
               unselectedLabelColor: Colors.grey,
-              indicatorColor: const Color(0xFFC2410C),
+              indicatorColor: _accent,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               tabs: [
-                Tab(text: 'My Hosted Events (${myEvents.length})'),
-                Tab(text: 'My Uploaded Notices (${myNotices.length})'),
+                Tab(text: 'Hosted Events (${myEvents.length})'),
+                Tab(text: 'Notices (${myNotices.length})'),
+                Tab(text: 'Galleries (${myGalleries.length})'),
               ],
             ),
           ),
-
-          // Tab Content
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildPostsList(context, dataService, myEvents, 'No events created yet. Tap New Event!'),
-                _buildPostsList(context, dataService, myNotices, 'No notices published yet.'),
+                _buildList(context, dataService, myEvents,
+                    'No events or workshops hosted yet.'),
+                _buildList(context, dataService, myNotices,
+                    'No notices published yet.'),
+                _buildList(context, dataService, myGalleries,
+                    'No galleries uploaded yet.'),
               ],
             ),
           ),
@@ -206,81 +211,173 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen> wit
     );
   }
 
-  Widget _buildPostsList(BuildContext context, MockDataService dataService, List<PostModel> postsList, String emptyMsg) {
+  Widget _buildList(
+    BuildContext context,
+    MockDataService dataService,
+    List<PostModel> postsList,
+    String emptyMsg,
+  ) {
     if (postsList.isEmpty) {
       return Center(
-        child: Text(emptyMsg, style: const TextStyle(color: Colors.grey)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.inbox_outlined, size: 56, color: Colors.grey),
+            const SizedBox(height: 10),
+            Text(emptyMsg, style: const TextStyle(color: Colors.grey)),
+          ],
+        ),
       );
     }
 
+    final user = dataService.currentUser;
+    final config = dataService.config;
+
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
       itemCount: postsList.length,
       itemBuilder: (ctx, idx) {
-        final item = postsList[idx];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        final post = postsList[idx];
+        return ManagedPostCard(
+          post: post,
+          config: config,
+          isSaved: user.savedPostIds.contains(post.id),
+          isRegistered: user.registeredEventIds.contains(post.id),
+          isCongratulated: user.congratulatedPostIds.contains(post.id),
+          isLiked: user.likedPostIds.contains(post.id),
+          userYear: user.year,
+          currentUserId: user.id,
+          onToggleSave: () => dataService.toggleSavePost(post.id),
+          onToggleRegister: () => dataService.toggleEventRegistration(post.id),
+          onToggleCongratulate: () => dataService.toggleCongratulate(post.id),
+          onToggleLike: () => dataService.toggleLikePost(post.id),
+          onEdit: () => _showEditDialog(context, dataService, post),
+          onDelete: () => _confirmDelete(context, dataService, post),
+        );
+      },
+    );
+  }
+}
+
+/// Compact welcome row with three tappable-looking stat tiles, so upload
+/// totals are visible without taking too much space.
+class _StatsHeader extends StatelessWidget {
+  final String name;
+  final Color accent;
+  final int eventCount;
+  final int noticeCount;
+  final int galleryCount;
+
+  const _StatsHeader({
+    required this.name,
+    required this.accent,
+    required this.eventCount,
+    required this.noticeCount,
+    required this.galleryCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFC2410C), Color(0xFFFB8C00)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Welcome, $name',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
             children: [
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: item.isEvent ? Colors.orange.shade100 : Colors.blue.shade100,
-                  child: Icon(item.isEvent ? Icons.event : Icons.announcement, color: item.isEvent ? Colors.orange : Colors.blue),
-                ),
-                title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(
-                  item.isEvent
-                      ? 'Venue: ${item.venue ?? "Campus"} • ${item.currentRegistrations}/${item.maxParticipants ?? "∞"} Registered'
-                      : '${item.department} • ${item.category.displayName}',
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.event_available,
+                  count: eventCount,
+                  label: 'Events & Workshops',
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  item.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: Colors.black87),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.campaign,
+                  count: noticeCount,
+                  label: 'Campus Posts',
                 ),
               ),
-              const SizedBox(height: 8),
-              // Requirement 6: Edit & Delete Action Buttons
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton.icon(
-                      icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
-                      label: const Text('Edit Post', style: TextStyle(color: Colors.blue)),
-                      onPressed: () => _showEditDialog(context, dataService, item),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                      label: const Text('Delete', style: TextStyle(color: Colors.red)),
-                      onPressed: () async {
-                        final deleted = await dataService.deletePost(item.id);
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              deleted
-                                  ? '🗑️ Post deleted successfully.'
-                                  : '⚠️ Could not delete: only the author can delete a post.',
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.photo_library_outlined,
+                  count: galleryCount,
+                  label: 'Galleries',
                 ),
               ),
             ],
           ),
-        );
-      },
+        ],
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  final IconData icon;
+  final int count;
+  final String label;
+
+  const _StatTile({
+    required this.icon,
+    required this.count,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFFC2410C)),
+          const SizedBox(height: 4),
+          Text(
+            '$count',
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFFC2410C),
+            ),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 9, color: Colors.black54),
+          ),
+        ],
+      ),
     );
   }
 }

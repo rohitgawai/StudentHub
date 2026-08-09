@@ -42,14 +42,6 @@ class _PdfUploadFieldState extends State<PdfUploadField> {
     }
   }
 
-  void _clearPdf() {
-    setState(() {
-      selectedDocTitle = null;
-      selectedDocUrl = null;
-    });
-    widget.onAttachmentChanged([]);
-  }
-
   void _updateAttachment() {
     if (selectedDocTitle == null) {
       widget.onAttachmentChanged([]);

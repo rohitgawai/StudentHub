@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/app_config.dart';
 import '../models/post_model.dart';
-import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
 import '../widgets/post_card.dart';
-import 'dashboards/event_host_dashboard_screen.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -55,12 +53,6 @@ class _EventsScreenState extends State<EventsScreen>
     final dataService = context.read<MockDataService>();
     final cfg = context.select((MockDataService s) => s.config);
     final user = context.select((MockDataService s) => s.currentUser);
-    // The Host Dashboard is for the active elevated view only; a Student view
-    // never sees it even when elevated roles are held.
-    final canOpenHostDashboard = context.select(
-      (MockDataService s) =>
-          s.activeRole == UserRole.eventHost || s.activeRole == UserRole.admin,
-    );
     // Same underlying feed, filtered down to Events + Workshops.
     final allEvents = dataService.posts.where((p) => p.isEvent).toList();
     final registeredEvents = allEvents
@@ -89,21 +81,6 @@ class _EventsScreenState extends State<EventsScreen>
             Tab(text: 'My Hosted (${myHostedEvents.length})'),
           ],
         ),
-        actions: [
-          if (canOpenHostDashboard)
-            IconButton(
-              icon: const Icon(Icons.dashboard_outlined),
-              tooltip: 'Host Management Dashboard',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (ctx) => const EventHostDashboardScreen(),
-                  ),
-                );
-              },
-            ),
-        ],
       ),
       body: Column(
         children: [
