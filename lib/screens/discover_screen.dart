@@ -119,8 +119,23 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       onToggleLike: () => _handleToggleLike(dataService, post),
     );
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Discover')),
+    return PopScope(
+      // Inside a department feed or search results the Android back button
+      // steps back to Discover's main feed before it can close the app.
+      canPop: selectedDept == null && searchQuery.isEmpty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        setState(() {
+          if (selectedDept != null) {
+            selectedDept = null;
+          } else if (searchQuery.isNotEmpty) {
+            searchQuery = '';
+            searchController.clear();
+          }
+        });
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Discover')),
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
@@ -155,6 +170,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             ..._buildExploreSlivers(dataService, nonEventPosts, cfg, buildCard),
           ],
         ],
+      ),
       ),
     );
   }
