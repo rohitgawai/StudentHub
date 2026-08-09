@@ -22,6 +22,7 @@ Deno.serve(async (req) => {
     type?: string
     registrant_name?: string
     recipient_user_id?: string
+    skip_sender_device?: boolean
   }
   try {
     payload = await req.json()
@@ -37,6 +38,7 @@ Deno.serve(async (req) => {
     device_id,
     registrant_name,
     recipient_user_id,
+    skip_sender_device,
   } = payload
   const type = payload.type ?? 'new_post'
   if (!title) {
@@ -72,19 +74,21 @@ Deno.serve(async (req) => {
     return new Response('Internal error', { status: 500 })
   }
 
-  // Broadcast to every registered device except the uploader's own. When a
-  // recipient_user_id is given (e.g. a role decision), only that user's devices
-  // are targeted. Devices are matched by device_id (per-install, stable); when
-  // the client sends none, fall back to skipping the author's user_id.
+  // Scope targets by recipient when given (host-only "X registered" pushes,
+  // or a registrant's own confirmation). When skip_sender_device is true
+  // (default) this device is excluded, matching device_id when present and
+  // falling back to the author's user_id.
   const targets = (devices ?? [])
     .filter((d) =>
       recipient_user_id
         ? String(d.user_id ?? '') === recipient_user_id
         : true)
-    .filter((d) =>
-      device_id
+    .filter((d) => {
+      if (skip_sender_device === false) return true
+      return device_id
         ? String(d.device_id ?? '') !== device_id
-        : d.user_id !== author_id)
+        : d.user_id !== author_id
+    })
     .map((d) => String(d.token))
     .filter((t) => t.length > 0)
 

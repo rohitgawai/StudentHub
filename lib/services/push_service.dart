@@ -125,6 +125,7 @@ class PushService {
     }
     if (type != 'new_post' &&
         type != 'event_registration' &&
+        type != 'registration_confirmed' &&
         type != 'registrations_closed' &&
         type != 'role_update') {
       return;

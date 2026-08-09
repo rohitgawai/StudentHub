@@ -1624,13 +1624,24 @@ class MockDataService extends ChangeNotifier {
         ),
       );
 
-      // Let every other device know via push ("X registered for Event").
+      // Confirmation to the registrant's own devices.
+      _pushBroadcast(
+        post,
+        type: 'registration_confirmed',
+        title: '🎉 Registration Confirmed!',
+        body: 'You have registered for "${post.title}". Keep an eye on updates.',
+        recipientUserId: currentUser.id,
+        skipSenderDevice: false,
+      );
+
+      // Let only the event host know via push ("X registered for Event").
       _pushBroadcast(
         post,
         type: 'event_registration',
         title: '🎟️ New event registration',
         body: '${currentUser.name} registered for "${post.title}"',
         registrantName: currentUser.name,
+        recipientUserId: post.authorId,
       );
 
       // When the last seat gets taken, tell everyone registration closed.
@@ -1813,15 +1824,20 @@ class MockDataService extends ChangeNotifier {
     }
   }
 
-  /// Broadcasts a push to every registered device (except this one) via the
-  /// send-push Edge Function. Used for new posts, event registrations and
-  /// registration-closed updates.
+  /// Sends a push via the send-push Edge Function. By default it broadcasts
+  /// to every registered device except this one (used for new posts, event
+  /// registrations and registration-closed updates). Pass [recipientUserId]
+  /// to target only one user's devices (e.g. the event host, or the
+  /// registrant's own confirmation), and [skipSenderDevice] = false to also
+  /// deliver to this device.
   Future<void> _pushBroadcast(
     PostModel post, {
     String type = 'new_post',
     String? title,
     String? body,
     String? registrantName,
+    String? recipientUserId,
+    bool skipSenderDevice = true,
   }) async {
     final client = _client;
     if (client == null) return;
@@ -1843,6 +1859,8 @@ class MockDataService extends ChangeNotifier {
               'device_id': deviceId,
               'type': type,
               'registrant_name': ?registrantName,
+              'recipient_user_id': recipientUserId,
+              'skip_sender_device': skipSenderDevice,
             }),
           )
           .timeout(const Duration(seconds: 8));
