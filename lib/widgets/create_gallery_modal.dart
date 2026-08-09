@@ -123,6 +123,13 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Text(
+              'Upload captures from events, workshops, sports days and '
+              'campus moments — 3 to 6 photos best.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 12),
+
             TextFormField(
               controller: titleController,
               decoration: InputDecoration(

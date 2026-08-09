@@ -285,7 +285,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                     backgroundColor: Colors.orange.shade100,
                     child: const Icon(Icons.event, color: Colors.orange),
                   ),
-                  title: const Text('Create Event'),
+                  title: const Text('Create Event & Workshops'),
                   subtitle: const Text(
                     'Hackathons, workshops, competitions with registration',
                   ),
@@ -302,7 +302,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                     backgroundColor: Colors.blue.shade100,
                     child: const Icon(Icons.announcement, color: Colors.blue),
                   ),
-                  title: const Text('Create Announcement'),
+                  title: const Text('Create Campus Post'),
                   subtitle: const Text(
                     'Post academic updates, notices, or achievements',
                   ),

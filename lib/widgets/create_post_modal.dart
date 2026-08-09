@@ -23,7 +23,6 @@ class _CreatePostModalState extends State<CreatePostModal> {
   String? targetYear;
   String? selectedImageUrl;
   bool isUrgent = false;
-  bool isPinned = false;
   bool attachPdfMock = false;
   int announcementWeeks = 1;
 
@@ -156,7 +155,6 @@ class _CreatePostModalState extends State<CreatePostModal> {
       timestamp: DateTime.now(),
       imageUrl: selectedImageUrl,
       isUrgent: isUrgent,
-      isPinned: isPinned,
       attachments: attachPdfMock ? attachedPdfs : [],
     );
 
@@ -174,15 +172,21 @@ class _CreatePostModalState extends State<CreatePostModal> {
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
 
-    // Gallery and Event have their own dedicated upload cards.
+    // Gallery and Event have their own dedicated upload cards. Urgent is
+    // handled by the "Mark as Urgent" switch, and workshops are event posts
+    // that go through the Event card (they need venue/date fields).
     final allowedCategories = PostCategory.values
-        .where((c) => c != PostCategory.event && c != PostCategory.gallery)
+        .where((c) =>
+            c != PostCategory.event &&
+            c != PostCategory.gallery &&
+            c != PostCategory.urgent &&
+            c != PostCategory.workshop)
         .toList();
     final yearOptions = ['All Academic Years', ...dataService.config.academicYears];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('📢 Create Announcement'),
+        title: const Text('📢 Create Campus Post'),
         actions: [
           IconButton(
             icon: const Icon(Icons.close),
@@ -201,11 +205,21 @@ class _CreatePostModalState extends State<CreatePostModal> {
               labelText: 'Post Category',
               prefixIcon: Icons.category_outlined,
               items: allowedCategories,
-              itemLabel: (c) => c.displayName,
+              itemLabel: (c) => c == PostCategory.urgentAnnouncement
+                  ? 'Campus Alert (Header Banner)'
+                  : c.displayName,
               onChanged: (val) {
                 if (val != null) setState(() => category = val);
               },
             ),
+            if (category == PostCategory.urgentAnnouncement) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Shows as a banner on top of every page for 1-2 weeks; '
+                'only one active banner per department.',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+            ],
             const SizedBox(height: 12),
 
             // Announcement Validity (only for header announcements)
@@ -278,12 +292,14 @@ class _CreatePostModalState extends State<CreatePostModal> {
             const SizedBox(height: 14),
 
             // Requirement 10: Image Upload Picker (Replaces raw URL field)
-            ImagePickerField(
-              initialUrl: selectedImageUrl,
-              onImageSelected: (url) {
-                setState(() => selectedImageUrl = url);
-              },
-            ),
+            // Header banner alerts are plain text banners: no cover image.
+            if (category != PostCategory.urgentAnnouncement)
+              ImagePickerField(
+                initialUrl: selectedImageUrl,
+                onImageSelected: (url) {
+                  setState(() => selectedImageUrl = url);
+                },
+              ),
             const SizedBox(height: 14),
 
             // Toggles & PDF Attachment (Requirement 11)
@@ -293,11 +309,6 @@ class _CreatePostModalState extends State<CreatePostModal> {
                 subtitle: const Text('Will be prioritized at top of student feeds', style: TextStyle(fontSize: 11)),
                 value: isUrgent,
                 onChanged: (val) => setState(() => isUrgent = val),
-              ),
-              SwitchListTile(
-                title: const Text('Pin to Department Top 📌', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                value: isPinned,
-                onChanged: (val) => setState(() => isPinned = val),
               ),
               // Requirement 11: Switch yes button triggers PDF Upload options
               SwitchListTile(

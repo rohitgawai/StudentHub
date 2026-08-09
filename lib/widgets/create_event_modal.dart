@@ -20,6 +20,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
   final venueController = TextEditingController();
   final maxSeatsController = TextEditingController(text: '100');
   String? selectedImageUrl;
+  PostCategory eventKind = PostCategory.event;
 
   late String department;
   DateTime eventDate = DateTime.now().add(const Duration(days: 3));
@@ -102,7 +103,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
       id: 'pst_${DateTime.now().millisecondsSinceEpoch}',
       title: titleController.text.trim(),
       description: descController.text.trim(),
-      category: PostCategory.event,
+      category: eventKind,
       department: department,
       authorName: dataService.currentUser.name,
       authorRole: dataService.activeRole,
@@ -156,7 +157,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🎉 Create Campus Event'),
+        title: const Text('🎉 Create Event & Workshops'),
         actions: [
           IconButton(
             icon: const Icon(Icons.close),
@@ -169,6 +170,26 @@ class _CreateEventModalState extends State<CreateEventModal> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            SegmentedButton<PostCategory>(
+              segments: const [
+                ButtonSegment(
+                  value: PostCategory.event,
+                  label: Text('🎪 Event'),
+                  icon: Icon(Icons.event),
+                ),
+                ButtonSegment(
+                  value: PostCategory.workshop,
+                  label: Text('🛠️ Workshop'),
+                  icon: Icon(Icons.construction),
+                ),
+              ],
+              selected: {eventKind},
+              onSelectionChanged: (selection) {
+                setState(() => eventKind = selection.first);
+              },
+            ),
+            const SizedBox(height: 14),
+
             TextFormField(
               controller: titleController,
               decoration: InputDecoration(
