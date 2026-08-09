@@ -124,6 +124,7 @@ class PushService {
       }
     }
     if (type != 'new_post' &&
+        type != 'post_live' &&
         type != 'event_registration' &&
         type != 'registration_confirmed' &&
         type != 'registrations_closed' &&

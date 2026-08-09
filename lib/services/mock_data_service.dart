@@ -1674,14 +1674,33 @@ class MockDataService extends ChangeNotifier {
       _deviceOnlyPostIds.add(newPost.id);
     } else {
       _persistPost(newPost);
+      final isEvent = newPost.isEvent;
+      final isGallery = newPost.category == PostCategory.gallery;
+
+      // Everyone else (never the publisher) sees the "new post" push.
       _pushBroadcast(
         newPost,
-        title: newPost.isEvent
+        title: isEvent
             ? '🎉 New event posted'
-            : newPost.category == PostCategory.gallery
+            : isGallery
                 ? '📸 New gallery posted'
                 : '📢 New announcement posted',
         body: newPost.title,
+        excludeUserId: currentUser.id,
+      );
+
+      // The publisher's own devices get a live confirmation instead.
+      _pushBroadcast(
+        newPost,
+        type: 'post_live',
+        title: isEvent
+            ? '✅ Your event is live!'
+            : isGallery
+                ? '✅ Your gallery is live on Campus Feed!'
+                : '✅ Your post is live on Campus Feed!',
+        body: newPost.title,
+        recipientUserId: currentUser.id,
+        skipSenderDevice: false,
       );
     }
     _scheduleLocalSave();
@@ -1828,8 +1847,9 @@ class MockDataService extends ChangeNotifier {
   /// to every registered device except this one (used for new posts, event
   /// registrations and registration-closed updates). Pass [recipientUserId]
   /// to target only one user's devices (e.g. the event host, or the
-  /// registrant's own confirmation), and [skipSenderDevice] = false to also
-  /// deliver to this device.
+  /// registrant's own confirmation), [excludeUserId] to exclude an entire
+  /// user's devices (e.g. the publisher), and [skipSenderDevice] = false to
+  /// also deliver to this device.
   Future<void> _pushBroadcast(
     PostModel post, {
     String type = 'new_post',
@@ -1837,6 +1857,7 @@ class MockDataService extends ChangeNotifier {
     String? body,
     String? registrantName,
     String? recipientUserId,
+    String? excludeUserId,
     bool skipSenderDevice = true,
   }) async {
     final client = _client;
@@ -1860,6 +1881,7 @@ class MockDataService extends ChangeNotifier {
               'type': type,
               'registrant_name': ?registrantName,
               'recipient_user_id': recipientUserId,
+              'exclude_user_id': excludeUserId,
               'skip_sender_device': skipSenderDevice,
             }),
           )

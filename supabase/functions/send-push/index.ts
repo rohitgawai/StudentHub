@@ -22,6 +22,7 @@ Deno.serve(async (req) => {
     type?: string
     registrant_name?: string
     recipient_user_id?: string
+    exclude_user_id?: string
     skip_sender_device?: boolean
   }
   try {
@@ -38,6 +39,7 @@ Deno.serve(async (req) => {
     device_id,
     registrant_name,
     recipient_user_id,
+    exclude_user_id,
     skip_sender_device,
   } = payload
   const type = payload.type ?? 'new_post'
@@ -75,13 +77,18 @@ Deno.serve(async (req) => {
   }
 
   // Scope targets by recipient when given (host-only "X registered" pushes,
-  // or a registrant's own confirmation). When skip_sender_device is true
-  // (default) this device is excluded, matching device_id when present and
-  // falling back to the author's user_id.
+// or a registrant's own confirmation), exclude an entire user's devices
+// (e.g. the publisher of a "new post" push), and when skip_sender_device is
+// true (default) exclude this device too, matching device_id when present
+// and falling back to the author's user_id.
   const targets = (devices ?? [])
     .filter((d) =>
       recipient_user_id
         ? String(d.user_id ?? '') === recipient_user_id
+        : true)
+    .filter((d) =>
+      exclude_user_id
+        ? String(d.user_id ?? '') !== exclude_user_id
         : true)
     .filter((d) => {
       if (skip_sender_device === false) return true
