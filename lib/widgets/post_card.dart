@@ -75,15 +75,6 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
     Share.share(shareText, subject: post.title);
   }
 
-  void _openFirstAttachment(BuildContext context) {
-    final post = widget.post;
-    if (post.attachments.isEmpty) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => PdfViewerModal(attachment: post.attachments.first),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final post = widget.post;
@@ -451,10 +442,9 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
     );
   }
 
-  /// Type-aware actions:
   /// · Event/Workshop → Register (primary) · Save · Share
   /// · Achievement    → Congratulate · Share
-  /// · Everything else → View PDF · Save · Share
+  /// · Everything else → Save · Share
   Widget _buildSmartActionBar(BuildContext context) {
     final post = widget.post;
 
@@ -489,18 +479,6 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
         ),
       );
     } else {
-      if (post.attachments.isNotEmpty) {
-        actions.add(
-          _SmartAction(
-            icon: Icons.picture_as_pdf_outlined,
-            activeIcon: Icons.picture_as_pdf,
-            active: true,
-            label: 'View PDF',
-            color: widget.config.academicColor,
-            onTap: () => _openFirstAttachment(context),
-          ),
-        );
-      }
       actions.add(
         _SmartAction(
           icon: Icons.bookmark_border,
