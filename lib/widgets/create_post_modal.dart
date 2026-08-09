@@ -7,9 +7,7 @@ import 'image_picker_field.dart';
 import 'pdf_upload_field.dart';
 
 class CreatePostModal extends StatefulWidget {
-  final PostCategory? initialCategory;
-
-  const CreatePostModal({super.key, this.initialCategory});
+  const CreatePostModal({super.key});
 
   @override
   State<CreatePostModal> createState() => _CreatePostModalState();
@@ -20,7 +18,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
   final titleController = TextEditingController();
   final descController = TextEditingController();
 
-  late PostCategory category = widget.initialCategory ?? PostCategory.announcement;
+  late PostCategory category = PostCategory.announcement;
   late String department;
   String? targetYear;
   String? selectedImageUrl;
@@ -176,7 +174,10 @@ class _CreatePostModalState extends State<CreatePostModal> {
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
 
-    final allowedCategories = PostCategory.values.where((c) => c != PostCategory.event).toList();
+    // Gallery and Event have their own dedicated upload cards.
+    final allowedCategories = PostCategory.values
+        .where((c) => c != PostCategory.event && c != PostCategory.gallery)
+        .toList();
     final yearOptions = ['All Academic Years', ...dataService.config.academicYears];
 
     return Scaffold(

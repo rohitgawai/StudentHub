@@ -14,6 +14,7 @@ create table if not exists public.posts (
   author_role text not null default 'student',
   author_id text not null default '',
   image_url text,
+  image_urls text[] not null default '{}',
   is_urgent boolean not null default false,
   is_pinned boolean not null default false,
   save_count integer not null default 0,
@@ -32,6 +33,7 @@ create table if not exists public.posts (
 -- from the app never fail on missing columns (idempotent, safe to re-run).
 alter table public.posts add column if not exists congratulate_count integer not null default 0;
 alter table public.posts add column if not exists congratulated_user_ids text[] not null default '{}';
+alter table public.posts add column if not exists image_urls text[] not null default '{}';
 
 alter table public.posts enable row level security;
 

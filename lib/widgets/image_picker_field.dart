@@ -164,7 +164,7 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
                 onPressed: _pickImageFromDevice,
                 icon: const Icon(Icons.upload_file_rounded, color: Colors.blue),
                 label: const Text(
-                  '📁 Upload Image from Device Storage',
+                  'Upload Image',
                   style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 13),
                 ),
               ),

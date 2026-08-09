@@ -6,6 +6,7 @@ import '../models/post_model.dart';
 import 'role_badge.dart';
 import 'pdf_viewer_modal.dart';
 import 'app_image.dart';
+import 'gallery_viewer_modal.dart';
 
 /// A post card that stays decoupled from the data service (it never
 /// subscribes), so unrelated data changes don't rebuild cards. It owns the
@@ -44,9 +45,11 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> {
   bool _pressed = false;
 
-  Color get _categoryColor => widget.config.colorForCategory(widget.post.category);
+  Color get _categoryColor =>
+      widget.config.colorForCategory(widget.post.category);
 
   bool get _isEvent => widget.post.isEvent;
+  bool get _isGallery => widget.post.category == PostCategory.gallery;
   bool get _isAchievement => widget.post.category == PostCategory.achievement;
 
   void _sharePostDynamic(BuildContext context) {
@@ -160,9 +163,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: _pressed ? 0.10 : 0.04,
-                  ),
+                  color: Colors.black.withValues(alpha: _pressed ? 0.10 : 0.04),
                   blurRadius: _pressed ? 18 : 10,
                   offset: const Offset(0, 4),
                 ),
@@ -279,9 +280,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                   color: categoryColor.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: categoryColor.withValues(
-                                      alpha: 0.3,
-                                    ),
+                                    color: categoryColor.withValues(alpha: 0.3),
                                   ),
                                 ),
                                 child: Text(
@@ -315,19 +314,13 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                         const SizedBox(height: 8),
 
                         // Post Description
-                        Text(
-                          post.description,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                            height: 1.45,
-                          ),
-                        ),
+                        _ExpandableDescription(text: post.description),
 
-                        // Optional Post Image
-                        if (post.imageUrl != null) ...[
+                        // Gallery Images — fixed-size slider with dots
+                        if (_isGallery && post.imageUrls.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _GalleryCarousel(images: post.imageUrls),
+                        ] else if (post.imageUrl != null) ...[
                           const SizedBox(height: 12),
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
@@ -381,10 +374,11 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                           vertical: 2,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: (post.isRegistrationFull
-                                                  ? Colors.red
-                                                  : Colors.green)
-                                              .withValues(alpha: 0.15),
+                                          color:
+                                              (post.isRegistrationFull
+                                                      ? Colors.red
+                                                      : Colors.green)
+                                                  .withValues(alpha: 0.15),
                                           borderRadius: BorderRadius.circular(
                                             8,
                                           ),
@@ -575,8 +569,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
     return Row(
       children: [
         ...actions.map(
-          (a) =>
-              Padding(padding: const EdgeInsets.only(right: 4), child: a),
+          (a) => Padding(padding: const EdgeInsets.only(right: 4), child: a),
         ),
         const Spacer(),
         if (_isEvent) ...[
@@ -637,6 +630,174 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
 
   String _formatEventDate(DateTime dt) {
     return '${dt.day}/${dt.month}/${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+/// Instagram-style collapsible description: clipped to a few lines with a
+/// "View more" reveal and a "Show less" collapse back to the default height.
+class _ExpandableDescription extends StatefulWidget {
+  final String text;
+
+  const _ExpandableDescription({required this.text});
+
+  @override
+  State<_ExpandableDescription> createState() => _ExpandableDescriptionState();
+}
+
+class _ExpandableDescriptionState extends State<_ExpandableDescription> {
+  static const int _collapsedLines = 3;
+
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(fontSize: 14, height: 1.45);
+    final textStyle = style.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final plain = TextPainter(
+          text: TextSpan(text: widget.text, style: textStyle),
+          maxLines: _collapsedLines,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final didExceed = plain.didExceedMaxLines;
+
+        if (!didExceed) {
+          return Text(widget.text, style: textStyle);
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.text,
+              style: textStyle,
+              maxLines: _expanded ? null : _collapsedLines,
+              overflow: _expanded
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
+            ),
+            GestureDetector(
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  _expanded ? 'Show less' : 'View more',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Fixed-size swipeable slider for gallery posts. Every image is rendered at
+/// the same height/width (BoxFit.cover) and dots indicate the current slide.
+class _GalleryCarousel extends StatefulWidget {
+  final List<String> images;
+
+  const _GalleryCarousel({required this.images});
+
+  @override
+  State<_GalleryCarousel> createState() => _GalleryCarouselState();
+}
+
+class _GalleryCarouselState extends State<_GalleryCarousel> {
+  static const double _imageHeight = 240;
+
+  final _controller = PageController();
+  int _current = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final images = widget.images;
+
+    return GestureDetector(
+      onTap: () =>
+          showGalleryViewer(context, images: images, initialIndex: _current),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            SizedBox(
+              height: _imageHeight,
+              width: double.infinity,
+              child: PageView.builder(
+                controller: _controller,
+                itemCount: images.length,
+                onPageChanged: (i) => setState(() => _current = i),
+                itemBuilder: (context, index) => AppImage(
+                  source: images[index],
+                  height: _imageHeight,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            if (images.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(images.length, (i) {
+                    final active = i == _current;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: active ? 18 : 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: active ? Colors.white : Colors.white54,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            if (images.length > 1)
+              Positioned(
+                right: 10,
+                top: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_current + 1}/${images.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -799,7 +960,9 @@ class _RegisterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
-        backgroundColor: isRegistered ? Colors.grey.shade300 : config.eventColor,
+        backgroundColor: isRegistered
+            ? Colors.grey.shade300
+            : config.eventColor,
         foregroundColor: isRegistered ? Colors.black87 : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         elevation: isRegistered ? 0 : 2,

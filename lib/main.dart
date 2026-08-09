@@ -18,6 +18,7 @@ import 'screens/profile_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'widgets/create_post_modal.dart';
 import 'widgets/create_event_modal.dart';
+import 'widgets/create_gallery_modal.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -329,9 +330,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                     Navigator.of(ctx).pop();
                     showDialog(
                       context: context,
-                      builder: (c) => const CreatePostModal(
-                        initialCategory: PostCategory.gallery,
-                      ),
+                      builder: (c) => const CreateGalleryModal(),
                     );
                   },
                 ),

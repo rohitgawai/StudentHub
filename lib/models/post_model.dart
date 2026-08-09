@@ -63,6 +63,7 @@ class PostModel {
   final String authorId;
   final DateTime timestamp;
   final String? imageUrl;
+  final List<String> imageUrls; // gallery posts: 3-6 images
   final List<PostAttachment> attachments;
   final bool isUrgent;
   final bool isPinned;
@@ -89,6 +90,7 @@ class PostModel {
     required this.authorId,
     required this.timestamp,
     this.imageUrl,
+    this.imageUrls = const [],
     this.attachments = const [],
     this.isUrgent = false,
     this.isPinned = false,
@@ -118,6 +120,7 @@ class PostModel {
     String? authorId,
     DateTime? timestamp,
     String? imageUrl,
+    List<String>? imageUrls,
     List<PostAttachment>? attachments,
     bool? isUrgent,
     bool? isPinned,
@@ -142,6 +145,7 @@ class PostModel {
       authorId: authorId ?? this.authorId,
       timestamp: timestamp ?? this.timestamp,
       imageUrl: imageUrl ?? this.imageUrl,
+      imageUrls: imageUrls ?? this.imageUrls,
       attachments: attachments ?? this.attachments,
       isUrgent: isUrgent ?? this.isUrgent,
       isPinned: isPinned ?? this.isPinned,

@@ -397,6 +397,24 @@ class MockDataService extends ChangeNotifier {
       i++;
     }
     row['attachments'] = attachments;
+    // Persist gallery images to local refs too, so offline snapshots keep
+    // the full multi-image set instead of the raw base64 blobs.
+    final localGallery = <String>[];
+    var j = 0;
+    for (final url in p.imageUrls) {
+      final localUrl = await _localStore.persistDataUri(
+        url,
+        p.id,
+        'g$j',
+        _extFromDataUri(url),
+      );
+      if (localUrl != url) changed = true;
+      localGallery.add(localUrl);
+      j++;
+    }
+    if (localGallery.isNotEmpty) {
+      row['image_urls'] = localGallery;
+    }
     // Swap the in-memory post to `local://` refs so later saves skip the
     // expensive base64 decode + disk write entirely.
     if (changed) {
@@ -404,6 +422,7 @@ class MockDataService extends ChangeNotifier {
       if (idx != -1) {
         _posts[idx] = _posts[idx].copyWith(
           imageUrl: localImage,
+          imageUrls: localGallery,
           attachments: localAttachments,
         );
       }
@@ -1164,6 +1183,7 @@ class MockDataService extends ChangeNotifier {
       authorId: row['author_id']?.toString() ?? '',
       timestamp: _parseDate(row['created_at']) ?? DateTime.now(),
       imageUrl: row['image_url'] as String?,
+      imageUrls: ((row['image_urls'] as List?) ?? const []).cast<String>(),
       attachments: attachments,
       isUrgent: row['is_urgent'] as bool? ?? false,
       isPinned: row['is_pinned'] as bool? ?? false,
@@ -1192,6 +1212,7 @@ class MockDataService extends ChangeNotifier {
     'author_role': p.authorRole.name,
     'author_id': p.authorId,
     'image_url': p.imageUrl,
+    'image_urls': p.imageUrls.isEmpty ? null : p.imageUrls,
     'is_urgent': p.isUrgent,
     'is_pinned': p.isPinned,
     'save_count': p.saveCount,
@@ -1249,6 +1270,7 @@ class MockDataService extends ChangeNotifier {
         stored = post.copyWith(attachments: uploaded);
       }
       stored = await _uploadPostImageIfNeeded(stored);
+      stored = await _uploadGalleryImagesIfNeeded(stored);
       await client.from('posts').upsert(_rowFromPost(stored), onConflict: 'id');
       final idx = _posts.indexWhere((p) => p.id == post.id);
       if (idx != -1) _posts[idx] = stored;
@@ -1297,6 +1319,58 @@ class MockDataService extends ChangeNotifier {
     } catch (_) {
       return post;
     }
+  }
+
+  /// Uploads every gallery image (data URI or local file ref) to Supabase
+  /// Storage as `posts/<id>_gallery_<index>.<ext>` and returns the post with
+  /// all public URLs. Remote/empty images are left untouched.
+  Future<PostModel> _uploadGalleryImagesIfNeeded(PostModel post) async {
+    final client = _client;
+    if (client == null || post.imageUrls.isEmpty) return post;
+
+    final uploaded = <String>[];
+    var changed = false;
+    for (var i = 0; i < post.imageUrls.length; i++) {
+      final url = post.imageUrls[i];
+      if (url.isEmpty) {
+        uploaded.add(url);
+        continue;
+      }
+      if (!url.startsWith('data:') && !_localStore.isLocalRef(url)) {
+        uploaded.add(url);
+        continue;
+      }
+      try {
+        final bytes = url.startsWith('data:')
+            ? await compute(
+                _decodeBase64Helper,
+                url.substring(url.indexOf(',') + 1),
+              )
+            : await _localStore.readLocalBlob(url);
+        if (bytes == null || bytes.isEmpty) {
+          uploaded.add(url);
+          continue;
+        }
+        final ext = _extFromDataUri(url);
+        final path = 'posts/${post.id}_gallery_$i.$ext';
+        await client.storage
+            .from('documents')
+            .uploadBinary(
+              path,
+              bytes,
+              fileOptions: FileOptions(
+                contentType: ext == 'png' ? 'image/png' : 'image/jpeg',
+                upsert: true,
+              ),
+            );
+        uploaded.add(client.storage.from('documents').getPublicUrl(path));
+        changed = true;
+      } catch (_) {
+        uploaded.add(url);
+      }
+    }
+    if (!changed) return post;
+    return post.copyWith(imageUrls: uploaded);
   }
 
   Future<PostAttachment> _uploadAttachmentIfNeeded(PostAttachment att) async {
@@ -1548,8 +1622,11 @@ class MockDataService extends ChangeNotifier {
       _persistPost(newPost);
       _pushBroadcast(
         newPost,
-        title:
-            newPost.isEvent ? '🎉 New event posted' : '📢 New announcement posted',
+        title: newPost.isEvent
+            ? '🎉 New event posted'
+            : newPost.category == PostCategory.gallery
+                ? '📸 New gallery posted'
+                : '📢 New announcement posted',
         body: newPost.title,
       );
     }
@@ -1647,6 +1724,9 @@ class MockDataService extends ChangeNotifier {
     _serverKnownIds.add(postId);
     _client?.from('posts').delete().eq('id', postId);
     _localStore.deleteLocalBlob(removed.imageUrl);
+    for (final img in removed.imageUrls) {
+      _localStore.deleteLocalBlob(img);
+    }
     for (final att in removed.attachments) {
       _localStore.deleteLocalBlob(att.url);
     }
