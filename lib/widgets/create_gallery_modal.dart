@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
+import 'custom_dropdown.dart';
 import 'multi_image_picker_field.dart';
 
 class CreateGalleryModal extends StatefulWidget {
@@ -125,7 +126,7 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
             TextFormField(
               controller: titleController,
               decoration: InputDecoration(
-                labelText: 'Post Title *',
+                labelText: 'Post Title',
                 prefixIcon: const Icon(Icons.title_outlined),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -148,6 +149,19 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
+            ),
+            const SizedBox(height: 14),
+
+            // Target Department
+            CustomDropdownField<String>(
+              value: department,
+              labelText: 'Target Department',
+              prefixIcon: Icons.school_outlined,
+              items: dataService.config.departments,
+              itemLabel: (d) => d,
+              onChanged: (val) {
+                if (val != null) setState(() => department = val);
+              },
             ),
             const SizedBox(height: 14),
 

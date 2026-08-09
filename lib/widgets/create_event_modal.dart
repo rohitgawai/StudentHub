@@ -19,7 +19,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
   final descController = TextEditingController();
   final venueController = TextEditingController();
   final maxSeatsController = TextEditingController(text: '100');
-  String? selectedImageUrl = 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=800';
+  String? selectedImageUrl;
 
   late String department;
   DateTime eventDate = DateTime.now().add(const Duration(days: 3));
@@ -45,6 +45,31 @@ class _CreateEventModalState extends State<CreateEventModal> {
     final dataService = Provider.of<MockDataService>(context, listen: false);
 
     if (!_formKey.currentState!.validate()) return;
+
+    final image = selectedImageUrl;
+    if (image == null || image.trim().isEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          icon: const Icon(Icons.image_not_supported_outlined,
+              color: Colors.orange, size: 40),
+          title: const Text('Cover image required'),
+          content: const Text(
+            'Please upload a cover image before publishing your event.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     final online = await dataService.checkBackendReachable();
     if (!mounted) return;
@@ -83,7 +108,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
       authorRole: dataService.activeRole,
       authorId: dataService.currentUser.id,
       timestamp: DateTime.now(),
-      imageUrl: selectedImageUrl ?? 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80&w=800',
+      imageUrl: selectedImageUrl,
       venue: venueController.text.trim(),
       eventDate: eventDate,
       registrationDeadline: regDeadline,
@@ -147,7 +172,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
             TextFormField(
               controller: titleController,
               decoration: InputDecoration(
-                labelText: 'Event Title *',
+                labelText: 'Event Title',
                 prefixIcon: const Icon(Icons.event_note),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -159,7 +184,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
               controller: descController,
               maxLines: 3,
               decoration: InputDecoration(
-                labelText: 'Event Description & Agenda *',
+                labelText: 'Event Description',
                 prefixIcon: const Icon(Icons.description_outlined),
                 alignLabelWithHint: true,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -171,7 +196,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
             TextFormField(
               controller: venueController,
               decoration: InputDecoration(
-                labelText: 'Venue / Hall / Room *',
+                labelText: 'Venue / Hall / Room ',
                 hintText: 'e.g. Main Auditorium / Lab 102',
                 prefixIcon: const Icon(Icons.location_on_outlined),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -209,9 +234,9 @@ class _CreateEventModalState extends State<CreateEventModal> {
             ),
             const SizedBox(height: 14),
 
-            // Requirement 10: Image Upload / Selector
+            // Required cover image upload
             ImagePickerField(
-              label: 'Event Cover / Banner Image (Optional)',
+              label: 'Cover Image',
               initialUrl: selectedImageUrl,
               onImageSelected: (url) {
                 setState(() => selectedImageUrl = url);

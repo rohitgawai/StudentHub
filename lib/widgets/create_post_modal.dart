@@ -182,7 +182,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Announcement / Post'),
+        title: const Text('📢 Create Announcement'),
         actions: [
           IconButton(
             icon: const Icon(Icons.close),
@@ -227,7 +227,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
             TextFormField(
               controller: titleController,
               decoration: InputDecoration(
-                labelText: 'Post Title *',
+                labelText: 'Post Title',
                 prefixIcon: const Icon(Icons.title_outlined),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -240,7 +240,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
               controller: descController,
               maxLines: 4,
               decoration: InputDecoration(
-                labelText: 'Detailed Description *',
+                labelText: 'Detailed Description',
                 prefixIcon: const Icon(Icons.description_outlined),
                 alignLabelWithHint: true,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

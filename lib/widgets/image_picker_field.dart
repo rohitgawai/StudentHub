@@ -11,7 +11,7 @@ class ImagePickerField extends StatefulWidget {
     super.key,
     this.initialUrl,
     required this.onImageSelected,
-    this.label = 'Post Cover Image (Optional)',
+    this.label = 'Cover Image',
   });
 
   @override

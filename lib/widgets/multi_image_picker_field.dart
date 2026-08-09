@@ -90,7 +90,7 @@ class _MultiImagePickerFieldState extends State<MultiImagePickerField> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Gallery Images *',
+                    'Gallery Images',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
