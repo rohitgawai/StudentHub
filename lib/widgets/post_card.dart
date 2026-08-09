@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/app_config.dart';
 import '../models/post_model.dart';
+import '../utils/date_formatter.dart';
 import 'role_badge.dart';
 import 'pdf_viewer_modal.dart';
 import 'app_image.dart';
@@ -628,9 +629,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
     return '${diff.inDays}d ago';
   }
 
-  String _formatEventDate(DateTime dt) {
-    return '${dt.day}/${dt.month}/${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-  }
+  String _formatEventDate(DateTime dt) => formatEventDateTime(dt);
 }
 
 /// Instagram-style collapsible description: clipped to a few lines with a

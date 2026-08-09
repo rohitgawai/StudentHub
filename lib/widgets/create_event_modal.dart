@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
+import '../utils/date_formatter.dart';
 import 'custom_dropdown.dart';
 import 'image_picker_field.dart';
 
@@ -98,6 +99,30 @@ class _CreateEventModalState extends State<CreateEventModal> {
         backgroundColor: Colors.green,
       ),
     );
+  }
+
+  Future<DateTime?> _pickEventDateTime({
+    required DateTime initial,
+    required DateTime first,
+    required DateTime last,
+  }) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: first,
+      lastDate: last,
+    );
+    if (date == null) return null;
+    if (!mounted) return null;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null) return null;
+    if (!mounted) return null;
+
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
   }
 
   @override
@@ -202,17 +227,16 @@ class _CreateEventModalState extends State<CreateEventModal> {
               ),
               leading: const Icon(Icons.event, color: Colors.orange),
               title: const Text('Event Date & Time', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: Text('${eventDate.day}/${eventDate.month}/${eventDate.year} at ${eventDate.hour}:00'),
+              subtitle: Text(formatEventDateTime(eventDate)),
               trailing: const Icon(Icons.edit_calendar),
               onTap: () async {
-                final d = await showDatePicker(
-                  context: context,
-                  initialDate: eventDate,
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                final d = await _pickEventDateTime(
+                  initial: eventDate,
+                  first: DateTime.now(),
+                  last: DateTime.now().add(const Duration(days: 365)),
                 );
                 if (d != null) {
-                  setState(() => eventDate = DateTime(d.year, d.month, d.day, 10, 0));
+                  setState(() => eventDate = d);
                 }
               },
             ),
@@ -225,17 +249,16 @@ class _CreateEventModalState extends State<CreateEventModal> {
               ),
               leading: const Icon(Icons.timer, color: Colors.red),
               title: const Text('Registration Deadline', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: Text('${regDeadline.day}/${regDeadline.month}/${regDeadline.year} at 23:59'),
+              subtitle: Text(formatEventDateTime(regDeadline)),
               trailing: const Icon(Icons.edit_calendar),
               onTap: () async {
-                final d = await showDatePicker(
-                  context: context,
-                  initialDate: regDeadline,
-                  firstDate: DateTime.now(),
-                  lastDate: eventDate,
+                final d = await _pickEventDateTime(
+                  initial: regDeadline,
+                  first: DateTime.now(),
+                  last: eventDate,
                 );
                 if (d != null) {
-                  setState(() => regDeadline = DateTime(d.year, d.month, d.day, 23, 59));
+                  setState(() => regDeadline = d);
                 }
               },
             ),
