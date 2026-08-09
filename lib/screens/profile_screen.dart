@@ -79,10 +79,14 @@ class _ProfileScreenState extends State<ProfileScreen>
       return true;
     }).toList();
 
-    // Requirement 7: Apply for role button visibility & expiration logic
+    // Requirement 7: Apply for role button visibility & expiration logic.
+    // Hidden whenever the user holds Event Host or Faculty (both are granted
+    // via this flow): a temporary Host role hides it until it expires, after
+    // which the role is removed and the button reappears; a confirmed Faculty
+    // role hides it permanently.
     final bool hasHostRole = user.hasRole(UserRole.eventHost);
     final bool hasFacultyRole = user.hasRole(UserRole.faculty);
-    final bool hasBothElevatedRoles = hasHostRole && hasFacultyRole;
+    final bool canApplyForRoles = !hasHostRole && !hasFacultyRole;
 
     // Check if host/faculty role expired notification is present
     final bool showRoleExpiredNotice = notifications.any(
@@ -371,8 +375,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                   ],
 
-                  // Requirement 7: Apply for Role Button (Hidden if user holds both elevated roles; re-appears if role expired)
-                  if (cfg.allowRoleSelfApplication && !hasBothElevatedRoles)
+                  // Requirement 7: Apply for Role Button (Hidden while any elevated role is held; re-appears when it expires)
+                  if (cfg.allowRoleSelfApplication && canApplyForRoles)
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
