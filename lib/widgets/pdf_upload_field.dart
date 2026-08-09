@@ -78,31 +78,6 @@ class _PdfUploadFieldState extends State<PdfUploadField> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: const [
-                  Icon(Icons.picture_as_pdf, color: Colors.red, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Device PDF Document Attachment',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blue),
-                  ),
-                ],
-              ),
-              if (selectedDocTitle != null)
-                GestureDetector(
-                  onTap: _clearPdf,
-                  child: const Text(
-                    'Remove PDF',
-                    style: TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.w600),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
           if (selectedDocTitle != null) ...[
             Container(
               padding: const EdgeInsets.all(10),
@@ -154,7 +129,7 @@ class _PdfUploadFieldState extends State<PdfUploadField> {
                 ),
                 onPressed: _pickPdfFromDevice,
                 icon: const Icon(Icons.upload_file_rounded, size: 18),
-                label: const Text('📄 Browse & Upload PDF Document from Device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                label: const Text('Upload PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ),
           ],
