@@ -37,6 +37,8 @@ class UserModel {
   final bool isVerified;
   final Map<UserRole, DateTime> roleExpirations;
   final bool hasChangedUniqueId;
+  final bool hasCompletedProgressiveForm;
+  final String? activeDeviceId;
 
   UserModel({
     required this.id,
@@ -55,6 +57,8 @@ class UserModel {
     this.isVerified = true,
     this.roleExpirations = const {},
     this.hasChangedUniqueId = false,
+    this.hasCompletedProgressiveForm = true,
+    this.activeDeviceId,
   });
 
   bool hasRole(UserRole role) => roles.contains(role);
@@ -80,6 +84,8 @@ class UserModel {
     bool? isVerified,
     Map<UserRole, DateTime>? roleExpirations,
     bool? hasChangedUniqueId,
+    bool? hasCompletedProgressiveForm,
+    String? activeDeviceId,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -99,6 +105,9 @@ class UserModel {
       isVerified: isVerified ?? this.isVerified,
       roleExpirations: roleExpirations ?? this.roleExpirations,
       hasChangedUniqueId: hasChangedUniqueId ?? this.hasChangedUniqueId,
+      hasCompletedProgressiveForm:
+          hasCompletedProgressiveForm ?? this.hasCompletedProgressiveForm,
+      activeDeviceId: activeDeviceId ?? this.activeDeviceId,
     );
   }
 }

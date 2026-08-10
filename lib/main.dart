@@ -11,6 +11,7 @@ import 'services/local_store_service.dart';
 import 'services/push_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_screen.dart';
+import 'screens/progressive_form_screen.dart';
 import 'screens/home_feed_screen.dart';
 import 'screens/events_screen.dart';
 import 'screens/discover_screen.dart';
@@ -19,6 +20,7 @@ import 'screens/notifications_screen.dart';
 import 'widgets/create_post_modal.dart';
 import 'widgets/create_event_modal.dart';
 import 'widgets/create_gallery_modal.dart';
+import 'widgets/post_detail_modal.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,27 +102,71 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   void initState() {
     super.initState();
     PushService.instance.openCategory.addListener(_handlePushTap);
+    PushService.instance.targetPostId.addListener(_handlePushTap);
   }
 
   @override
   void dispose() {
     PushService.instance.openCategory.removeListener(_handlePushTap);
+    PushService.instance.targetPostId.removeListener(_handlePushTap);
     super.dispose();
   }
 
   void _handlePushTap() {
     final category = PushService.instance.openCategory.value;
+    final postId = PushService.instance.targetPostId.value;
     final targetIndex = category == PostCategory.event ? 1 : 0;
     if (currentIndex != targetIndex) {
       setState(() => currentIndex = targetIndex);
+    }
+    if (postId != null && postId.isNotEmpty) {
+      PushService.instance.targetPostId.value = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          PostDetailModal.show(context, postId);
+        }
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final dataService = Provider.of<MockDataService>(context);
+    final user = dataService.currentUser;
+    final isLoggedOut = dataService.isLoggedOut;
+
+    if (isLoggedOut) {
+      if (dataService.logoutReason != null) {
+        final reason = dataService.logoutReason;
+        dataService.logoutReason = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('📱 $reason'),
+                backgroundColor: Colors.orange.shade900,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+        });
+      }
+      return AuthScreen(
+        onLoginComplete: () => setState(() => isAuthenticated = true),
+      );
+    }
+
     if (!isAuthenticated) {
       return AuthScreen(
         onLoginComplete: () => setState(() => isAuthenticated = true),
+      );
+    }
+
+    if (!user.hasCompletedProgressiveForm) {
+      return ProgressiveFormScreen(
+        onComplete: () {
+          setState(() {});
+        },
       );
     }
 

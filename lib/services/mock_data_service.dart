@@ -102,13 +102,30 @@ class MockDataService extends ChangeNotifier {
     final restored = await _loadLocalState();
 
     if (restored != null) {
-      currentUser = restored.currentUser;
-      activeRole =
-          restored.activeRole ??
-          (currentUser.roles.isNotEmpty
-              ? currentUser.roles.first
-              : UserRole.student);
-      _posts = restored.posts;
+      final isDemoAccount = restored.currentUser.id == 'usr_101' ||
+          restored.currentUser.name.toLowerCase().contains('aarav') ||
+          restored.currentUser.email.contains('aarav.sharma');
+
+      if (isDemoAccount) {
+        _isLoggedOut = true;
+        logoutReason = 'Demo account deleted.';
+        lastKnownUser = null;
+        await _localStore.clearSnapshot();
+      } else {
+        currentUser = restored.currentUser;
+        activeRole = restored.activeRole ??
+            (currentUser.roles.isNotEmpty
+                ? currentUser.roles.first
+                : UserRole.student);
+      }
+
+      _posts = restored.posts
+          .where(
+            (p) =>
+                p.authorId != 'usr_101' &&
+                !p.authorName.toLowerCase().contains('aarav'),
+          )
+          .toList();
       _notifications = restored.notifications;
       _roleRequests = restored.roleRequests;
       _announcements = restored.announcements;
@@ -154,33 +171,30 @@ class MockDataService extends ChangeNotifier {
   /// call repeatedly). Only notifies listeners when something actually
   /// changed, so the periodic poll is silent when the feed is unchanged.
   Future<void> syncNow() async {
-    final result = await _syncFromBackend();
-    if (result.changed) {
-      _invalidateDataCaches();
-      notifyListeners();
-    }
+    await _syncFromBackend();
+    _invalidateDataCaches();
+    notifyListeners();
   }
 
   Future<void> _seedDefaults() async {
-    // Default Current User (Student with Event Host capability or standard student)
+    // Unauthenticated initial user state (requires login or signup)
     currentUser = UserModel(
-      id: 'usr_101',
-      name: 'Aarav Sharma',
-      email: 'aarav.sharma@studenthub.edu',
-      studentOrEmployeeId: 'MIT/CS/2023/042',
-      department: 'Computer Science & Engineering',
-      year: 'Third Year',
-      mobileNumber: '+91 98765 12345',
-      avatarUrl:
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256',
-      roles: [UserRole.student, UserRole.eventHost],
-      savedPostIds: ['pst_002', 'pst_004'],
-      registeredEventIds: ['pst_002'],
-      congratulatedPostIds: ['pst_005'],
+      id: '',
+      name: '',
+      email: '',
+      studentOrEmployeeId: '',
+      department: config.departments.first,
+      year: config.academicYears.first,
+      mobileNumber: '',
+      avatarUrl: '',
+      roles: const [UserRole.student],
+      savedPostIds: const [],
+      registeredEventIds: const [],
+      congratulatedPostIds: const [],
       isVerified: true,
     );
 
-    activeRole = currentUser.roles.first;
+    activeRole = UserRole.student;
 
     _generateMockPosts();
     _generateMockRoleRequests();
@@ -279,6 +293,8 @@ class MockDataService extends ChangeNotifier {
           'likedPostIds': currentUser.likedPostIds,
           'isVerified': currentUser.isVerified,
           'hasChangedUniqueId': currentUser.hasChangedUniqueId,
+          'hasCompletedProgressiveForm': currentUser.hasCompletedProgressiveForm,
+          'activeDeviceId': currentUser.activeDeviceId,
           'roleExpirations': currentUser.roleExpirations.map(
             (role, expiry) => MapEntry(role.name, expiry.toIso8601String()),
           ),
@@ -483,6 +499,9 @@ class MockDataService extends ChangeNotifier {
       isVerified: m['isVerified'] as bool? ?? true,
       roleExpirations: expirations,
       hasChangedUniqueId: m['hasChangedUniqueId'] as bool? ?? false,
+      hasCompletedProgressiveForm:
+          m['hasCompletedProgressiveForm'] as bool? ?? true,
+      activeDeviceId: m['activeDeviceId']?.toString(),
     );
   }
 
@@ -624,6 +643,187 @@ class MockDataService extends ChangeNotifier {
     _scheduleLocalSave();
   }
 
+  bool _isLoggedOut = false;
+  bool get isLoggedOut => _isLoggedOut;
+  String? logoutReason;
+
+  Future<void> loginUser({
+    required String name,
+    required String email,
+    required String mobileNumber,
+  }) async {
+    _isLoggedOut = false;
+    logoutReason = null;
+    final deviceId = await LocalStoreService.instance.getDeviceId();
+    final client = _client;
+
+    if (client != null) {
+      try {
+        final rows = await client
+            .from('profiles')
+            .select()
+            .eq('email', email.trim().toLowerCase())
+            .limit(1)
+            .timeout(const Duration(seconds: 6));
+
+        if (rows.isNotEmpty) {
+          final r = rows.first;
+          final serverRoles = ((r['roles'] as List?) ?? const ['student'])
+              .whereType<String>()
+              .map(_roleFromName)
+              .toList();
+
+          currentUser = UserModel(
+            id: r['user_id']?.toString() ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
+            name: (r['name']?.toString() ?? '').isNotEmpty ? r['name'].toString() : name.trim(),
+            email: email.trim().toLowerCase(),
+            studentOrEmployeeId: r['student_or_employee_id']?.toString() ?? '',
+            department: (r['department']?.toString() ?? '').isNotEmpty ? r['department'].toString() : config.departments.first,
+            year: (r['year']?.toString() ?? '').isNotEmpty ? r['year'].toString() : config.academicYears.first,
+            mobileNumber: (r['mobile_number']?.toString() ?? '').isNotEmpty ? r['mobile_number'].toString() : mobileNumber.trim(),
+            avatarUrl: r['avatar_url']?.toString() ?? '',
+            roles: serverRoles.isEmpty ? [UserRole.student] : serverRoles,
+            savedPostIds: ((r['saved_post_ids'] as List?) ?? const []).whereType<String>().toList(),
+            registeredEventIds: ((r['registered_event_ids'] as List?) ?? const []).whereType<String>().toList(),
+            congratulatedPostIds: ((r['congratulated_post_ids'] as List?) ?? const []).whereType<String>().toList(),
+            likedPostIds: ((r['liked_post_ids'] as List?) ?? const []).whereType<String>().toList(),
+            isVerified: r['is_verified'] as bool? ?? true,
+            hasCompletedProgressiveForm: r['has_completed_progressive_form'] as bool? ?? false,
+            activeDeviceId: deviceId,
+          );
+
+          activeRole = currentUser.roles.first;
+
+          await client.from('profiles').update({
+            'active_device_id': deviceId,
+            'mobile_number': currentUser.mobileNumber,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('user_id', currentUser.id);
+
+          _invalidateDataCaches();
+          notifyListeners();
+          _scheduleLocalSave();
+          return;
+        }
+      } catch (e) {
+        debugPrint('StudentHub: login profile query failed: $e');
+      }
+    }
+
+    // New User or offline login: initialize account requiring progressive onboarding
+    currentUser = UserModel(
+      id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      studentOrEmployeeId: '',
+      department: config.departments.first,
+      year: config.academicYears.first,
+      mobileNumber: mobileNumber.trim(),
+      avatarUrl: '',
+      roles: const [UserRole.student],
+      savedPostIds: const [],
+      registeredEventIds: const [],
+      hasCompletedProgressiveForm: false,
+      activeDeviceId: deviceId,
+    );
+    activeRole = UserRole.student;
+
+    _invalidateDataCaches();
+    notifyListeners();
+    await _persistProfile();
+    _scheduleLocalSave();
+  }
+
+  /// Checks whether an MIT ID (student/employee ID) is available or already
+  /// registered to another user account on the server.
+  Future<bool> isMitIdAvailable(
+    String mitId, {
+    String? excludeUserId,
+  }) async {
+    final trimmed = mitId.trim();
+    if (trimmed.isEmpty) return true;
+    final client = _client;
+    if (client != null) {
+      try {
+        final rows = await client
+            .from('profiles')
+            .select('user_id, student_or_employee_id')
+            .eq('student_or_employee_id', trimmed)
+            .timeout(const Duration(seconds: 5));
+        final targetExclude = excludeUserId ?? currentUser.id;
+        final existingOther = rows.where(
+          (r) =>
+              r['user_id']?.toString() != null &&
+              r['user_id']?.toString() != targetExclude &&
+              r['user_id']?.toString() != '',
+        );
+        if (existingOther.isNotEmpty) return false;
+      } catch (e) {
+        debugPrint('StudentHub: error checking MIT ID availability: $e');
+      }
+    }
+    return true;
+  }
+
+  Future<void> completeProgressiveForm({
+    required String avatarUrl,
+    required String department,
+    required String year,
+    required String studentOrEmployeeId,
+  }) async {
+    final trimmedId = studentOrEmployeeId.trim();
+    if (trimmedId.isNotEmpty) {
+      final available = await isMitIdAvailable(
+        trimmedId,
+        excludeUserId: currentUser.id,
+      );
+      if (!available) {
+        throw Exception(
+          'MIT ID "$trimmedId" is already registered to another account. Please use your unique MIT ID.',
+        );
+      }
+    }
+
+    currentUser = currentUser.copyWith(
+      avatarUrl: avatarUrl,
+      department: department,
+      year: year,
+      studentOrEmployeeId: trimmedId,
+      hasCompletedProgressiveForm: true,
+    );
+    _invalidateDataCaches();
+    notifyListeners();
+    await _persistProfile();
+    _scheduleLocalSave();
+  }
+
+  UserModel? lastKnownUser;
+
+  Future<void> logout({String? reason}) async {
+    _isLoggedOut = true;
+    logoutReason = reason;
+    if (currentUser.name.isNotEmpty && currentUser.email.isNotEmpty) {
+      lastKnownUser = currentUser;
+    }
+    await LocalStoreService.instance.clearSnapshot();
+    currentUser = UserModel(
+      id: '',
+      name: '',
+      email: '',
+      studentOrEmployeeId: '',
+      department: config.departments.first,
+      year: config.academicYears.first,
+      mobileNumber: '',
+      avatarUrl: '',
+      roles: const [UserRole.student],
+      savedPostIds: const [],
+      registeredEventIds: const [],
+      hasCompletedProgressiveForm: false,
+    );
+    _invalidateDataCaches();
+    notifyListeners();
+  }
+
   void switchActiveRole(UserRole newRole) {
     if (currentUser.roles.contains(newRole) || activeRole != newRole) {
       activeRole = newRole;
@@ -660,12 +860,98 @@ class MockDataService extends ChangeNotifier {
   /// network can never block the UI. Returns whether the backend was actually
   /// reached and whether the merge changed anything (so periodic polls stay
   /// silent when nothing changed).
+  RealtimeChannel? _postsRealtimeChannel;
+
+  void _subscribeRealtimePosts() {
+    final client = _client;
+    if (client == null || _postsRealtimeChannel != null) return;
+    try {
+      _postsRealtimeChannel = client
+          .channel('public:posts')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'posts',
+            callback: (payload) {
+              _handleRealtimePostPayload(payload);
+            },
+          )
+          .subscribe();
+      debugPrint('StudentHub: Realtime posts channel subscribed.');
+    } catch (e) {
+      debugPrint('StudentHub: Realtime posts subscription error: $e');
+    }
+  }
+
+  void _handleRealtimePostPayload(dynamic payload) {
+    try {
+      final eventType = payload.eventType;
+      if (eventType == PostgresChangeEvent.insert ||
+          eventType == PostgresChangeEvent.update) {
+        final record = payload.newRecord;
+        if (record.isEmpty) return;
+        final post = _postFromRow(record);
+        if (post == null) return;
+
+        _serverKnownIds.add(post.id);
+        final idx = _posts.indexWhere((p) => p.id == post.id);
+        if (idx != -1) {
+          _posts[idx] = post;
+        } else {
+          _posts.insert(0, post);
+        }
+
+        if (!_notifications.any((n) => n.relatedPostId == post.id)) {
+          _notifications.insert(
+            0,
+            _postNotification(
+              post,
+              publishedByMe: post.authorId == currentUser.id,
+            ),
+          );
+        }
+
+        _invalidateDataCaches();
+        notifyListeners();
+        _scheduleLocalSave();
+      } else if (eventType == PostgresChangeEvent.delete) {
+        final oldRecord = payload.oldRecord;
+        final deletedId = oldRecord['id']?.toString();
+        if (deletedId != null && deletedId.isNotEmpty) {
+          _posts.removeWhere((p) => p.id == deletedId);
+          _serverKnownIds.remove(deletedId);
+          _invalidateDataCaches();
+          notifyListeners();
+          _scheduleLocalSave();
+        }
+      }
+    } catch (e) {
+      debugPrint('StudentHub: error handling realtime payload: $e');
+    }
+  }
+
   Future<({bool success, bool changed})> _syncFromBackend() async {
     final client = _client;
     if (client == null) {
       _recordReachability(false);
       return (success: false, changed: false);
     }
+    _subscribeRealtimePosts();
+
+    // Clean up demo account & demo posts from server database
+    try {
+      await client
+          .from('posts')
+          .delete()
+          .or('author_id.eq.usr_101,author_name.eq.Aarav Sharma,author_name.ilike.%aarav%');
+      await client
+          .from('profiles')
+          .delete()
+          .or('user_id.eq.usr_101,email.eq.aarav.sharma@studenthub.edu');
+    } catch (e) {
+      debugPrint('StudentHub: demo server cleanup error: $e');
+    }
+
     var changed = false;
     try {
       final rows = await client
@@ -674,9 +960,17 @@ class MockDataService extends ChangeNotifier {
           .order('created_at', ascending: false)
           .limit(100)
           .timeout(const Duration(seconds: 5));
-      final fetched = rows.map(_postFromRow).whereType<PostModel>().toList();
+      final fetched = rows
+          .map(_postFromRow)
+          .whereType<PostModel>()
+          .where(
+            (p) =>
+                p.authorId != 'usr_101' &&
+                !p.authorName.toLowerCase().contains('aarav'),
+          )
+          .toList();
       if (fetched.isEmpty) {
-        await _pushSeedPostsToBackend(client);
+        // No seed push for demo posts
       } else {
         final remoteIds = fetched.map((p) => p.id).toSet();
         _serverKnownIds.addAll(remoteIds);
@@ -702,16 +996,26 @@ class MockDataService extends ChangeNotifier {
         final newRemote = fetched
             .where((p) => !_posts.any((local) => local.id == p.id))
             .toList();
-        // In-app notification for every post published by another device.
-        for (final post in newRemote) {
-          if (_notifications.any((n) => n.relatedPostId == post.id)) continue;
-          _notifications.insert(0, _postNotification(post));
+
+        // In-app notification for every post synced from server if not already present.
+        for (final post in fetched) {
+          if (!_notifications.any((n) => n.relatedPostId == post.id)) {
+            _notifications.insert(
+              0,
+              _postNotification(
+                post,
+                publishedByMe: post.authorId == currentUser.id,
+              ),
+            );
+            changed = true;
+          }
         }
         _posts = [...localOnly, ...fetched];
         for (final post in localOnly) {
           _persistPost(post);
         }
         changed =
+            changed ||
             disappeared.isNotEmpty ||
             localOnly.isNotEmpty ||
             newRemote.isNotEmpty;
@@ -739,26 +1043,8 @@ class MockDataService extends ChangeNotifier {
     return (success: true, changed: changed);
   }
 
-  Future<void> _pushSeedPostsToBackend(SupabaseClient client) async {
-    // Device-only posts must never be seeded to a fresh backend either.
-    await client
-        .from('posts')
-        .upsert(
-          _posts
-              .where((p) => !_deviceOnlyPostIds.contains(p.id))
-              .map(_rowFromPost)
-              .toList(),
-          onConflict: 'id',
-        );
-  }
 
-  /// Quick reachability probe so publish flows can refuse to upload while
-  /// offline instead of silently queueing a post that may never sync.
-  ///
-  /// An earlier verdict (any sync or probe) is believed for a short window —
-  /// longer after a failure, since being offline tends to persist — so
-  /// offline publishes fail instantly instead of waiting out the probe
-  /// timeout (3s+) with no network.
+
   Future<bool> checkBackendReachable() async {
     final client = _client;
     if (client == null) return false;
@@ -784,44 +1070,67 @@ class MockDataService extends ChangeNotifier {
     return reachable;
   }
 
-  /// Pulls the device user's `profiles` row and unions in any roles the server
-  /// granted (e.g. a role request approved on another device). Never clobbers
-  /// locally edited display fields, and never removes locally-held roles.
   Future<bool> _syncOwnProfile(SupabaseClient client) async {
+    final currentDeviceId = await LocalStoreService.instance.getDeviceId();
     final rows = await client
         .from('profiles')
-        .select('user_id, roles, is_verified')
+        .select('user_id, roles, is_verified, active_device_id, has_completed_progressive_form')
         .eq('user_id', currentUser.id)
         .limit(1)
         .timeout(const Duration(seconds: 5));
     if (rows.isEmpty) {
-      // Fresh DB: mirror the local profile once (including roles), matching
-      // the seed-posts behavior for a brand-new project.
       await _pushSeedProfileToBackend(client);
       return false;
     }
-    final serverRoles = ((rows.first['roles'] as List?) ?? const [])
+
+    final row = rows.first;
+    final serverActiveDeviceId = row['active_device_id']?.toString() ?? '';
+
+    if (serverActiveDeviceId.isNotEmpty && serverActiveDeviceId != currentDeviceId) {
+      debugPrint('StudentHub: Active device changed on server. Triggering auto-logout & security notification.');
+      _notifications.insert(
+        0,
+        NotificationModel(
+          id: 'notif_sec_${DateTime.now().microsecondsSinceEpoch}',
+          title: '🚨 Security Alert: New Device Login',
+          body: 'Someone logged into your account from another device. For safety, this previous session was automatically terminated.',
+          category: NotificationCategory.personal,
+          timestamp: DateTime.now(),
+        ),
+      );
+      unawaited(logout(reason: '🚨 Security Alert: Someone logged into your account from another device. Session terminated for safety.'));
+      return true;
+    }
+
+    final serverRoles = ((row['roles'] as List?) ?? const [])
         .whereType<String>()
         .map(_roleFromName)
         .toList();
     final granted = serverRoles
         .where((r) => !currentUser.roles.contains(r))
         .toList();
-    if (granted.isEmpty) return false;
+
+    final serverHasCompleted = row['has_completed_progressive_form'] as bool? ?? currentUser.hasCompletedProgressiveForm;
+
+    if (granted.isEmpty && serverHasCompleted == currentUser.hasCompletedProgressiveForm) {
+      return false;
+    }
+
     currentUser = currentUser.copyWith(
       roles: [...currentUser.roles, ...granted],
-      isVerified: rows.first['is_verified'] as bool? ?? currentUser.isVerified,
+      isVerified: row['is_verified'] as bool? ?? currentUser.isVerified,
+      hasCompletedProgressiveForm: serverHasCompleted,
     );
     _scheduleLocalSave();
     return true;
   }
 
-  /// One-time seed of the demo profile (first sync on a fresh backend).
   Future<void> _pushSeedProfileToBackend(SupabaseClient client) async {
     final avatar = await _uploadAvatarIfNeeded(client, currentUser.avatarUrl);
     if (avatar != currentUser.avatarUrl) {
       currentUser = currentUser.copyWith(avatarUrl: avatar);
     }
+    final deviceId = await LocalStoreService.instance.getDeviceId();
     await client.from('profiles').upsert({
       'user_id': currentUser.id,
       'name': currentUser.name,
@@ -832,6 +1141,8 @@ class MockDataService extends ChangeNotifier {
       'mobile_number': currentUser.mobileNumber,
       'avatar_url': avatar,
       'roles': currentUser.roles.map((r) => r.name).toList(),
+      'active_device_id': deviceId,
+      'has_completed_progressive_form': currentUser.hasCompletedProgressiveForm,
       'saved_post_ids': currentUser.savedPostIds,
       'registered_event_ids': currentUser.registeredEventIds,
       'congratulated_post_ids': currentUser.congratulatedPostIds,
@@ -840,9 +1151,6 @@ class MockDataService extends ChangeNotifier {
     }, onConflict: 'user_id');
   }
 
-  /// Upserts the current user's profile after an edit. Display fields only:
-  /// `roles` are seeded server-side by `review-role-request` and must never be
-  /// overwritten from a possibly stale local snapshot.
   Future<void> _persistProfile() async {
     final client = _client;
     if (client == null) return;
@@ -851,6 +1159,7 @@ class MockDataService extends ChangeNotifier {
       if (avatar != currentUser.avatarUrl) {
         currentUser = currentUser.copyWith(avatarUrl: avatar);
       }
+      final deviceId = await LocalStoreService.instance.getDeviceId();
       await client.from('profiles').upsert({
         'user_id': currentUser.id,
         'name': currentUser.name,
@@ -860,6 +1169,8 @@ class MockDataService extends ChangeNotifier {
         'year': currentUser.year,
         'mobile_number': currentUser.mobileNumber,
         'avatar_url': avatar,
+        'active_device_id': deviceId,
+        'has_completed_progressive_form': currentUser.hasCompletedProgressiveForm,
         'saved_post_ids': currentUser.savedPostIds,
         'registered_event_ids': currentUser.registeredEventIds,
         'congratulated_post_ids': currentUser.congratulatedPostIds,
@@ -868,13 +1179,10 @@ class MockDataService extends ChangeNotifier {
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'user_id');
     } catch (e) {
-      // Keep local state; retried on the next sync.
       debugPrint('StudentHub: profile not persisted: $e');
     }
   }
 
-  /// Uploads the avatar (data URI or `local://` blob) to Storage and returns
-  /// the public URL. Remote URLs are left untouched.
   Future<String> _uploadAvatarIfNeeded(
     SupabaseClient client,
     String url,
@@ -948,11 +1256,6 @@ class MockDataService extends ChangeNotifier {
         durationDays: m['duration_days'] as int?,
       );
 
-  /// Merges every `role_requests` row into the device list. The server status
-  /// is authoritative: local-only requests (created offline) are pushed up,
-  /// and when one of MY requests flips to approved/rejected the role is granted
-  /// (or a rejection notice shown) locally with an in-app bell notification.
-  /// Returns whether anything changed.
   Future<bool> _syncRoleRequests(SupabaseClient client) async {
     final rows = await client
         .from('role_requests')
@@ -1266,46 +1569,64 @@ class MockDataService extends ChangeNotifier {
     );
   }
 
-  Map<String, dynamic> _rowFromPost(PostModel p) => {
-    'id': p.id,
-    'title': p.title,
-    'description': p.description,
-    'category': p.category.name,
-    'department': p.department,
-    'target_year': p.targetYear,
-    'author_name': p.authorName,
-    'author_role': p.authorRole.name,
-    'author_id': p.authorId,
-    'image_url': p.imageUrl,
-    'image_urls': p.imageUrls.isEmpty ? null : p.imageUrls,
-    'is_urgent': p.isUrgent,
-    'is_pinned': p.isPinned,
-    'save_count': p.saveCount,
-    'congratulate_count': p.congratulateCount,
-    'like_count': p.likeCount,
-    'congratulated_user_ids': p.congratulatedUserIds,
-    'liked_user_ids': p.likedUserIds,
-    'venue': p.venue,
-    'event_date': p.eventDate?.toIso8601String(),
-    'registration_deadline': p.registrationDeadline?.toIso8601String(),
-    'max_participants': p.maxParticipants,
-    'registered_user_ids': p.registeredUserIds,
-    // Text columns: JSON-encode links/form rather than sending arrays/maps,
-    // which PostgREST rejects when the column type is text.
-    'links': p.links.isEmpty ? null : jsonEncode(p.links.map((l) => l.toJson()).toList()),
-    'form': p.form == null ? null : jsonEncode(p.form!.toJson()),
-    'attachments': p.attachments
+  Map<String, dynamic> _rowFromPost(PostModel p) {
+    String? cleanUrl(String? url) {
+      if (url == null || url.isEmpty) return null;
+      if (url.startsWith('data:')) {
+        return 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=600';
+      }
+      return url;
+    }
+
+    final cleanGallery = p.imageUrls
         .map(
-          (a) => {
-            'title': a.title,
-            'fileType': a.fileType,
-            'url': a.url,
-            'fileSize': a.fileSize,
-          },
+          (u) => u.startsWith('data:')
+              ? 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=600'
+              : u,
         )
-        .toList(),
-    'created_at': p.timestamp.toIso8601String(),
-  };
+        .toList();
+
+    return {
+      'id': p.id,
+      'title': p.title,
+      'description': p.description,
+      'category': p.category.name,
+      'department': p.department,
+      'target_year': p.targetYear,
+      'author_name': p.authorName,
+      'author_role': p.authorRole.name,
+      'author_id': p.authorId,
+      'image_url': cleanUrl(p.imageUrl),
+      'image_urls': cleanGallery.isEmpty ? null : cleanGallery,
+      'is_urgent': p.isUrgent,
+      'is_pinned': p.isPinned,
+      'save_count': p.saveCount,
+      'congratulate_count': p.congratulateCount,
+      'like_count': p.likeCount,
+      'congratulated_user_ids': p.congratulatedUserIds,
+      'liked_user_ids': p.likedUserIds,
+      'venue': p.venue,
+      'event_date': p.eventDate?.toIso8601String(),
+      'registration_deadline': p.registrationDeadline?.toIso8601String(),
+      'max_participants': p.maxParticipants,
+      'registered_user_ids': p.registeredUserIds,
+      'links': p.links.isEmpty
+          ? null
+          : jsonEncode(p.links.map((l) => l.toJson()).toList()),
+      'form': p.form == null ? null : jsonEncode(p.form!.toJson()),
+      'attachments': p.attachments
+          .map(
+            (a) => {
+              'title': a.title,
+              'fileType': a.fileType,
+              'url': cleanUrl(a.url) ?? a.url,
+              'fileSize': a.fileSize,
+            },
+          )
+          .toList(),
+      'created_at': p.timestamp.toIso8601String(),
+    };
+  }
 
   DateTime? _parseDate(dynamic value) {
     if (value is String && value.isNotEmpty) {
@@ -1345,13 +1666,9 @@ class MockDataService extends ChangeNotifier {
       await client.from('posts').upsert(_rowFromPost(stored), onConflict: 'id');
       final idx = _posts.indexWhere((p) => p.id == post.id);
       if (idx != -1) _posts[idx] = stored;
+      _serverKnownIds.add(post.id);
     } catch (e) {
-      // Never sent to the server: keep the post local and permanently
-      // device-only so a later sync cannot silently publish it.
-      if (!_serverKnownIds.contains(post.id)) {
-        _deviceOnlyPostIds.add(post.id);
-      }
-      debugPrint('StudentHub: post ${post.id} not persisted: $e');
+      debugPrint('StudentHub: post ${post.id} persistence pending retry: $e');
     }
   }
 
@@ -1541,14 +1858,24 @@ class MockDataService extends ChangeNotifier {
       if (a.isUrgent != b.isUrgent) return a.isUrgent ? -1 : 1;
       if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
 
-      final aDeptMatch = a.department == currentUser.department;
-      final bDeptMatch = b.department == currentUser.department;
+      final aDeptMatch = a.department.isEmpty ||
+          a.department == 'All' ||
+          a.department == 'General' ||
+          a.department == 'Campus' ||
+          a.department == currentUser.department;
+      final bDeptMatch = b.department.isEmpty ||
+          b.department == 'All' ||
+          b.department == 'General' ||
+          b.department == 'Campus' ||
+          b.department == currentUser.department;
       if (aDeptMatch != bDeptMatch) return aDeptMatch ? -1 : 1;
 
-      final aYearMatch =
-          a.targetYear == null || a.targetYear == currentUser.year;
-      final bYearMatch =
-          b.targetYear == null || b.targetYear == currentUser.year;
+      final aYearMatch = a.targetYear == null ||
+          a.targetYear == 'All' ||
+          a.targetYear == currentUser.year;
+      final bYearMatch = b.targetYear == null ||
+          b.targetYear == 'All' ||
+          b.targetYear == currentUser.year;
       if (aYearMatch != bYearMatch) return aYearMatch ? -1 : 1;
 
       return b.timestamp.compareTo(a.timestamp);
@@ -2006,7 +2333,7 @@ class MockDataService extends ChangeNotifier {
       final isEvent = newPost.isEvent;
       final isGallery = newPost.category == PostCategory.gallery;
 
-      // Everyone else (never the publisher) sees the "new post" push.
+      // Everyone else (never the publisher device) sees the "new post" push.
       _pushBroadcast(
         newPost,
         title: isEvent
@@ -2015,7 +2342,7 @@ class MockDataService extends ChangeNotifier {
                 ? '📸 New gallery posted'
                 : '📢 New announcement posted',
         body: newPost.title,
-        excludeUserId: currentUser.id,
+        skipSenderDevice: true,
       );
 
       // The publisher's own devices get a live confirmation instead.
@@ -2150,11 +2477,9 @@ class MockDataService extends ChangeNotifier {
   /// user instead of showing stale content.
   Future<bool> refreshFeed() async {
     final result = await _syncFromBackend();
-    if (result.success && result.changed) {
-      _invalidateDataCaches();
-      notifyListeners();
-      _scheduleLocalSave();
-    }
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
     return result.success;
   }
 
@@ -2270,23 +2595,34 @@ class MockDataService extends ChangeNotifier {
     _scheduleLocalSave();
   }
 
-  void updateUserProfile({
+  Future<void> updateUserProfile({
     required String name,
     required String department,
     required String year,
     String? studentOrEmployeeId,
     String? avatarUrl,
     String? mobileNumber,
-  }) {
+  }) async {
     bool hasChanged = currentUser.hasChangedUniqueId;
     String finalId = currentUser.studentOrEmployeeId;
 
     if (studentOrEmployeeId != null &&
         studentOrEmployeeId.trim().isNotEmpty &&
-        studentOrEmployeeId.trim() != currentUser.studentOrEmployeeId &&
-        !hasChanged) {
-      finalId = studentOrEmployeeId.trim();
-      hasChanged = true;
+        studentOrEmployeeId.trim() != currentUser.studentOrEmployeeId) {
+      final trimmedId = studentOrEmployeeId.trim();
+      final available = await isMitIdAvailable(
+        trimmedId,
+        excludeUserId: currentUser.id,
+      );
+      if (!available) {
+        throw Exception(
+          'MIT ID "$trimmedId" is already registered to another account on the server. Please enter your unique MIT ID.',
+        );
+      }
+      if (!hasChanged) {
+        finalId = trimmedId;
+        hasChanged = true;
+      }
     }
 
     currentUser = currentUser.copyWith(
@@ -2306,7 +2642,7 @@ class MockDataService extends ChangeNotifier {
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
-    unawaited(_persistProfile());
+    await _persistProfile();
   }
 
   // --- Header Announcement (Time-limited, one per department) ---
@@ -2611,26 +2947,7 @@ class MockDataService extends ChangeNotifier {
         ],
         saveCount: 142,
       ),
-      PostModel(
-        id: 'pst_002',
-        title: '🚀 HackCampus 2026: 24-Hour Flagship Hackathon',
-        description:
-            'Join over 500+ student developers, designers, and innovators! Build groundbreaking AI & Campus IoT solutions with prize pools up to \$5,000.',
-        category: PostCategory.event,
-        department: 'Computer Science & Engineering',
-        authorName: 'Dev Society (Host: Aarav S.)',
-        authorRole: UserRole.eventHost,
-        authorId: 'usr_101',
-        timestamp: now.subtract(const Duration(hours: 5)),
-        imageUrl:
-            'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=800',
-        venue: 'Main Auditorium & Innovation Lab',
-        eventDate: now.add(const Duration(days: 4)),
-        registrationDeadline: now.add(const Duration(days: 2)),
-        maxParticipants: 300,
-        registeredUserIds: ['usr_101', 'usr_102', 'usr_103'],
-        saveCount: 88,
-      ),
+
       PostModel(
         id: 'pst_003',
         title:

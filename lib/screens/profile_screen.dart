@@ -97,15 +97,61 @@ class _ProfileScreenState extends State<ProfileScreen>
       appBar: AppBar(
         title: const Text('My Profile'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Edit Profile Details',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => const EditProfileModal(),
-              );
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings & Account',
+            onSelected: (val) {
+              if (val == 'edit') {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => const EditProfileModal(),
+                );
+              } else if (val == 'logout') {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Log Out'),
+                    content: const Text('Are you sure you want to log out of StudentHub?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          dataService.logout();
+                        },
+                        child: const Text('Log Out', style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                );
+              }
             },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Edit Profile Details'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout_rounded, size: 18, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Log Out', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -205,10 +251,26 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                            if (user.mobileNumber.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.phone_outlined, size: 13, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    user.mobileNumber,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       ),
-                      // Requirement 4: Edit Details button over profile tab
                       IconButton(
                         icon: const Icon(Icons.edit_note, color: Colors.blue),
                         tooltip: 'Edit Profile Details',

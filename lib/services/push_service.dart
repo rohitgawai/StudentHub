@@ -27,6 +27,10 @@ class PushService {
   final ValueNotifier<PostCategory?> openCategory =
       ValueNotifier<PostCategory?>(null);
 
+  /// Set when the user taps a notification targeting a specific post; the app
+  /// opens the post detail modal directly.
+  final ValueNotifier<String?> targetPostId = ValueNotifier<String?>(null);
+
   MockDataService? _dataService;
   bool _initialized = false;
 
@@ -136,9 +140,13 @@ class PushService {
 
   void _onMessageOpenedApp(RemoteMessage message) {
     final category = message.data['category'];
+    final postId = message.data['post_id']?.toString();
     openCategory.value = 'event' == category || 'workshop' == category
         ? PostCategory.event
         : PostCategory.announcement;
+    if (postId != null && postId.isNotEmpty) {
+      targetPostId.value = postId;
+    }
     _maybeSyncAfterPush(message.data);
   }
 }

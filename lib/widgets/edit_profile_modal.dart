@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/mock_data_service.dart';
 import 'custom_dropdown.dart';
+import 'mit_id_input_field.dart';
 
 class EditProfileModal extends StatefulWidget {
   const EditProfileModal({super.key});
@@ -116,22 +117,30 @@ class _EditProfileModalState extends State<EditProfileModal> {
                 const SizedBox(height: 12),
 
                 // Unique Student ID (Editable ONLY ONCE)
-                TextFormField(
-                  controller: idController,
-                  enabled: !user.hasChangedUniqueId,
-                  decoration: InputDecoration(
-                    labelText: 'MIT Unique Student/Employee ID',
-                    prefixIcon: const Icon(Icons.badge_outlined),
-                    border: const OutlineInputBorder(),
-                    helperText: user.hasChangedUniqueId
-                        ? '🔒 Locked: Unique ID can only be changed once'
-                        : '⚠️ Note: Unique ID can be updated ONLY ONCE',
-                    helperStyle: TextStyle(
-                      color: user.hasChangedUniqueId ? Colors.red : Colors.orange.shade800,
-                      fontWeight: FontWeight.w600,
+                if (user.hasChangedUniqueId)
+                  TextFormField(
+                    controller: idController,
+                    enabled: false,
+                    decoration: const InputDecoration(
+                      labelText: 'MIT Unique Student/Employee ID',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                      border: OutlineInputBorder(),
+                      helperText: '🔒 Locked: Unique ID can only be changed once',
+                      helperStyle: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
+                  )
+                else
+                  MitIdInputField(
+                    initialValue: idController.text,
+                    department: selectedDepartment,
+                    year: selectedYear,
+                    onChanged: (val) {
+                      idController.text = val;
+                    },
                   ),
-                ),
                 const SizedBox(height: 12),
 
                 // Mobile Number (used for registrations & event contact)
@@ -172,24 +181,35 @@ class _EditProfileModalState extends State<EditProfileModal> {
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
                       if (!_formKey.currentState!.validate()) return;
-
-                      dataService.updateUserProfile(
-                        name: nameController.text.trim(),
-                        department: selectedDepartment,
-                        year: selectedYear,
-                        studentOrEmployeeId: idController.text.trim(),
-                        mobileNumber: mobileController.text.trim(),
-                      );
-
-                      Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('✅ Profile details updated successfully!'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
+                      try {
+                        await dataService.updateUserProfile(
+                          name: nameController.text.trim(),
+                          department: selectedDepartment,
+                          year: selectedYear,
+                          studentOrEmployeeId: idController.text.trim(),
+                          mobileNumber: mobileController.text.trim(),
+                        );
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('✅ Profile details updated successfully!'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('⚠️ $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
                     },
                     child: const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   ),

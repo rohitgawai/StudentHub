@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
 
   const { data: devices, error } = await supabase
     .from('device_tokens')
-    .select('token, user_id')
+    .select('token, user_id, device_id')
   if (error) {
     console.error('fetch device_tokens failed', error.message)
     return new Response('Internal error', { status: 500 })
@@ -97,9 +97,9 @@ Deno.serve(async (req) => {
         : true)
     .filter((d) => {
       if (skip_sender_device === false) return true
-      return device_id
-        ? String(d.device_id ?? '') !== device_id
-        : d.user_id !== author_id
+      const isSenderDevice = device_id && String(d.device_id ?? '') === device_id
+      const isAuthorUser = author_id && String(d.user_id ?? '') === author_id
+      return !isSenderDevice && !isAuthorUser
     })
     .map((d) => String(d.token))
     .filter((t) => t.length > 0)

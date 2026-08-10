@@ -86,12 +86,13 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
                 Row(
                   children: [
                     IconButton(
-                      icon: Icon(isEditing ? Icons.close : Icons.edit, color: Colors.white),
-                      tooltip: 'Edit / Update Photo',
+                      icon: Icon(isEditing ? Icons.arrow_back : Icons.edit, color: Colors.white),
+                      tooltip: isEditing ? 'Back to Photo' : 'Edit / Update Photo',
                       onPressed: () => setState(() => isEditing = !isEditing),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, color: Colors.white),
+                      tooltip: 'Close',
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
@@ -160,7 +161,7 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
                       ),
                       icon: const Icon(Icons.upload_file_rounded),
                       label: const Text(
-                        '📁 Upload Photo from Device Storage',
+                        'Upload Photo',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       onPressed: _pickAvatarFromDevice,

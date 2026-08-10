@@ -325,6 +325,43 @@ class _FormFillScreenState extends State<FormFillScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
           children: [
+            if (post.authorId == _service.currentUser.id || _service.currentUser.hasRole(UserRole.faculty)) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade400),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.remove_red_eye_outlined, color: Colors.amber.shade900, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '👁️ Host Form Preview Mode',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: Colors.amber.shade900,
+                            ),
+                          ),
+                          const Text(
+                            'You are reviewing your published form. Submissions are disabled for the creator.',
+                            style: TextStyle(fontSize: 11, color: Colors.black87),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             // Hero card with the post title
             Container(
               padding: const EdgeInsets.all(16),
@@ -467,23 +504,34 @@ class _FormFillScreenState extends State<FormFillScreen> {
           ),
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: accent,
+              backgroundColor: (post.authorId == _service.currentUser.id || _service.currentUser.hasRole(UserRole.faculty))
+                  ? Colors.grey.shade400
+                  : accent,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            icon: const Icon(Icons.send_outlined, size: 19),
+            icon: Icon(
+              (post.authorId == _service.currentUser.id || _service.currentUser.hasRole(UserRole.faculty))
+                  ? Icons.lock_outline
+                  : Icons.send_outlined,
+              size: 19,
+            ),
             label: Text(
-              _submitting
-                  ? 'Submitting…'
-                  : isEvent
-                      ? 'Register for Event'
-                      : 'Submit Response',
+              (post.authorId == _service.currentUser.id || _service.currentUser.hasRole(UserRole.faculty))
+                  ? 'Host Preview Mode (Disabled)'
+                  : _submitting
+                      ? 'Submitting…'
+                      : isEvent
+                          ? 'Register for Event'
+                          : 'Submit Response',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            onPressed: _submitting || submitted ? null : _submit,
+            onPressed: (_submitting || submitted || post.authorId == _service.currentUser.id || _service.currentUser.hasRole(UserRole.faculty))
+                ? null
+                : _submit,
           ),
         ),
       ),
