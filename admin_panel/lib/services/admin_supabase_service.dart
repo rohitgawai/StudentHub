@@ -237,7 +237,7 @@ class AdminSupabaseService extends ChangeNotifier {
       final response = await _client
           .from('role_requests')
           .select()
-          .order('created_at', ascending: false);
+          .order('submitted_at', ascending: false);
 
       final List<dynamic> data = response as List<dynamic>;
       _roleRequests = data
@@ -264,7 +264,7 @@ class AdminSupabaseService extends ChangeNotifier {
       
       await _client.from('role_requests').update({
         'status': status,
-        'review_notes': note ?? (approve ? 'Approved by Admin' : 'Rejected by Admin'),
+        'admin_notes': note ?? (approve ? 'Approved by Admin' : 'Rejected by Admin'),
       }).eq('id', requestId);
 
       if (approve) {

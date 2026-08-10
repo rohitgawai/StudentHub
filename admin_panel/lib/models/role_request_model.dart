@@ -38,11 +38,13 @@ class RoleRequestModel {
       reason: map['reason']?.toString() ?? map['notes']?.toString() ?? 'Role application submitted.',
       proofDocumentUrl: map['proof_url']?.toString() ?? map['document_url']?.toString(),
       status: map['status']?.toString() ?? 'pending',
-      createdAt: map['created_at'] != null 
-          ? DateTime.parse(map['created_at'].toString()) 
-          : DateTime.now(),
+      createdAt: map['submitted_at'] != null
+          ? DateTime.parse(map['submitted_at'].toString())
+          : map['created_at'] != null
+              ? DateTime.parse(map['created_at'].toString())
+              : DateTime.now(),
       reviewerId: map['reviewer_id']?.toString(),
-      reviewNotes: map['review_notes']?.toString(),
+      reviewNotes: map['admin_notes']?.toString() ?? map['review_notes']?.toString(),
     );
   }
 }

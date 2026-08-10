@@ -29,18 +29,24 @@ class ContentModerationScreen extends StatelessWidget {
                 child: const Icon(Icons.gavel_rounded, color: AdminTheme.statusDanger, size: 28),
               ),
               const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Content & Post Moderation',
-                    style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                  Text(
-                    'Review reported posts and keep your student community safe.',
-                    style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 13),
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Content & Post Moderation',
+                      style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    Text(
+                      'Review reported posts and keep your student community safe.',
+                      style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -125,8 +131,10 @@ class ContentModerationScreen extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
+                            Wrap(
+                              alignment: WrapAlignment.end,
+                              spacing: 10,
+                              runSpacing: 10,
                               children: [
                                 OutlinedButton.icon(
                                   style: OutlinedButton.styleFrom(
@@ -139,7 +147,6 @@ class ContentModerationScreen extends StatelessWidget {
                                   icon: const Icon(Icons.close_rounded, size: 18),
                                   label: const Text('Dismiss Report'),
                                 ),
-                                const SizedBox(width: 12),
                                 ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AdminTheme.statusDanger,

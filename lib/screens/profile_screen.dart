@@ -12,6 +12,7 @@ import '../widgets/profile_avatar_zoom_dialog.dart';
 import '../widgets/edit_profile_modal.dart';
 import '../widgets/app_image.dart';
 import 'dashboards/admin_dashboard_screen.dart';
+import 'role_application_status_screen.dart';
 import 'dashboards/faculty_dashboard_screen.dart';
 import 'dashboards/event_host_dashboard_screen.dart';
 
@@ -62,9 +63,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     final registeredEvents = posts
         .where((p) => user.registeredEventIds.contains(p.id))
         .toList();
-    final myRoleRequests = roleRequests
-        .where((r) => r.userId == user.id)
+    final pendingApplications = roleRequests
+        .where((r) => r.userId == user.id && r.status == RoleRequestStatus.pending)
         .toList();
+    final pendingApplication =
+        pendingApplications.isEmpty ? null : pendingApplications.first;
 
     // Filter approved roles for dropdown (excluding Admin)
     final allowedSwitcherRoles = user.roles
@@ -443,16 +446,34 @@ class _ProfileScreenState extends State<ProfileScreen>
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => const RoleRequestModal(),
-                          );
+                          if (pendingApplication != null) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (c) => RoleApplicationStatusScreen(
+                                  application: pendingApplication,
+                                ),
+                              ),
+                            );
+                          } else {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => const RoleRequestModal(),
+                            );
+                          }
                         },
-                        icon: const Icon(Icons.add_moderator, size: 16),
+                        icon: Icon(
+                          pendingApplication != null
+                              ? Icons.hourglass_top
+                              : Icons.add_moderator,
+                          size: 16,
+                        ),
                         label: Text(
-                          showRoleExpiredNotice
-                              ? 'Re-Apply for Event Host / Faculty Role'
-                              : 'Apply for Event Host / Faculty Role',
+                          pendingApplication != null
+                              ? 'Application Under Review'
+                              : showRoleExpiredNotice
+                                  ? 'Re-Apply for Event Host / Faculty Role'
+                                  : 'Apply for Event Host / Faculty Role',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
@@ -598,55 +619,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                   ],
 
-                  // Role Requests Status Box
-                  if (myRoleRequests.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Role Application Statuses:',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          ...myRoleRequests.map(
-                            (req) => Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    '${req.requestedRole.displayName}: ',
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                  _buildStatusBadge(req.status),
-                                  if (req.isLimitedAccess &&
-                                      req.expiresAt != null) ...[
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${req.termLabel} • till ${_formatDate(req.expiresAt!)}',
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -733,44 +705,6 @@ class _ProfileScreenState extends State<ProfileScreen>
           color: isExpiringSoon
               ? Colors.orange.shade900
               : Colors.green.shade800,
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime dt) {
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-  }
-
-  Widget _buildStatusBadge(RoleRequestStatus status) {
-    Color color;
-    String label;
-    switch (status) {
-      case RoleRequestStatus.pending:
-        color = Colors.orange;
-        label = 'Pending Review';
-        break;
-      case RoleRequestStatus.approved:
-        color = Colors.green;
-        label = 'Approved';
-        break;
-      case RoleRequestStatus.rejected:
-        color = Colors.red;
-        label = 'Rejected';
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: color,
         ),
       ),
     );

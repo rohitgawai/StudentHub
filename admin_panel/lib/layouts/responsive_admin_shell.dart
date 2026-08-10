@@ -129,15 +129,18 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                 onPressed: () => Scaffold.of(ctx).openDrawer(),
               ),
             ),
-          Text(
-            _getTabTitle(_currentTab),
-            style: GoogleFonts.outfit(
-              fontSize: isDesktop ? 22 : 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+          Expanded(
+            child: Text(
+              _getTabTitle(_currentTab),
+              style: GoogleFonts.outfit(
+                fontSize: isDesktop ? 22 : 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
-          const Spacer(),
           // Live Online Pill Counter
           InkWell(
             onTap: () => setState(() => _currentTab = AdminTab.onlineUsers),

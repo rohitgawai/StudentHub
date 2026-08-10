@@ -13,25 +13,27 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<AdminSupabaseService>(context);
-    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 900;
+    final isMobile = width < 600;
 
     final pendingRoles = service.roleRequests.where((r) => r.status == 'pending').length;
     final pendingReports = service.reportedPosts.where((r) => r.status == 'pending').length;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isDesktop ? 24.0 : 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Banner Welcome Card
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(isDesktop ? 24.0 : 16.0),
             decoration: BoxDecoration(
               gradient: AdminTheme.primaryGradient,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: AdminTheme.primary.withOpacity(0.3),
+                  color: AdminTheme.primary.withValues(alpha: 0.3),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 )
@@ -50,14 +52,18 @@ class DashboardScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                       const SizedBox(height: 6),
                       Text(
                         'Manage your student community, approve role requests, and broadcast notices effortlessly.',
                         style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: Colors.white.withOpacity(0.9),
+                          fontSize: isDesktop ? 14 : 12,
+                          color: Colors.white.withValues(alpha: 0.9),
                         ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
                       ),
                     ],
                   ),
@@ -82,16 +88,16 @@ class DashboardScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // KPI Stats Grid
           GridView.count(
-            crossAxisCount: isDesktop ? 4 : 2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
+            crossAxisCount: isDesktop ? 4 : (isMobile ? 1 : 2),
+            crossAxisSpacing: 14,
+            mainAxisSpacing: 14,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: isDesktop ? 1.6 : 1.3,
+            childAspectRatio: isDesktop ? 1.6 : (isMobile ? 2.5 : 1.4),
             children: [
               _buildKpiCard(
                 title: 'Live Online Students',
@@ -127,7 +133,7 @@ class DashboardScreen extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
 
           // Section Header
           Text(
@@ -138,7 +144,7 @@ class DashboardScreen extends StatelessWidget {
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           Wrap(
             spacing: 12,
@@ -189,7 +195,7 @@ class DashboardScreen extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AdminTheme.surfaceCard,
             borderRadius: BorderRadius.circular(16),
@@ -202,28 +208,32 @@ class DashboardScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AdminTheme.textMuted,
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AdminTheme.textMuted,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
+                      color: color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(icon, color: color, size: 20),
+                    child: Icon(icon, color: color, size: 18),
                   ),
                 ],
               ),
               Text(
                 value,
                 style: GoogleFonts.outfit(
-                  fontSize: 28,
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
@@ -234,6 +244,8 @@ class DashboardScreen extends StatelessWidget {
                   fontSize: 11,
                   color: AdminTheme.textMuted,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ],
           ),
@@ -252,7 +264,7 @@ class DashboardScreen extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: AdminTheme.surfaceCard,
           borderRadius: BorderRadius.circular(12),

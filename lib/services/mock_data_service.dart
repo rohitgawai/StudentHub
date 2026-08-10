@@ -1352,27 +1352,41 @@ class MockDataService extends ChangeNotifier {
       if (remote.userId == currentUser.id &&
           (local == null || local.status != remote.status)) {
         if (remote.status == RoleRequestStatus.approved) {
-          if (_grantRoleFromRemote(remote)) changed = true;
+          if (_grantRoleFromRemote(remote)) {
+            changed = true;
+            unawaited(
+              _pushRoleDecision(
+                request: remote,
+                status: RoleRequestStatus.approved,
+                notes: remote.adminNotes,
+              ),
+            );
+          }
         } else if (remote.status == RoleRequestStatus.rejected &&
-            !_notifications.any(
-              (n) =>
-                  n.title == 'Role Application Update' &&
-                  n.body ==
-                      'Your application for ${remote.requestedRole.displayName} was reviewed.',
-            )) {
+            !_notifications.any((n) => n.relatedPostId == remote.id)) {
+          final hasNote =
+              remote.adminNotes != null && remote.adminNotes!.trim().isNotEmpty;
           _notifications.insert(
             0,
             NotificationModel(
               id: 'notif_${DateTime.now().microsecondsSinceEpoch}_${remote.id}_rev',
-              title: 'Role Application Update',
-              body:
-                  'Your application for ${remote.requestedRole.displayName} was reviewed.',
+              title: 'Role Application Rejected',
+              body: hasNote
+                  ? 'Your application for ${remote.requestedRole.displayName} was rejected. Reason: ${remote.adminNotes}'
+                  : 'Your application for ${remote.requestedRole.displayName} was rejected.',
               category: NotificationCategory.personal,
               timestamp: DateTime.now(),
               relatedPostId: remote.id,
             ),
           );
           changed = true;
+          unawaited(
+            _pushRoleDecision(
+              request: remote,
+              status: RoleRequestStatus.rejected,
+              notes: remote.adminNotes,
+            ),
+          );
         }
       }
     }
@@ -1404,14 +1418,18 @@ class MockDataService extends ChangeNotifier {
       );
     }
     if (_notifications.any((n) => n.relatedPostId == req.id)) return false;
+    final hasNote =
+        req.adminNotes != null && req.adminNotes!.trim().isNotEmpty;
     _notifications.insert(
       0,
       NotificationModel(
         id: 'notif_${DateTime.now().microsecondsSinceEpoch}_${req.id}_appr',
         title: 'Role Approved! 🎖️',
-        body: req.isLimitedAccess && req.expiresAt != null
-            ? 'Congratulations! Your temporary ${req.requestedRole.displayName} access is approved until ${_formatDate(req.expiresAt!)}.'
-            : 'Congratulations! Your application for ${req.requestedRole.displayName} was approved.',
+        body: hasNote
+            ? 'Congratulations! Your application for ${req.requestedRole.displayName} was approved. Message: ${req.adminNotes}'
+            : req.isLimitedAccess && req.expiresAt != null
+                ? 'Congratulations! Your temporary ${req.requestedRole.displayName} access is approved until ${_formatDate(req.expiresAt!)}.'
+                : 'Congratulations! Your application for ${req.requestedRole.displayName} was approved.',
         category: NotificationCategory.personal,
         timestamp: DateTime.now(),
         relatedPostId: req.id,
@@ -1470,6 +1488,7 @@ class MockDataService extends ChangeNotifier {
           _pushRoleDecision(
             request: req.first,
             status: status,
+            notes: notes,
           );
         }
       } else {
@@ -1482,17 +1501,27 @@ class MockDataService extends ChangeNotifier {
     }
   }
 
-  /// OS push to the applicant's device ("Role Approved / Reviewed") via the
+  /// OS push to the applicant's device ("Role Approved / Rejected") via the
   /// send-push function, targeted by user id. Best-effort.
   Future<void> _pushRoleDecision({
     required RoleRequestModel request,
     required RoleRequestStatus status,
+    String? notes,
   }) async {
     final client = _client;
     if (client == null) return;
     try {
       final deviceId = await LocalStoreService.instance.getDeviceId();
       final approved = status == RoleRequestStatus.approved;
+      final roleName = request.requestedRole.displayName;
+      final hasNote = notes != null && notes.trim().isNotEmpty;
+      final body = approved
+          ? hasNote
+              ? 'Congratulations! You are now $roleName.\nMessage: $notes'
+              : 'Congratulations! You are now $roleName.'
+          : hasNote
+              ? 'Your application for $roleName was rejected.\nReason: $notes'
+              : 'Your application for $roleName was rejected.';
       final res = await http
           .post(
             Uri.parse(SupabaseConfig.pushFunctionUrl),
@@ -1504,12 +1533,10 @@ class MockDataService extends ChangeNotifier {
               'type': 'role_update',
               'recipient_user_id': request.userId,
               'device_id': deviceId,
-              'title': approved ? '🎖️ Role Approved!' : 'Role Request Update',
-              'body': approved
-                  ? 'Congratulations! You are now '
-                        '${request.requestedRole.displayName}.'
-                  : 'Your application for '
-                        '${request.requestedRole.displayName} was reviewed.',
+              'title': approved
+                  ? '🎖️ Role Approved!'
+                  : '⛔ Role Request Rejected',
+              'body': body,
               'category': 'announcement',
             }),
           )
@@ -2859,11 +2886,14 @@ class MockDataService extends ChangeNotifier {
         NotificationModel(
           id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
           title: 'Role Approved! 🎖️',
-          body: req.isLimitedAccess && req.expiresAt != null
-              ? 'Congratulations! Your temporary ${req.requestedRole.displayName} access is approved until ${_formatDate(req.expiresAt!)}.'
-              : 'Congratulations! Your application for ${req.requestedRole.displayName} was approved.',
+          body: notes != null && notes.trim().isNotEmpty
+              ? 'Congratulations! Your application for ${req.requestedRole.displayName} was approved. Message: $notes'
+              : req.isLimitedAccess && req.expiresAt != null
+                  ? 'Congratulations! Your temporary ${req.requestedRole.displayName} access is approved until ${_formatDate(req.expiresAt!)}.'
+                  : 'Congratulations! Your application for ${req.requestedRole.displayName} was approved.',
           category: NotificationCategory.personal,
           timestamp: DateTime.now(),
+          relatedPostId: req.id,
         ),
       );
     } else if (status == RoleRequestStatus.rejected) {
@@ -2871,11 +2901,13 @@ class MockDataService extends ChangeNotifier {
         0,
         NotificationModel(
           id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
-          title: 'Role Application Update',
-          body:
-              'Your application for ${req.requestedRole.displayName} was reviewed.',
+          title: 'Role Application Rejected',
+          body: notes != null && notes.trim().isNotEmpty
+              ? 'Your application for ${req.requestedRole.displayName} was rejected. Reason: $notes'
+              : 'Your application for ${req.requestedRole.displayName} was rejected.',
           category: NotificationCategory.personal,
           timestamp: DateTime.now(),
+          relatedPostId: req.id,
         ),
       );
     }

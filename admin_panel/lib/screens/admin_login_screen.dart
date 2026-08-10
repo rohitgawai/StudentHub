@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/admin_theme.dart';
 import '../layouts/responsive_admin_shell.dart';
@@ -33,6 +34,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
     // Dedicated Credentials Check
     if (adminId == 'rohitgawai' && password == 'mit@34') {
+      await _persistAdminAuth();
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const ResponsiveAdminShell()),
@@ -49,6 +51,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       );
 
       if (response.user != null) {
+        await _persistAdminAuth();
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const ResponsiveAdminShell()),
@@ -62,6 +65,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       _isLoading = false;
       _errorMessage = 'Invalid Admin ID or Password. Please check credentials.';
     });
+  }
+
+  Future<void> _persistAdminAuth() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('admin_authenticated', true);
   }
 
   @override

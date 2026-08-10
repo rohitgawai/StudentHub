@@ -115,6 +115,7 @@ class _RoleRequestsScreenState extends State<RoleRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<AdminSupabaseService>(context);
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
 
     final filtered = service.roleRequests.where((r) {
       if (_selectedFilter == 'all') return true;
@@ -122,28 +123,34 @@ class _RoleRequestsScreenState extends State<RoleRequestsScreen> {
     }).toList();
 
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isDesktop ? 24.0 : 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Filter Row
-          Row(
+          // Responsive Filter Row
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
             children: [
               Text(
                 'Role Applications Queue',
-                style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.outfit(fontSize: isDesktop ? 20 : 18, fontWeight: FontWeight.bold, color: Colors.white),
               ),
-              const Spacer(),
-              _buildFilterChip('pending', 'Pending (${service.roleRequests.where((r) => r.status == 'pending').length})'),
-              const SizedBox(width: 8),
-              _buildFilterChip('approved', 'Approved'),
-              const SizedBox(width: 8),
-              _buildFilterChip('rejected', 'Rejected'),
-              const SizedBox(width: 8),
-              _buildFilterChip('all', 'All'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildFilterChip('pending', 'Pending (${service.roleRequests.where((r) => r.status == 'pending').length})'),
+                  _buildFilterChip('approved', 'Approved'),
+                  _buildFilterChip('rejected', 'Rejected'),
+                  _buildFilterChip('all', 'All'),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // List
           Expanded(
@@ -166,8 +173,8 @@ class _RoleRequestsScreenState extends State<RoleRequestsScreen> {
                     itemBuilder: (context, index) {
                       final req = filtered[index];
                       return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(20),
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: EdgeInsets.all(isDesktop ? 20.0 : 16.0),
                         decoration: BoxDecoration(
                           color: AdminTheme.surfaceCard,
                           borderRadius: BorderRadius.circular(16),
@@ -176,33 +183,47 @@ class _RoleRequestsScreenState extends State<RoleRequestsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
+                            // Header Row / Wrap
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 12,
+                              runSpacing: 10,
                               children: [
-                                CircleAvatar(
-                                  backgroundColor: AdminTheme.primary.withValues(alpha: 0.2),
-                                  child: Text(
-                                    req.userName.isNotEmpty ? req.userName[0].toUpperCase() : 'A',
-                                    style: GoogleFonts.outfit(color: AdminTheme.primaryLight, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        req.userName,
-                                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircleAvatar(
+                                      backgroundColor: AdminTheme.primary.withValues(alpha: 0.2),
+                                      child: Text(
+                                        req.userName.isNotEmpty ? req.userName[0].toUpperCase() : 'A',
+                                        style: GoogleFonts.outfit(color: AdminTheme.primaryLight, fontWeight: FontWeight.bold),
                                       ),
-                                      Text(
-                                        req.userEmail,
-                                        style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 12),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Flexible(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            req.userName,
+                                            style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                          ),
+                                          Text(
+                                            req.userEmail,
+                                            style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 12),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: req.status == 'approved'
                                         ? AdminTheme.statusOnline.withValues(alpha: 0.2)
@@ -212,7 +233,7 @@ class _RoleRequestsScreenState extends State<RoleRequestsScreen> {
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
-                                    'Requested Role: ${_formatRoleName(req.requestedRole)}',
+                                    'Requested: ${_formatRoleName(req.requestedRole)}',
                                     style: GoogleFonts.inter(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 12,
@@ -226,10 +247,10 @@ class _RoleRequestsScreenState extends State<RoleRequestsScreen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 12),
                             Text(
                               'Reason / Notes:',
-                              style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 12, fontWeight: FontWeight.w600),
+                              style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 11, fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 4),
                             Container(
@@ -245,34 +266,40 @@ class _RoleRequestsScreenState extends State<RoleRequestsScreen> {
                               ),
                             ),
                             const SizedBox(height: 14),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            // Footer Action Row / Wrap
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 12,
+                              runSpacing: 10,
                               children: [
                                 Text(
                                   'Applied: ${DateFormat('MMM dd, yyyy • hh:mm a').format(req.createdAt)}',
-                                  style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 12),
+                                  style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 11),
                                 ),
                                 if (req.status == 'pending')
-                                  Row(
+                                  Wrap(
+                                    spacing: 8,
                                     children: [
                                       OutlinedButton.icon(
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: AdminTheme.statusDanger,
                                           side: const BorderSide(color: AdminTheme.statusDanger),
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                         ),
                                         onPressed: () => _showReviewDialog(context, req, false),
-                                        icon: const Icon(Icons.close_rounded, size: 18),
-                                        label: const Text('Reject'),
+                                        icon: const Icon(Icons.close_rounded, size: 16),
+                                        label: const Text('Reject', style: TextStyle(fontSize: 12)),
                                       ),
-                                      const SizedBox(width: 12),
                                       ElevatedButton.icon(
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: AdminTheme.statusOnline,
                                           foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                         ),
                                         onPressed: () => _showReviewDialog(context, req, true),
-                                        icon: const Icon(Icons.check_rounded, size: 18),
-                                        label: const Text('Approve Role'),
+                                        icon: const Icon(Icons.check_rounded, size: 16),
+                                        label: const Text('Approve Role', style: TextStyle(fontSize: 12)),
                                       ),
                                     ],
                                   ),
@@ -300,6 +327,7 @@ class _RoleRequestsScreenState extends State<RoleRequestsScreen> {
       labelStyle: GoogleFonts.inter(
         color: isSelected ? Colors.white : AdminTheme.textMuted,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        fontSize: 12,
       ),
     );
   }

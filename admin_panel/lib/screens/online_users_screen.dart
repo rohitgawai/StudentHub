@@ -29,7 +29,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> {
     }).toList();
 
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(isDesktop ? 24.0 : 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -37,45 +37,52 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AdminTheme.statusOnline.withOpacity(0.15),
+                  color: AdminTheme.statusOnline.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.sensors_rounded, color: AdminTheme.statusOnline, size: 28),
+                child: const Icon(Icons.sensors_rounded, color: AdminTheme.statusOnline, size: 24),
               ),
-              const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Real-Time Active Sessions',
-                    style: GoogleFonts.outfit(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Real-Time Active Sessions',
+                      style: GoogleFonts.outfit(
+                        fontSize: isDesktop ? 20 : 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
-                  ),
-                  Text(
-                    'Currently ${service.onlineUsers.length} student(s) active on StudentHub',
-                    style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 13),
-                  ),
-                ],
+                    Text(
+                      'Currently ${service.onlineUsers.length} student(s) active on StudentHub',
+                      style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Search Box
           TextField(
             onChanged: (val) => setState(() => _searchQuery = val),
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.white, fontSize: 14),
             decoration: InputDecoration(
               hintText: 'Search online students by name, email, or MIT ID...',
-              hintStyle: GoogleFonts.inter(color: AdminTheme.textMuted),
-              prefixIcon: const Icon(Icons.search, color: AdminTheme.textMuted),
+              hintStyle: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 13),
+              prefixIcon: const Icon(Icons.search, color: AdminTheme.textMuted, size: 20),
               filled: true,
               fillColor: AdminTheme.surfaceCard,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: AdminTheme.borderDark),
@@ -86,7 +93,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // Content Grid / List
           Expanded(
@@ -104,6 +111,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> {
                         Text(
                           'When students open the mobile app, their sessions will appear here live.',
                           style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 12),
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
@@ -112,32 +120,32 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> {
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: isDesktop ? 3 : 1,
                       crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      mainAxisExtent: 130,
+                      mainAxisSpacing: 14,
+                      mainAxisExtent: 140,
                     ),
                     itemCount: filteredUsers.length,
                     itemBuilder: (context, index) {
                       final user = filteredUsers[index];
                       return Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: AdminTheme.surfaceCard,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AdminTheme.statusOnline.withOpacity(0.3)),
+                          border: Border.all(color: AdminTheme.statusOnline.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
                             Stack(
                               children: [
                                 CircleAvatar(
-                                  radius: 24,
-                                  backgroundColor: AdminTheme.primary.withOpacity(0.3),
+                                  radius: 22,
+                                  backgroundColor: AdminTheme.primary.withValues(alpha: 0.3),
                                   child: Text(
                                     user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'S',
                                     style: GoogleFonts.outfit(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 18,
+                                      fontSize: 16,
                                     ),
                                   ),
                                 ),
@@ -156,7 +164,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(width: 14),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,26 +172,28 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      Expanded(
+                                      Flexible(
                                         child: Text(
                                           user.fullName,
                                           style: GoogleFonts.inter(
                                             fontWeight: FontWeight.bold,
                                             color: Colors.white,
-                                            fontSize: 15,
+                                            fontSize: 14,
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      if (user.isVerifiedStudent)
-                                        const Icon(Icons.verified, color: AdminTheme.statusVerified, size: 16),
+                                      if (user.isVerifiedStudent) ...[
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.verified, color: AdminTheme.statusVerified, size: 15),
+                                      ],
                                     ],
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     user.email,
-                                    style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 12),
+                                    style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 11),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -193,7 +203,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: AdminTheme.primary.withOpacity(0.2),
+                                          color: AdminTheme.primary.withValues(alpha: 0.2),
                                           borderRadius: BorderRadius.circular(6),
                                         ),
                                         child: Text(
