@@ -473,8 +473,8 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                           ),
                         ],
 
-                        // Response form attached to a regular (non-event) post
-                        if (!_isEvent && post.form != null) ...[
+                        // Response form attached to a post (only display if creator actually built a form)
+                        if (!_isEvent && post.form != null && post.form!.title.trim().isNotEmpty && post.form!.fields.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           InkWell(
                             onTap: () => openRegistrationForm(context, post),

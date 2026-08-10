@@ -158,8 +158,13 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ],
       ),
-      body: CustomScrollView(
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await dataService.refreshUserProfile();
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
           // Profile Header Card
           SliverToBoxAdapter(
             child: Container(
@@ -681,7 +686,8 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildExpiryTag(DateTime expiry) {

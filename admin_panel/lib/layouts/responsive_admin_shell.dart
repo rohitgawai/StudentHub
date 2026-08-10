@@ -8,6 +8,7 @@ import '../screens/online_users_screen.dart';
 import '../screens/role_requests_screen.dart';
 import '../screens/student_lookup_screen.dart';
 import '../screens/user_directory_screen.dart';
+import '../screens/role_removals_screen.dart';
 import '../screens/content_moderation_screen.dart';
 import '../screens/broadcast_screen.dart';
 
@@ -17,6 +18,7 @@ enum AdminTab {
   roleRequests,
   studentLookup,
   userDirectory,
+  roleRemovals,
   contentModeration,
   broadcast,
 }
@@ -54,6 +56,8 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
         return const StudentLookupScreen();
       case AdminTab.userDirectory:
         return const UserDirectoryScreen();
+      case AdminTab.roleRemovals:
+        return const RoleRemovalsScreen();
       case AdminTab.contentModeration:
         return const ContentModerationScreen();
       case AdminTab.broadcast:
@@ -66,17 +70,19 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
       case AdminTab.dashboard:
         return 'Dashboard Overview';
       case AdminTab.onlineUsers:
-        return 'Live Online Students';
+        return 'Live Online Active Users';
       case AdminTab.roleRequests:
-        return 'Role Application Queue';
+        return 'Student Role Applications';
       case AdminTab.studentLookup:
         return 'Student College Lookup';
       case AdminTab.userDirectory:
         return 'User & Privilege Directory';
+      case AdminTab.roleRemovals:
+        return 'Role Removals Management';
       case AdminTab.contentModeration:
         return 'Content & Post Moderation';
       case AdminTab.broadcast:
-        return 'Broadcast Announcements';
+        return 'Broadcast Announcement System';
     }
   }
 
@@ -146,17 +152,17 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
             onTap: () => setState(() => _currentTab = AdminTab.onlineUsers),
             borderRadius: BorderRadius.circular(20),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AdminTheme.statusOnline.withOpacity(0.15),
+                color: AdminTheme.statusOnline.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AdminTheme.statusOnline.withOpacity(0.4)),
+                border: Border.all(color: AdminTheme.statusOnline.withValues(alpha: 0.4)),
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 9,
-                    height: 9,
+                    width: 8,
+                    height: 8,
                     decoration: const BoxDecoration(
                       color: AdminTheme.statusOnline,
                       shape: BoxShape.circle,
@@ -276,6 +282,11 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                   'User Directory',
                 ),
                 _sidebarNavItem(
+                  AdminTab.roleRemovals,
+                  Icons.remove_moderator_rounded,
+                  'Role Removals',
+                ),
+                _sidebarNavItem(
                   AdminTab.contentModeration,
                   Icons.gavel_rounded,
                   'Content Moderation',
@@ -358,10 +369,10 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              color: isSelected ? AdminTheme.primary.withOpacity(0.15) : Colors.transparent,
-              border: isSelected
-                  ? Border.all(color: AdminTheme.primary.withOpacity(0.5))
-                  : Border.all(color: Colors.transparent),
+              color: isSelected ? AdminTheme.primary.withValues(alpha: 0.15) : Colors.transparent,
+              border: Border.all(
+                color: isSelected ? AdminTheme.primary.withValues(alpha: 0.4) : Colors.transparent,
+              ),
             ),
             child: Row(
               children: [
@@ -370,13 +381,13 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                   size: 20,
                   color: isSelected ? AdminTheme.primaryLight : AdminTheme.textMuted,
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     label,
                     style: GoogleFonts.inter(
                       fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                       color: isSelected ? Colors.white : AdminTheme.textMuted,
                     ),
                   ),
@@ -386,7 +397,7 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: badgeColor,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       '$badgeCount',
@@ -412,11 +423,19 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
         children: [
           DrawerHeader(
             decoration: const BoxDecoration(
-              gradient: AdminTheme.primaryGradient,
+              color: AdminTheme.bgDark,
+              border: Border(bottom: BorderSide(color: AdminTheme.borderDark)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 36),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: AdminTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 28),
+                ),
                 const SizedBox(width: 14),
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -451,6 +470,7 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                 _sidebarNavItem(AdminTab.roleRequests, Icons.verified_user_rounded, 'Role Applications'),
                 _sidebarNavItem(AdminTab.studentLookup, Icons.badge_rounded, 'Student Lookup'),
                 _sidebarNavItem(AdminTab.userDirectory, Icons.people_alt_rounded, 'User Directory'),
+                _sidebarNavItem(AdminTab.roleRemovals, Icons.remove_moderator_rounded, 'Role Removals'),
                 _sidebarNavItem(AdminTab.contentModeration, Icons.gavel_rounded, 'Content Moderation'),
                 _sidebarNavItem(AdminTab.broadcast, Icons.campaign_rounded, 'Broadcast Alert'),
               ],

@@ -375,10 +375,18 @@ class MockDataService extends ChangeNotifier {
     }
   }
 
-  UserRole _roleFromName(String name) => UserRole.values.firstWhere(
-    (r) => r.name == name,
-    orElse: () => UserRole.student,
-  );
+  UserRole _roleFromName(String name) {
+    final clean = name.trim().toLowerCase();
+    if (clean == 'host' || clean == 'eventhost' || clean == 'event_host') {
+      return UserRole.eventHost;
+    }
+    if (clean == 'faculty') return UserRole.faculty;
+    if (clean == 'admin') return UserRole.admin;
+    return UserRole.values.firstWhere(
+      (r) => r.name.toLowerCase() == clean,
+      orElse: () => UserRole.student,
+    );
+  }
 
   String _extFromDataUri(String? url) {
     if (url == null || !url.startsWith('data:')) return 'jpg';
@@ -1218,6 +1226,7 @@ class MockDataService extends ChangeNotifier {
         'registered_event_ids': currentUser.registeredEventIds,
         'congratulated_post_ids': currentUser.congratulatedPostIds,
         'liked_post_ids': currentUser.likedPostIds,
+        'roles': currentUser.roles.map((r) => r == UserRole.eventHost ? 'host' : r.name).toList(),
         'is_verified': currentUser.isVerified,
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'user_id');
@@ -1589,11 +1598,15 @@ class MockDataService extends ChangeNotifier {
     FormDefinition? form;
     final formRaw = row['form'];
     if (formRaw is Map) {
-      form = FormDefinition.fromJson(formRaw);
+      final f = FormDefinition.fromJson(formRaw.cast<String, dynamic>());
+      if (f != null && f.title.trim().isNotEmpty && f.fields.isNotEmpty) form = f;
     } else if (formRaw is String && formRaw.trim().isNotEmpty) {
       try {
         final decoded = jsonDecode(formRaw);
-        if (decoded is Map) form = FormDefinition.fromJson(decoded);
+        if (decoded is Map) {
+          final f = FormDefinition.fromJson(decoded.cast<String, dynamic>());
+          if (f != null && f.title.trim().isNotEmpty && f.fields.isNotEmpty) form = f;
+        }
       } catch (_) {
         form = null;
       }
@@ -1662,12 +1675,12 @@ class MockDataService extends ChangeNotifier {
       'description': p.description,
       'category': p.category.name,
       'department': p.department,
-      'target_year': p.targetYear,
+      'target_year': p.targetYear ?? 'ALL',
       'author_name': p.authorName,
       'author_role': p.authorRole.name,
       'author_id': p.authorId,
       'image_url': cleanUrl(p.imageUrl),
-      'image_urls': cleanGallery.isEmpty ? null : cleanGallery,
+      'image_urls': cleanGallery,
       'is_urgent': p.isUrgent,
       'is_pinned': p.isPinned,
       'save_count': p.saveCount,
@@ -1680,10 +1693,8 @@ class MockDataService extends ChangeNotifier {
       'registration_deadline': p.registrationDeadline?.toIso8601String(),
       'max_participants': p.maxParticipants,
       'registered_user_ids': p.registeredUserIds,
-      'links': p.links.isEmpty
-          ? null
-          : jsonEncode(p.links.map((l) => l.toJson()).toList()),
-      'form': p.form == null ? null : jsonEncode(p.form!.toJson()),
+      'links': jsonEncode(p.links.map((l) => l.toJson()).toList()),
+      'form': jsonEncode(p.form?.toJson() ?? {}),
       'attachments': p.attachments
           .map(
             (a) => {
@@ -1706,7 +1717,7 @@ class MockDataService extends ChangeNotifier {
     return null;
   }
 
-/// Pushes a post to Postgres in the background, uploading any base64 PDF
+  /// Pushes a post to Postgres in the background, uploading any base64 PDF
   /// attachments (and post images) to Supabase Storage first. Device-only posts
   /// (created offline) are permanently exempt: they never reach the server.
   Future<void> _persistPost(PostModel post) async {
@@ -1738,7 +1749,10 @@ class MockDataService extends ChangeNotifier {
       if (idx != -1) _posts[idx] = stored;
       _serverKnownIds.add(post.id);
     } catch (e) {
-      debugPrint('StudentHub: post ${post.id} persistence pending retry: $e');
+      debugPrint('StudentHub: post ${post.id} persistence failed: $e');
+      _posts.removeWhere((p) => p.id == post.id);
+      _invalidateDataCaches();
+      notifyListeners();
     }
   }
 
@@ -2713,6 +2727,44 @@ class MockDataService extends ChangeNotifier {
     notifyListeners();
     _scheduleLocalSave();
     await _persistProfile();
+  }
+
+  Future<bool> refreshUserProfile() async {
+    final client = _client;
+    if (client == null) return false;
+    try {
+      final rows = await client
+          .from('profiles')
+          .select()
+          .eq('user_id', currentUser.id)
+          .limit(1);
+
+      if (rows.isNotEmpty) {
+        final r = rows.first;
+        final serverRoles = ((r['roles'] as List?) ?? const ['student'])
+            .whereType<String>()
+            .map(_roleFromName)
+            .toList();
+
+        currentUser = currentUser.copyWith(
+          name: (r['name']?.toString() ?? '').isNotEmpty ? r['name'].toString() : currentUser.name,
+          roles: serverRoles.isEmpty ? [UserRole.student] : serverRoles,
+          isVerified: r['is_verified'] as bool? ?? currentUser.isVerified,
+        );
+
+        if (!currentUser.roles.contains(activeRole)) {
+          activeRole = currentUser.roles.first;
+        }
+
+        _invalidateDataCaches();
+        notifyListeners();
+        _scheduleLocalSave();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('StudentHub: refresh profile error: $e');
+    }
+    return false;
   }
 
   // --- Header Announcement (Time-limited, one per department) ---

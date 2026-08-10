@@ -76,189 +76,149 @@ class _LinkFormEditorState extends State<LinkFormEditor> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: widget.accent.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: widget.accent.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Link chips
+        if (_links.isNotEmpty) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Icon(Icons.link, size: 18, color: widget.accent),
-              const SizedBox(width: 8),
-              const Text(
-                'Links & Form',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-              ),
-              const Spacer(),
-              Text(
-                'Optional',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey.shade500,
-                  fontWeight: FontWeight.w600,
+              for (var i = 0; i < _links.length; i++)
+                InputChip(
+                  avatar: Icon(
+                    Icons.open_in_new,
+                    size: 14,
+                    color: widget.accent,
+                  ),
+                  label: Text(
+                    _links[i].label.isEmpty ? _links[i].url : _links[i].label,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  onDeleted: () => setState(() {
+                    _links.removeAt(i);
+                    _notifyLinks();
+                  }),
+                  deleteIconColor: Colors.grey.shade600,
                 ),
-              ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Attach external links (Meet, form, brochure…), or create an in-app form to collect student data.',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade600,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+        ],
 
-          // Link chips
-          if (_links.isNotEmpty) ...[
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+        // Form attached summary card
+        if (_form != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: widget.accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: widget.accent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
               children: [
-                for (var i = 0; i < _links.length; i++)
-                  InputChip(
-                    avatar: Icon(
-                      Icons.open_in_new,
-                      size: 15,
-                      color: widget.accent,
-                    ),
-                    label: Text(
-                      _links[i].label.isEmpty ? _links[i].url : _links[i].label,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    visualDensity: VisualDensity.compact,
-                    onDeleted: () => setState(() {
-                      _links.removeAt(i);
-                      _notifyLinks();
-                    }),
-                    deleteIconColor: Colors.grey.shade600,
+                Icon(Icons.assignment_outlined,
+                    size: 18, color: widget.accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _form!.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        '${_form!.questionCount} questions attached',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 17),
+                  tooltip: 'Edit form',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _createOrEditForm,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 17, color: Colors.red),
+                  tooltip: 'Remove form',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => setState(() {
+                    _form = null;
+                    widget.onFormChanged?.call(null);
+                  }),
+                ),
               ],
             ),
-            const SizedBox(height: 8),
-          ],
+          ),
+          const SizedBox(height: 8),
+        ],
 
-          // Form attached summary
-          if (_form != null) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.assignment_outlined,
-                      size: 18, color: widget.accent),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _form!.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Text(
-                          '${_form!.questionCount} questions · '
-                          '${_form!.allowResubmit ? 'editable' : 'one response per student'}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
+        // 1-Row Compact Action Buttons
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: widget.accent,
+                  side: BorderSide(color: widget.accent.withValues(alpha: 0.4)),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 19),
-                    tooltip: 'Remove form',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => setState(() {
-                      _form = null;
-                      widget.onFormChanged?.call(null);
-                    }),
-                  ),
-                ],
+                ),
+                onPressed: _addLink,
+                icon: const Icon(Icons.add_link, size: 16),
+                label: const Text(
+                  '+ Link 🔗',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _form != null ? Colors.green : widget.accent,
+                  side: BorderSide(
+                    color: _form != null
+                        ? Colors.green
+                        : widget.accent.withValues(alpha: 0.4),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: _createOrEditForm,
+                icon: Icon(
+                  _form == null ? Icons.post_add_outlined : Icons.check_circle_outline,
+                  size: 16,
+                ),
+                label: Text(
+                  _form == null ? '+ Form 📝' : 'Form Added ✓',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
           ],
-
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: widget.accent,
-                      side: BorderSide(color: widget.accent),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onPressed: _addLink,
-                    icon: const Icon(Icons.add_link, size: 17),
-                    label: const Text(
-                      'Add link',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: widget.accent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onPressed: _createOrEditForm,
-                    icon: Icon(
-                      _form == null
-                          ? Icons.create_outlined
-                          : Icons.edit_outlined,
-                      size: 17,
-                    ),
-                    label: Text(
-                      _form == null ? 'Create form' : 'Edit form',
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

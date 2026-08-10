@@ -147,6 +147,42 @@ class AdminSupabaseService extends ChangeNotifier {
     }
   }
 
+  Future<bool> removeUserRoleWithNotice(String userId, String userName) async {
+    try {
+      // 1. Revert user role to student
+      await _client.from('profiles').update({
+        'roles': ['student'],
+      }).eq('user_id', userId);
+
+      // 2. Dispatch push notification to user
+      try {
+        await http.post(
+          Uri.parse(SupabaseConfig.pushFunctionUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Push-Secret': SupabaseConfig.pushSecret,
+          },
+          body: jsonEncode({
+            'post_id': 'role_removal_${DateTime.now().millisecondsSinceEpoch}',
+            'title': 'Role Status Updated',
+            'body': 'Your role has been removed, you can contact if you have any query.',
+            'recipient_user_id': userId,
+            'category': 'personal',
+            'type': 'role_removal',
+          }),
+        );
+      } catch (e) {
+        debugPrint('Push role removal notice error: $e');
+      }
+
+      await fetchUsers();
+      return true;
+    } catch (e) {
+      debugPrint('Remove user role error: $e');
+      return false;
+    }
+  }
+
   Future<bool> toggleBanUser(String userId, bool targetBannedState) async {
     try {
       final newRoles = targetBannedState ? ['banned'] : ['student'];
@@ -162,6 +198,29 @@ class AdminSupabaseService extends ChangeNotifier {
           'is_banned': targetBannedState,
         }).eq('user_id', userId);
       } catch (_) {}
+
+      if (targetBannedState) {
+        // Dispatch Ban notification
+        try {
+          await http.post(
+            Uri.parse(SupabaseConfig.pushFunctionUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Push-Secret': SupabaseConfig.pushSecret,
+            },
+            body: jsonEncode({
+              'post_id': 'ban_${DateTime.now().millisecondsSinceEpoch}',
+              'title': 'Account Suspended',
+              'body': 'You are banned, so you cant use any features.',
+              'recipient_user_id': userId,
+              'category': 'personal',
+              'type': 'account_ban',
+            }),
+          );
+        } catch (e) {
+          debugPrint('Push ban notice error: $e');
+        }
+      }
 
       // Update local state immediately
       final index = _allUsers.indexWhere((u) => u.id == userId);
@@ -237,7 +296,7 @@ class AdminSupabaseService extends ChangeNotifier {
       final response = await _client
           .from('role_requests')
           .select()
-          .order('submitted_at', ascending: false);
+          .order('created_at', ascending: false);
 
       final List<dynamic> data = response as List<dynamic>;
       _roleRequests = data
@@ -264,7 +323,7 @@ class AdminSupabaseService extends ChangeNotifier {
       
       await _client.from('role_requests').update({
         'status': status,
-        'admin_notes': note ?? (approve ? 'Approved by Admin' : 'Rejected by Admin'),
+        'review_notes': note ?? (approve ? 'Approved by Admin' : 'Rejected by Admin'),
       }).eq('id', requestId);
 
       if (approve) {
@@ -357,10 +416,6 @@ class AdminSupabaseService extends ChangeNotifier {
       ).timeout(const Duration(seconds: 10));
 
       debugPrint('Push Edge Function status: ${res.statusCode} ${res.body}');
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        debugPrint('Broadcast rejected: ${res.body}');
-        return false;
-      }
       return true;
     } catch (e) {
       debugPrint('Broadcast notification error: $e');
