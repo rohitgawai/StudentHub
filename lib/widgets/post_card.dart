@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/app_config.dart';
 import '../models/post_model.dart';
+import '../screens/form_fill_screen.dart';
 import '../utils/date_formatter.dart';
+import '../utils/external_links.dart';
 import 'role_badge.dart';
 import 'pdf_viewer_modal.dart';
 import 'app_image.dart';
@@ -28,6 +30,10 @@ class PostCard extends StatefulWidget {
   final VoidCallback? onToggleCongratulate;
   final VoidCallback? onToggleLike;
 
+  /// When set, the owner's "N registered" chip becomes tappable and opens the
+  /// registrant list (wired by the host/faculty dashboards).
+  final VoidCallback? onViewRegistrants;
+
   const PostCard({
     super.key,
     required this.post,
@@ -42,6 +48,7 @@ class PostCard extends StatefulWidget {
     this.onToggleRegister,
     this.onToggleCongratulate,
     this.onToggleLike,
+    this.onViewRegistrants,
   });
 
   @override
@@ -426,6 +433,80 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                         ],
 
                         const SizedBox(height: 12),
+
+                        // External links (Meet, registration form, brochure…)
+                        if (post.links.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final link in post.links)
+                                ActionChip(
+                                  avatar: Icon(
+                                    Icons.open_in_new,
+                                    size: 14,
+                                    color: categoryColor,
+                                  ),
+                                  label: Text(
+                                    link.label.isEmpty
+                                        ? 'Open link'
+                                        : link.label,
+                                    style: const TextStyle(fontSize: 11.5),
+                                  ),
+                                  side: BorderSide(
+                                    color: categoryColor.withValues(
+                                      alpha: 0.4,
+                                    ),
+                                  ),
+                                  backgroundColor: categoryColor.withValues(
+                                    alpha: 0.08,
+                                  ),
+                                  labelStyle: TextStyle(
+                                    color: categoryColor,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  onPressed: () =>
+                                      openExternalLink(context, link.url),
+                                ),
+                            ],
+                          ),
+                        ],
+
+                        // Response form attached to a regular (non-event) post
+                        if (!_isEvent && post.form != null) ...[
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: categoryColor,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.assignment_outlined,
+                                size: 17,
+                              ),
+                              label: Text(
+                                '📝 ${post.form!.title}',
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              onPressed: () =>
+                                  openRegistrationForm(context, post),
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 12),
                         const Divider(height: 1),
                         const SizedBox(height: 6),
 
@@ -515,35 +596,64 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
           if (widget.currentUserId != null &&
               widget.post.authorId == widget.currentUserId)
             // The event host cannot register for their own event; show the
-            // current registrant count instead of a Register button.
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: widget.config.eventColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: widget.config.eventColor.withValues(alpha: 0.35),
+            // current registrant count instead of a Register button. Tapping
+            // it (when wired) opens the registrant list.
+            InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: widget.onViewRegistrants,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.people_alt_outlined,
-                    size: 16,
-                    color: widget.config.eventColor,
+                decoration: BoxDecoration(
+                  color: widget.config.eventColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: widget.config.eventColor.withValues(alpha: 0.35),
                   ),
-                  const SizedBox(width: 5),
-                  Text(
-                    '${post.currentRegistrations} registered',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.people_alt_outlined,
+                      size: 16,
                       color: widget.config.eventColor,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 5),
+                    Text(
+                      '${post.currentRegistrations} registered',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: widget.config.eventColor,
+                      ),
+                    ),
+                    if (widget.onViewRegistrants != null) ...[
+                      const SizedBox(width: 3),
+                      Icon(
+                        Icons.chevron_right,
+                        size: 13,
+                        color: widget.config.eventColor,
+                      ),
+                    ],
+                  ],
+                ),
               ),
+            )
+          else if (widget.post.form != null)
+            // Events with an attached form: Register opens the in-app form.
+            _RegisterButton(
+              config: widget.config,
+              isRegistered: widget.isRegistered,
+              isFull: widget.post.isRegistrationFull && !widget.isRegistered,
+              onPressed:
+                  (widget.post.isRegistrationFull ||
+                          _isRegistrationClosed(widget.post)) &&
+                      !widget.isRegistered
+                      ? null
+                      : () => openRegistrationForm(context, widget.post),
             )
           else
             _RegisterButton(
@@ -557,6 +667,13 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
         ],
       ],
     );
+  }
+
+  /// Past the registration deadline: quick toggle is blocked (form events are
+  /// guarded in submitForm), the button is disabled for everyone.
+  bool _isRegistrationClosed(PostModel post) {
+    final deadline = post.registrationDeadline;
+    return deadline != null && DateTime.now().isAfter(deadline);
   }
 
   String _formatTimestamp(DateTime dt) {

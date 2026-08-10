@@ -1,3 +1,4 @@
+import 'form_models.dart';
 import 'user_model.dart';
 
 enum PostCategory {
@@ -80,6 +81,10 @@ class PostModel {
   final int? maxParticipants;
   final List<String> registeredUserIds;
 
+  // Links & registration form attached by host/faculty
+  final List<PostLink> links;
+  final FormDefinition? form;
+
   PostModel({
     required this.id,
     required this.title,
@@ -106,6 +111,8 @@ class PostModel {
     this.registrationDeadline,
     this.maxParticipants,
     this.registeredUserIds = const [],
+    this.links = const [],
+    this.form,
   });
 
   bool get isEvent => category == PostCategory.event || category == PostCategory.workshop;
@@ -138,6 +145,8 @@ class PostModel {
     DateTime? registrationDeadline,
     int? maxParticipants,
     List<String>? registeredUserIds,
+    List<PostLink>? links,
+    FormDefinition? form,
   }) {
     return PostModel(
       id: id ?? this.id,
@@ -166,6 +175,8 @@ class PostModel {
       registrationDeadline: registrationDeadline ?? this.registrationDeadline,
       maxParticipants: maxParticipants ?? this.maxParticipants,
       registeredUserIds: registeredUserIds ?? this.registeredUserIds,
+      links: links ?? this.links,
+      form: form ?? this.form,
     );
   }
 }

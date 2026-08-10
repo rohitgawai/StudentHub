@@ -597,10 +597,26 @@ class _ProfileScreenState extends State<ProfileScreen>
               tabBar: TabBar(
                 controller: tabController,
                 labelColor: cfg.primaryColor,
-                unselectedLabelColor: Colors.grey,
+                unselectedLabelColor: Colors.grey.shade600,
+                indicatorColor: cfg.primaryColor,
+                indicatorWeight: 3,
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontWeight: FontWeight.normal,
+                  fontSize: 13,
+                ),
                 tabs: [
-                  Tab(text: 'Saved Posts (${savedPosts.length})'),
-                  Tab(text: 'Registered Events (${registeredEvents.length})'),
+                  Tab(
+                    icon: const Icon(Icons.bookmark_outline, size: 18),
+                    text: 'Saved (${savedPosts.length})',
+                  ),
+                  Tab(
+                    icon: const Icon(Icons.event_available_outlined, size: 18),
+                    text: 'Registered (${registeredEvents.length})',
+                  ),
                 ],
               ),
             ),
@@ -612,7 +628,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               children: [
                 _buildList(
                   savedPosts,
-                  'No saved posts yet. Tap bookmark on feed posts!',
+                  'Tap the bookmark icon on any feed post to save it for quick access later.',
                   cfg: cfg,
                   userYear: user.year,
                   isSavedForAll: true,
@@ -620,7 +636,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
                 _buildList(
                   registeredEvents,
-                  'No registered events yet.',
+                  'You haven\'t registered for any upcoming campus events yet.',
                   cfg: cfg,
                   userYear: user.year,
                   isRegisteredForAll: true,
@@ -708,8 +724,42 @@ class _ProfileScreenState extends State<ProfileScreen>
     bool isRegisteredForAll = false,
   }) {
     if (posts.isEmpty) {
-      return Center(
-        child: Text(emptyMsg, style: const TextStyle(color: Colors.grey)),
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cfg.primaryColor.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cfg.primaryColor.withValues(alpha: 0.15)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isSavedForAll ? Icons.bookmark_border : Icons.event_note,
+              size: 48,
+              color: cfg.primaryColor.withValues(alpha: 0.6),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isSavedForAll ? 'No Saved Posts' : 'No Registered Events',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              emptyMsg,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
       );
     }
     return ListView.builder(

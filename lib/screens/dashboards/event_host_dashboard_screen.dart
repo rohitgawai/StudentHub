@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/post_model.dart';
 import '../../services/mock_data_service.dart';
+import '../../widgets/edit_post_dialog.dart';
 import '../../widgets/managed_post_card.dart';
+import '../registration_stats_screen.dart';
+import '../registrants_screen.dart';
 
 class EventHostDashboardScreen extends StatefulWidget {
   const EventHostDashboardScreen({super.key});
@@ -39,67 +42,20 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
     BuildContext context,
     MockDataService dataService,
     PostModel post,
-  ) {
-    final titleCtrl = TextEditingController(text: post.title);
-    final descCtrl = TextEditingController(text: post.description);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('✏️ Edit ${post.isEvent ? 'Event' : 'Post'}'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descCtrl,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _accent,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              final updated = post.copyWith(
-                title: titleCtrl.text.trim(),
-                description: descCtrl.text.trim(),
-              );
-              dataService.updatePost(updated);
-              Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('✅ Post updated successfully!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            child: const Text('Save Changes'),
-          ),
-        ],
-      ),
+  ) async {
+    final updated = await showEditPostDialog(
+      context,
+      post: post,
+      accent: _accent,
     );
+    if (updated != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Post updated successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   Future<void> _confirmDelete(
@@ -167,6 +123,25 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
         centerTitle: false,
         backgroundColor: _accent,
         foregroundColor: Colors.white,
+        actions: [
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const RegistrationStatsScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.query_stats),
+            label: const Text(
+              'Stats',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -176,6 +151,56 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
             eventCount: myEvents.length,
             noticeCount: myNotices.length,
             galleryCount: myGalleries.length,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Material(
+              color: _accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const RegistrationStatsScreen(),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.query_stats, color: _accent),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '📊 Registration Stats',
+                              style: TextStyle(
+                                color: _accent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Registrations, attendance tracking & CSV/PDF export for your events — tap to open.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: Colors.grey.shade500),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
           Container(
             color: Theme.of(context).cardColor,
@@ -238,6 +263,7 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
       itemCount: postsList.length,
       itemBuilder: (ctx, idx) {
         final post = postsList[idx];
+        final isMine = post.authorId == user.id;
         return ManagedPostCard(
           post: post,
           config: config,
@@ -253,6 +279,15 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
           onToggleLike: () => dataService.toggleLikePost(post.id),
           onEdit: () => _showEditDialog(context, dataService, post),
           onDelete: () => _confirmDelete(context, dataService, post),
+          onViewRegistrants: isMine && post.isEvent
+              ? () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => RegistrantsScreen(post: post),
+                    ),
+                  );
+                }
+              : null,
         );
       },
     );

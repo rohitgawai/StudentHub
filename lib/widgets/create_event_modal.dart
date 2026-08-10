@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/form_models.dart';
 import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
 import '../utils/date_formatter.dart';
 import 'custom_dropdown.dart';
 import 'image_picker_field.dart';
+import 'link_form_editor.dart';
 
 class CreateEventModal extends StatefulWidget {
   const CreateEventModal({super.key});
@@ -21,6 +23,9 @@ class _CreateEventModalState extends State<CreateEventModal> {
   final maxSeatsController = TextEditingController(text: '100');
   String? selectedImageUrl;
   PostCategory eventKind = PostCategory.event;
+
+  List<PostLink> links = [];
+  FormDefinition? form;
 
   late String department;
   DateTime eventDate = DateTime.now().add(const Duration(days: 3));
@@ -115,6 +120,8 @@ class _CreateEventModalState extends State<CreateEventModal> {
       registrationDeadline: regDeadline,
       maxParticipants: maxCap,
       registeredUserIds: const [],
+      links: links,
+      form: form,
     );
 
     dataService.addPost(newEvent);
@@ -307,6 +314,17 @@ class _CreateEventModalState extends State<CreateEventModal> {
                   setState(() => regDeadline = d);
                 }
               },
+            ),
+
+            const SizedBox(height: 24),
+
+            LinkFormEditor(
+              accent: dataService.config.eventColor,
+              initialFormLabel: titleController.text.trim().isEmpty
+                  ? 'Event Registration'
+                  : titleController.text.trim(),
+              onLinksChanged: (links) => setState(() => this.links = links),
+              onFormChanged: (form) => setState(() => this.form = form),
             ),
 
             const SizedBox(height: 24),

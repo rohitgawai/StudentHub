@@ -10,6 +10,7 @@ import '../models/post_model.dart';
 import '../models/role_request_model.dart';
 import '../models/notification_model.dart';
 import '../models/active_announcement_model.dart';
+import '../models/form_models.dart';
 import 'local_store_service.dart';
 
 class MockDataService extends ChangeNotifier {
@@ -21,6 +22,7 @@ class MockDataService extends ChangeNotifier {
   List<RoleRequestModel> _roleRequests = [];
   List<NotificationModel> _notifications = [];
   List<ActiveAnnouncement> _announcements = [];
+  List<FormSubmission> _formSubmissions = [];
 
   /// Post ids this device has confirmed exist on the server. The server is
   /// authoritative for them: they are never re-uploaded from a stale local
@@ -52,6 +54,7 @@ class MockDataService extends ChangeNotifier {
   List<RoleRequestModel> _cacheRoleRequests = const [];
   List<NotificationModel> _cacheNotifications = const [];
   List<ActiveAnnouncement> _cacheAnnouncements = const [];
+  List<FormSubmission> _cacheSubmissions = const [];
   String? _feedCacheKey;
   List<PostModel>? _feedCacheValue;
 
@@ -65,12 +68,14 @@ class MockDataService extends ChangeNotifier {
     _cacheAnnouncements = List.unmodifiable(
       _announcements.where((a) => !a.isExpired),
     );
+    _cacheSubmissions = List.unmodifiable(_formSubmissions);
   }
 
   List<PostModel> get posts => _cachePosts;
   List<RoleRequestModel> get roleRequests => _cacheRoleRequests;
   List<NotificationModel> get notifications => _cacheNotifications;
   List<ActiveAnnouncement> get activeAnnouncements => _cacheAnnouncements;
+  List<FormSubmission> get formSubmissions => _cacheSubmissions;
 
   MockDataService({AppConfig? initialConfig}) {
     config = initialConfig ?? AppConfig.defaultConfig();
@@ -107,6 +112,7 @@ class MockDataService extends ChangeNotifier {
       _notifications = restored.notifications;
       _roleRequests = restored.roleRequests;
       _announcements = restored.announcements;
+      _formSubmissions = restored.formSubmissions;
       _serverKnownIds
         ..clear()
         ..addAll(restored.serverKnownIds);
@@ -179,6 +185,7 @@ class MockDataService extends ChangeNotifier {
     _generateMockPosts();
     _generateMockRoleRequests();
     _generateMockNotifications();
+    _generateMockSubmissions();
     _seedDefaultAnnouncement();
   }
 
@@ -280,6 +287,7 @@ class MockDataService extends ChangeNotifier {
         'notifications': _notifications.map(_notificationToJson).toList(),
         'roleRequests': _roleRequests.map(_roleRequestToJson).toList(),
         'announcements': _announcements.map(_announcementToJson).toList(),
+        'formSubmissions': _formSubmissions.map(_submissionToJson).toList(),
         'serverKnownIds': _serverKnownIds.toList(),
         'deviceOnlyPostIds': _deviceOnlyPostIds.toList(),
       };
@@ -320,6 +328,13 @@ class MockDataService extends ChangeNotifier {
           .whereType<Map>()
           .map((m) => _announcementFromJson(m.cast<String, dynamic>()))
           .toList();
+      final formSubmissions =
+          ((payload['formSubmissions'] as List?) ?? const [])
+              .whereType<Map>()
+              .map(
+                (m) => FormSubmission.fromJson(m.cast<String, dynamic>()),
+              )
+              .toList();
       final serverKnownIds = ((payload['serverKnownIds'] as List?) ?? const [])
           .whereType<String>()
           .toSet();
@@ -335,6 +350,7 @@ class MockDataService extends ChangeNotifier {
         notifications: notifications,
         roleRequests: roleRequests,
         announcements: announcements,
+        formSubmissions: formSubmissions,
         serverKnownIds: serverKnownIds,
         deviceOnlyPostIds: deviceOnlyPostIds,
       );
@@ -561,6 +577,8 @@ class MockDataService extends ChangeNotifier {
     expiresAt:
         DateTime.tryParse(m['expiresAt']?.toString() ?? '') ?? DateTime.now(),
   );
+
+  Map<String, dynamic> _submissionToJson(FormSubmission s) => s.toJson();
 
   void updateConfig(AppConfig newConfig) {
     config = newConfig;
@@ -1173,6 +1191,40 @@ class MockDataService extends ChangeNotifier {
           ),
         )
         .toList();
+    // `links` and `form` are text columns holding JSON documents, so rows can
+    // arrive as raw String (PostgREST) or already-decoded List/Map (local
+    // cache) depending on the source.
+    List<PostLink> links;
+    final linksRaw = row['links'];
+    if (linksRaw is List) {
+      links = linksRaw
+          .whereType<Map>()
+          .map((l) => PostLink.fromJson(l.cast<String, dynamic>()))
+          .toList();
+    } else if (linksRaw is String && linksRaw.trim().isNotEmpty) {
+      try {
+        links = (jsonDecode(linksRaw) as List? ?? const [])
+            .whereType<Map>()
+            .map((l) => PostLink.fromJson(l.cast<String, dynamic>()))
+            .toList();
+      } catch (_) {
+        links = const [];
+      }
+    } else {
+      links = const [];
+    }
+    FormDefinition? form;
+    final formRaw = row['form'];
+    if (formRaw is Map) {
+      form = FormDefinition.fromJson(formRaw);
+    } else if (formRaw is String && formRaw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(formRaw);
+        if (decoded is Map) form = FormDefinition.fromJson(decoded);
+      } catch (_) {
+        form = null;
+      }
+    }
     return PostModel(
       id: row['id']!.toString(),
       title: row['title']?.toString() ?? '',
@@ -1193,6 +1245,8 @@ class MockDataService extends ChangeNotifier {
       imageUrl: row['image_url'] as String?,
       imageUrls: ((row['image_urls'] as List?) ?? const []).cast<String>(),
       attachments: attachments,
+      links: links,
+      form: form,
       isUrgent: row['is_urgent'] as bool? ?? false,
       isPinned: row['is_pinned'] as bool? ?? false,
       saveCount: row['save_count'] as int? ?? 0,
@@ -1236,6 +1290,10 @@ class MockDataService extends ChangeNotifier {
     'registration_deadline': p.registrationDeadline?.toIso8601String(),
     'max_participants': p.maxParticipants,
     'registered_user_ids': p.registeredUserIds,
+    // Text columns: JSON-encode links/form rather than sending arrays/maps,
+    // which PostgREST rejects when the column type is text.
+    'links': p.links.isEmpty ? null : jsonEncode(p.links.map((l) => l.toJson()).toList()),
+    'form': p.form == null ? null : jsonEncode(p.form!.toJson()),
     'attachments': p.attachments
         .map(
           (a) => {
@@ -1596,19 +1654,40 @@ class MockDataService extends ChangeNotifier {
     if (index == -1) return;
 
     PostModel post = _posts[index];
+
+    // Events with an attached registration form are handled by the form
+    // flow (submitForm), never by the raw one-tap toggle.
+    if (post.form != null) return;
+
     List<String> regUsers = List.from(post.registeredUserIds);
     List<String> userRegEvents = List.from(currentUser.registeredEventIds);
 
     if (regUsers.contains(currentUser.id)) {
       regUsers.remove(currentUser.id);
       userRegEvents.remove(postId);
+      _formSubmissions.removeWhere(
+        (s) => s.postId == postId && s.userId == currentUser.id,
+      );
     } else {
-      if (post.maxParticipants != null &&
-          regUsers.length >= post.maxParticipants!) {
-        return; // Full
-      }
+      if (!_canRegister(post)) return;
       regUsers.add(currentUser.id);
       userRegEvents.add(postId);
+
+      // Quick (no-form) registration records a submission entry with a
+      // profile snapshot, so hosts see attendee data in Registration Stats.
+      _formSubmissions.add(
+        FormSubmission(
+          id: 'sub_${DateTime.now().microsecondsSinceEpoch}',
+          postId: postId,
+          userId: currentUser.id,
+          name: currentUser.name,
+          studentOrEmployeeId: currentUser.studentOrEmployeeId,
+          department: currentUser.department,
+          year: currentUser.year,
+          mobileNumber: currentUser.mobileNumber,
+          submittedAt: DateTime.now(),
+        ),
+      );
 
       // Add event registration notification
       _notifications.insert(
@@ -1661,6 +1740,256 @@ class MockDataService extends ChangeNotifier {
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
+  }
+
+  /// Whether the event/workshop still accepts registrations: not past the
+  /// deadline and not full.
+  bool _canRegister(PostModel post) {
+    final deadline = post.registrationDeadline;
+    if (deadline != null && DateTime.now().isAfter(deadline)) return false;
+    if (post.maxParticipants != null &&
+        post.registeredUserIds.length >= post.maxParticipants!) {
+      return false;
+    }
+    return true;
+  }
+
+  /// Human-readable reason a student can no longer register (button helper).
+  /// Returns null when registration is still open.
+  String? registrationBlockReason(PostModel post) {
+    if (post.maxParticipants != null &&
+        post.registeredUserIds.length >= post.maxParticipants!) {
+      return 'Registrations closed (seats full)';
+    }
+    final deadline = post.registrationDeadline;
+    if (deadline != null && DateTime.now().isAfter(deadline)) {
+      return 'Registration closed (deadline passed)';
+    }
+    return null;
+  }
+
+  /// Submits a filled form. For events this *is* the registration: the user is
+  /// added to [registeredUserIds] with the same confirmations + host pushes as
+  /// the quick toggle. For posts it just records the submission and alerts the
+  /// author. Returns false when submission is rejected (duplicate, full,
+  /// closed, or offline-host rules).
+  Future<bool> submitForm({
+    required PostModel post,
+    required Map<String, dynamic> answers,
+  }) async {
+    final isEvent = post.isEvent;
+    if (isEvent && !_canRegister(post)) return false;
+    if (!isEvent && post.form?.allowResubmit == false) {
+      final existing = _formSubmissions.any(
+        (s) =>
+            s.postId == post.id &&
+            s.userId == currentUser.id &&
+            s.formId == post.form?.id,
+      );
+      if (existing) return false;
+    }
+
+    final submission = FormSubmission(
+      id: 'sub_${DateTime.now().microsecondsSinceEpoch}',
+      postId: post.id,
+      formId: post.form?.id,
+      userId: currentUser.id,
+      name: currentUser.name,
+      studentOrEmployeeId: currentUser.studentOrEmployeeId,
+      department: currentUser.department,
+      year: currentUser.year,
+      mobileNumber: currentUser.mobileNumber,
+      answers: answers,
+      submittedAt: DateTime.now(),
+    );
+    _formSubmissions.add(submission);
+
+    if (isEvent) {
+      final regUsers = List<String>.from(post.registeredUserIds);
+      final userRegEvents = List<String>.from(currentUser.registeredEventIds);
+      regUsers.add(currentUser.id);
+      userRegEvents.add(post.id);
+
+      _notifications.insert(
+        0,
+        NotificationModel(
+          id: 'notif_${DateTime.now().microsecondsSinceEpoch}',
+          title: 'Registration Confirmed! 🎉',
+          body:
+              'You have registered for ${post.title}. Keep an eye on updates.',
+          category: NotificationCategory.events,
+          timestamp: DateTime.now(),
+          relatedPostId: post.id,
+        ),
+      );
+      _pushBroadcast(
+        post,
+        type: 'registration_confirmed',
+        title: '🎉 Registration Confirmed!',
+        body: 'You have registered for "${post.title}". Keep an eye on updates.',
+        recipientUserId: currentUser.id,
+        skipSenderDevice: false,
+      );
+      _pushBroadcast(
+        post,
+        type: 'event_registration',
+        title: '🎟️ New event registration',
+        body: '${currentUser.name} registered for "${post.title}"',
+        registrantName: currentUser.name,
+        recipientUserId: post.authorId,
+      );
+      if (regUsers.length >= (post.maxParticipants ?? regUsers.length + 1)) {
+        _pushBroadcast(
+          post,
+          type: 'registrations_closed',
+          title: '⛔ Registrations closed',
+          body: 'The event "${post.title}" is now full.',
+        );
+      }
+
+      final idx = _posts.indexWhere((p) => p.id == post.id);
+      if (idx != -1) {
+        _posts[idx] = _posts[idx].copyWith(registeredUserIds: regUsers);
+        _persistPost(_posts[idx]);
+      }
+      currentUser = currentUser.copyWith(registeredEventIds: userRegEvents);
+    } else {
+      _pushBroadcast(
+        post,
+        type: 'form_submission',
+        title: '📝 New form response',
+        body: '${currentUser.name} filled "${post.form?.title ?? 'your form'}"',
+        registrantName: currentUser.name,
+        recipientUserId: post.authorId,
+      );
+    }
+
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+    unawaited(_persistFormSubmission(submission));
+    return true;
+  }
+
+  /// Rewrites this user's submission for a post (used when a form allows
+  /// resubmission/editing).
+  void updateMySubmission({
+    required String postId,
+    required Map<String, dynamic> answers,
+  }) {
+    final idx = _formSubmissions.indexWhere(
+      (s) => s.postId == postId && s.userId == currentUser.id,
+    );
+    if (idx == -1) return;
+    _formSubmissions[idx] = _formSubmissions[idx].copyWith(answers: answers);
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+  }
+
+  /// Withdraws the current user's registration + form submission for an event.
+  void withdrawRegistration(String postId) {
+    final idx = _posts.indexWhere((p) => p.id == postId);
+    if (idx == -1) return;
+    final post = _posts[idx];
+    final regUsers = List<String>.from(post.registeredUserIds)
+      ..remove(currentUser.id);
+    final userRegEvents = List<String>.from(currentUser.registeredEventIds)
+      ..remove(postId);
+    _formSubmissions.removeWhere(
+      (s) => s.postId == postId && s.userId == currentUser.id,
+    );
+    _posts[idx] = post.copyWith(registeredUserIds: regUsers);
+    currentUser = currentUser.copyWith(registeredEventIds: userRegEvents);
+    _persistPost(_posts[idx]);
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+  }
+
+  /// All submissions for a post, newest first.
+  List<FormSubmission> submissionsForPost(String postId) {
+    final list = _formSubmissions
+        .where((s) => s.postId == postId)
+        .toList()
+      ..sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
+    return list;
+  }
+
+  /// One-click broadcast (OS push + in-app bell) to everyone registered /
+  /// who filled a form for this post.
+  Future<void> sendMessageToRegistrants({
+    required PostModel post,
+    required String title,
+    required String body,
+  }) async {
+    final userIds = <String>{
+      ...post.registeredUserIds,
+      ..._formSubmissions
+          .where((s) => s.postId == post.id)
+          .map((s) => s.userId),
+    }.where((id) => id.isNotEmpty).toList();
+
+    final notifTitle = title.trim().isEmpty
+        ? '📍 Update from ${post.authorName}'
+        : title.trim();
+    final notifBody = body.trim().isEmpty
+        ? 'A new update for "${post.title}".'
+        : body.trim();
+
+    for (final uid in userIds) {
+      final isMe = uid == currentUser.id;
+      if (isMe) {
+        _notifications.insert(
+          0,
+          NotificationModel(
+            id: 'notif_${DateTime.now().microsecondsSinceEpoch}_msg',
+            title: notifTitle,
+            body: notifBody,
+            category: post.isEvent
+                ? NotificationCategory.events
+                : NotificationCategory.general,
+            timestamp: DateTime.now(),
+            relatedPostId: post.id,
+          ),
+        );
+      } else {
+        _pushBroadcast(
+          post,
+          type: 'registrant_message',
+          title: notifTitle,
+          body: notifBody,
+          recipientUserId: uid,
+        );
+      }
+    }
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+  }
+
+  /// Best-effort mirror of a form submission row to the backend. Offline or
+  /// missing-table failures are ignored; the local record is authoritative.
+  Future<void> _persistFormSubmission(FormSubmission s) async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      await client.from('form_submissions').upsert({
+        'id': s.id,
+        'post_id': s.postId,
+        'form_id': s.formId,
+        'user_id': s.userId,
+        'name': s.name,
+        'student_or_employee_id': s.studentOrEmployeeId,
+        'department': s.department,
+        'year': s.year,
+        'mobile_number': s.mobileNumber,
+        'answers': s.answers,
+        'submitted_at': s.submittedAt.toIso8601String(),
+      }, onConflict: 'id');
+    } catch (e) {
+      debugPrint('StudentHub: submission ${s.id} not persisted: $e');
+    }
   }
 
   void addPost(PostModel newPost) {
@@ -1755,7 +2084,10 @@ class MockDataService extends ChangeNotifier {
 
     var serverDeleted = true;
     final client = _client;
-    if (client != null) {
+    // Posts that failed to persist are device-only: the server never had them,
+    // so there is nothing to delete remotely — skip the (rejected) server call.
+    final neverOnServer = _deviceOnlyPostIds.contains(postId);
+    if (client != null && !neverOnServer) {
       try {
         final res = await http
             .post(
@@ -1795,7 +2127,10 @@ class MockDataService extends ChangeNotifier {
     // Remember the deletion: even if this app is killed before the snapshot
     // write, the id can never be re-pushed or resurrected by this device.
     _serverKnownIds.add(postId);
-    _client?.from('posts').delete().eq('id', postId);
+    _deviceOnlyPostIds.remove(postId);
+    if (client != null && !neverOnServer) {
+      await _client?.from('posts').delete().eq('id', postId);
+    }
     _localStore.deleteLocalBlob(removed.imageUrl);
     for (final img in removed.imageUrls) {
       _localStore.deleteLocalBlob(img);
@@ -1847,9 +2182,10 @@ class MockDataService extends ChangeNotifier {
   /// to every registered device except this one (used for new posts, event
   /// registrations and registration-closed updates). Pass [recipientUserId]
   /// to target only one user's devices (e.g. the event host, or the
-  /// registrant's own confirmation), [excludeUserId] to exclude an entire
-  /// user's devices (e.g. the publisher), and [skipSenderDevice] = false to
-  /// also deliver to this device.
+  /// registrant's own confirmation), [recipientUserIds] to target a batch of
+  /// users (e.g. every registrant of an event), [excludeUserId] to exclude an
+  /// entire user's devices (e.g. the publisher), and [skipSenderDevice] =
+  /// false to also deliver to this device.
   Future<void> _pushBroadcast(
     PostModel post, {
     String type = 'new_post',
@@ -1857,6 +2193,7 @@ class MockDataService extends ChangeNotifier {
     String? body,
     String? registrantName,
     String? recipientUserId,
+    List<String>? recipientUserIds,
     String? excludeUserId,
     bool skipSenderDevice = true,
   }) async {
@@ -1881,6 +2218,7 @@ class MockDataService extends ChangeNotifier {
               'type': type,
               'registrant_name': ?registrantName,
               'recipient_user_id': recipientUserId,
+              'recipient_user_ids': recipientUserIds,
               'exclude_user_id': excludeUserId,
               'skip_sender_device': skipSenderDevice,
             }),
@@ -1938,6 +2276,7 @@ class MockDataService extends ChangeNotifier {
     required String year,
     String? studentOrEmployeeId,
     String? avatarUrl,
+    String? mobileNumber,
   }) {
     bool hasChanged = currentUser.hasChangedUniqueId;
     String finalId = currentUser.studentOrEmployeeId;
@@ -1956,6 +2295,9 @@ class MockDataService extends ChangeNotifier {
       year: year,
       studentOrEmployeeId: finalId,
       hasChangedUniqueId: hasChanged,
+      mobileNumber: (mobileNumber != null && mobileNumber.trim().isNotEmpty)
+          ? mobileNumber.trim()
+          : currentUser.mobileNumber,
       avatarUrl: (avatarUrl != null && avatarUrl.trim().isNotEmpty)
           ? avatarUrl.trim()
           : currentUser.avatarUrl,
@@ -2433,6 +2775,50 @@ class MockDataService extends ChangeNotifier {
       ),
     ];
   }
+
+  /// Seeds registration/submission entries for the mock registered users so
+  /// the host-side Registration Stats screen has data out of the box.
+  void _generateMockSubmissions() {
+    final now = DateTime.now();
+    _formSubmissions = [
+      FormSubmission(
+        id: 'sub_101',
+        postId: 'pst_002',
+        userId: 'usr_102',
+        name: 'Rohan Gupta',
+        studentOrEmployeeId: 'MIT/CS/2023/118',
+        department: 'Computer Science & Engineering',
+        year: 'Third Year',
+        mobileNumber: '+91 99887 76655',
+        answers: {'teamSize': '3 members', 'mode': 'Offline'},
+        submittedAt: now.subtract(const Duration(days: 1, hours: 2)),
+      ),
+      FormSubmission(
+        id: 'sub_102',
+        postId: 'pst_002',
+        userId: 'usr_103',
+        name: 'Sneha Kulkarni',
+        studentOrEmployeeId: 'MIT/CS/2023/071',
+        department: 'Computer Science & Engineering',
+        year: 'Third Year',
+        mobileNumber: '+91 97788 12340',
+        answers: {'teamSize': 'Solo (1)', 'mode': 'Online'},
+        submittedAt: now.subtract(const Duration(hours: 6)),
+      ),
+      FormSubmission(
+        id: 'sub_103',
+        postId: 'pst_004',
+        userId: 'usr_105',
+        name: 'Arjun Nair',
+        studentOrEmployeeId: 'MIT/CS/2024/056',
+        department: 'Computer Science & Engineering',
+        year: 'Second Year',
+        mobileNumber: '+91 96655 43210',
+        answers: {'teamSize': '2 members', 'mode': 'Offline'},
+        submittedAt: now.subtract(const Duration(days: 2, hours: 1)),
+      ),
+    ];
+  }
 }
 
 /// Snapshot of everything that must be restored from the device between app
@@ -2445,6 +2831,7 @@ class _LocalState {
     required this.notifications,
     required this.roleRequests,
     required this.announcements,
+    required this.formSubmissions,
     required this.serverKnownIds,
     required this.deviceOnlyPostIds,
   });
@@ -2455,6 +2842,7 @@ class _LocalState {
   final List<NotificationModel> notifications;
   final List<RoleRequestModel> roleRequests;
   final List<ActiveAnnouncement> announcements;
+  final List<FormSubmission> formSubmissions;
   final Set<String> serverKnownIds;
   final Set<String> deviceOnlyPostIds;
 }

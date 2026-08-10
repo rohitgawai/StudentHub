@@ -1,0 +1,214 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+
+import '../models/form_models.dart';
+import '../models/post_model.dart';
+
+enum ExportFormat { csv, pdf }
+
+String _formatExportDate(DateTime dt) {
+  String pad(int v) => v.toString().padLeft(2, '0');
+  return '${pad(dt.day)}/${pad(dt.month)}/${dt.year} ${pad(dt.hour)}:${pad(dt.minute)}';
+}
+
+String _safeFileName(String title) {
+  final cleaned = title
+      .replaceAll(RegExp(r'[^\w\s-]'), '')
+      .trim()
+      .replaceAll(RegExp(r'\s+'), '_');
+  return cleaned.isEmpty ? 'post' : cleaned;
+}
+
+/// Q-column headers: question labels from the attached form when available,
+/// otherwise generic Q1..QN for quick registrations.
+List<String> _answerHeaders(PostModel post, List<FormSubmission> subs) {
+  final form = post.form;
+  if (form != null && form.fields.isNotEmpty) {
+    return form.fields.where((f) => !f.isHeader).map((f) => f.label).toList();
+  }
+  final maxAnswers = subs
+      .map((s) => s.answers.length)
+      .fold<int>(0, (a, b) => a > b ? a : b);
+  return List.generate(maxAnswers, (i) => 'Q${i + 1}');
+}
+
+/// Answers keyed by question label -> value (fall back to field ids).
+Map<String, dynamic> _labelsToAnswers(PostModel post, FormSubmission s) {
+  final resolved = <String, dynamic>{};
+  final form = post.form;
+  if (form == null) {
+    s.answers.forEach((k, v) => resolved[k] = v);
+    return resolved;
+  }
+  final byId = {for (final f in form.fields) f.id: f};
+  s.answers.forEach((key, value) {
+    final field = byId[key];
+    resolved[field?.label.isNotEmpty == true ? field!.label : key] = value;
+  });
+  return resolved;
+}
+
+String _stringify(dynamic value) {
+  if (value == null) return '';
+  if (value is List) return value.join(', ');
+  return value.toString();
+}
+
+String buildRegistrantCsv({
+  required PostModel post,
+  required List<FormSubmission> submissions,
+}) {
+  final headers = _answerHeaders(post, submissions);
+  final buf = StringBuffer();
+  List<String> esc(Iterable<String> cells) =>
+      cells.map((c) => '"${c.replaceAll('"', '""')}"').toList();
+
+  buf.writeln(
+    esc([
+      'Name',
+      'MIT ID',
+      'Department',
+      'Year',
+      'Mobile Number',
+      'Submitted At',
+      ...headers,
+    ]).join(','),
+  );
+  for (final s in submissions) {
+    final answers = _labelsToAnswers(post, s);
+    buf.writeln(
+      esc([
+        s.name,
+        s.studentOrEmployeeId,
+        s.department,
+        s.year,
+        s.mobileNumber,
+        _formatExportDate(s.submittedAt),
+        ...headers.map((h) => _stringify(answers[h])),
+      ]).join(','),
+    );
+  }
+  return buf.toString();
+}
+
+Future<Uint8List> buildRegistrantPdf({
+  required PostModel post,
+  required List<FormSubmission> submissions,
+  String collegeName = 'StudentHub',
+}) async {
+  final doc = pw.Document();
+  doc.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      header: (context) => pw.Text(
+        '$collegeName · ${post.isEvent ? 'Event Registration Report' : 'Form Responses'}',
+        style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+      ),
+      footer: (context) => pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text(
+          'Page ${context.pageNumber} of ${context.pagesCount}',
+          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+        ),
+      ),
+      build: (context) => [
+        pw.Text(
+          post.title,
+          style: pw.TextStyle(
+            fontSize: 17,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.blueGrey900,
+          ),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          '${post.department} · Generated ${_formatExportDate(DateTime.now())} · '
+          '${submissions.length} ${post.isEvent ? 'registrations' : 'responses'}',
+          style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+        ),
+        pw.SizedBox(height: 16),
+        pw.TableHelper.fromTextArray(
+          headers: const [
+            'Name',
+            'MIT ID',
+            'Dept',
+            'Year',
+            'Mobile',
+            'Submitted',
+            'Answers',
+          ],
+          data: submissions.map((s) {
+            final answers = _labelsToAnswers(post, s);
+            final answerText = answers.entries
+                .map((e) => '${e.key}: ${_stringify(e.value)}')
+                .join('\n');
+            return [
+              s.name,
+              s.studentOrEmployeeId,
+              s.department,
+              s.year,
+              s.mobileNumber,
+              _formatExportDate(s.submittedAt),
+              answerText.isEmpty ? '—' : answerText,
+            ];
+          }).toList(),
+          border: pw.TableBorder.all(
+            color: PdfColors.grey400,
+            width: 0.5,
+          ),
+          headerStyle: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.white,
+          ),
+          headerDecoration: const pw.BoxDecoration(
+            color: PdfColors.blueGrey700,
+          ),
+          cellStyle: pw.TextStyle(fontSize: 8, color: PdfColors.blueGrey900),
+          cellPadding: const pw.EdgeInsets.all(5),
+        ),
+        if (submissions.isEmpty)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 16),
+            child: pw.Text(
+              'No ${post.isEvent ? 'registrations' : 'responses'} yet.',
+              style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+            ),
+          ),
+      ],
+    ),
+  );
+  return doc.save();
+}
+
+/// Writes the export to a temp file ready for sharing.
+Future<File> writeRegistrantExport({
+  required PostModel post,
+  required List<FormSubmission> submissions,
+  required ExportFormat format,
+  String collegeName = 'StudentHub',
+}) async {
+  final dir = await getTemporaryDirectory();
+  final base = _safeFileName(post.title);
+  final file = File(
+    '${dir.path}/${base}_${format.name == 'csv' ? 'registrations.csv' : 'registrations.pdf'}',
+  );
+  if (format == ExportFormat.csv) {
+    await file.writeAsString(
+      buildRegistrantCsv(post: post, submissions: submissions),
+    );
+  } else {
+    final bytes = await buildRegistrantPdf(
+      post: post,
+      submissions: submissions,
+      collegeName: collegeName,
+    );
+    await file.writeAsBytes(bytes);
+  }
+  return file;
+}

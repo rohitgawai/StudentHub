@@ -14,6 +14,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController nameController;
   late TextEditingController idController;
+  late TextEditingController mobileController;
   late String selectedDepartment;
   late String selectedYear;
 
@@ -23,6 +24,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
     final user = Provider.of<MockDataService>(context, listen: false).currentUser;
     nameController = TextEditingController(text: user.name);
     idController = TextEditingController(text: user.studentOrEmployeeId);
+    mobileController = TextEditingController(text: user.mobileNumber);
     selectedDepartment = user.department;
     selectedYear = user.year;
   }
@@ -31,6 +33,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
   void dispose() {
     nameController.dispose();
     idController.dispose();
+    mobileController.dispose();
     super.dispose();
   }
 
@@ -129,6 +132,34 @@ class _EditProfileModalState extends State<EditProfileModal> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+
+                // Mobile Number (used for registrations & event contact)
+                TextFormField(
+                  controller: mobileController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Mobile Number',
+                    hintText: 'e.g. +91 98765 43210',
+                    prefixIcon: const Icon(Icons.phone_android_outlined),
+                    border: const OutlineInputBorder(),
+                    helperText:
+                        'Shown to event hosts when you register for their events',
+                    helperStyle: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty) return 'Enter your mobile number';
+                    final digits = value.replaceAll(RegExp(r'\D'), '');
+                    if (digits.length < 10) {
+                      return 'Enter a valid mobile number (10+ digits)';
+                    }
+                    return null;
+                  },
+                ),
                 const SizedBox(height: 20),
 
                 // Save Button
@@ -149,6 +180,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
                         department: selectedDepartment,
                         year: selectedYear,
                         studentOrEmployeeId: idController.text.trim(),
+                        mobileNumber: mobileController.text.trim(),
                       );
 
                       Navigator.of(context).pop();

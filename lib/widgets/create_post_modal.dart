@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/form_models.dart';
 import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
 import 'custom_dropdown.dart';
 import 'image_picker_field.dart';
+import 'link_form_editor.dart';
 import 'pdf_upload_field.dart';
 
 class CreatePostModal extends StatefulWidget {
@@ -27,6 +29,8 @@ class _CreatePostModalState extends State<CreatePostModal> {
   int announcementWeeks = 1;
 
   List<PostAttachment> attachedPdfs = [];
+  List<PostLink> links = [];
+  FormDefinition? form;
 
   @override
   void initState() {
@@ -156,6 +160,8 @@ class _CreatePostModalState extends State<CreatePostModal> {
       imageUrl: selectedImageUrl,
       isUrgent: isUrgent,
       attachments: attachPdfMock ? attachedPdfs : [],
+      links: links,
+      form: form,
     );
 
     dataService.addPost(newPost);
@@ -325,6 +331,19 @@ class _CreatePostModalState extends State<CreatePostModal> {
                 ),
               ],
             ],
+
+            const SizedBox(height: 16),
+
+            // Links & Form section (any category except header banners).
+            if (category != PostCategory.urgentAnnouncement)
+              LinkFormEditor(
+                accent: dataService.config.primaryColor,
+                initialFormLabel: titleController.text.trim().isEmpty
+                    ? 'Response Form'
+                    : titleController.text.trim(),
+                onLinksChanged: (links) => setState(() => this.links = links),
+                onFormChanged: (form) => setState(() => this.form = form),
+              ),
 
             const SizedBox(height: 24),
             ElevatedButton(

@@ -21,6 +21,7 @@ class ManagedPostCard extends StatelessWidget {
   final VoidCallback? onToggleLike;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback? onViewRegistrants;
 
   const ManagedPostCard({
     super.key,
@@ -38,6 +39,7 @@ class ManagedPostCard extends StatelessWidget {
     this.onToggleLike,
     required this.onEdit,
     required this.onDelete,
+    this.onViewRegistrants,
   });
 
   @override
@@ -57,6 +59,7 @@ class ManagedPostCard extends StatelessWidget {
           onToggleRegister: onToggleRegister,
           onToggleCongratulate: onToggleCongratulate,
           onToggleLike: onToggleLike,
+          onViewRegistrants: onViewRegistrants,
         ),
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
