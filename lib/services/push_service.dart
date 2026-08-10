@@ -132,7 +132,8 @@ class PushService {
         type != 'event_registration' &&
         type != 'registration_confirmed' &&
         type != 'registrations_closed' &&
-        type != 'role_update') {
+        type != 'role_update' &&
+        type != 'announcement') {
       return;
     }
     unawaited(service.syncNow());

@@ -1039,8 +1039,51 @@ class MockDataService extends ChangeNotifier {
     } catch (e) {
       debugPrint('StudentHub: role request sync failed: $e');
     }
+    try {
+      if (await _syncAdminBroadcasts(client)) changed = true;
+    } catch (e) {
+      debugPrint('StudentHub: broadcast sync failed: $e');
+    }
     _recordReachability(true);
     return (success: true, changed: changed);
+  }
+
+  /// Pulls ADMIN broadcasts (sent from the admin panel) into the in-app
+  /// notification bell only — they never appear in the campus feed. Each
+  /// broadcast becomes an unread notification carrying the "By Admin" marker.
+  Future<bool> _syncAdminBroadcasts(SupabaseClient client) async {
+    final rows = await client
+        .from('broadcasts')
+        .select()
+        .order('created_at', ascending: false)
+        .limit(50)
+        .timeout(const Duration(seconds: 5));
+    var changed = false;
+    for (final row in rows) {
+      final id = row['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      final title = row['title']?.toString() ?? '';
+      if (title.isEmpty) continue;
+      final broadcastNotifId = 'notif_admin_broadcast_$id';
+      if (_notifications.any((n) => n.id == broadcastNotifId)) continue;
+      _notifications.insert(
+        0,
+        NotificationModel(
+          id: broadcastNotifId,
+          title: '📢 $title',
+          body: '${row['body']?.toString() ?? ''}\n\nBy Admin',
+          category: NotificationCategory.academic,
+          timestamp: _parseDate(row['created_at']) ?? DateTime.now(),
+          relatedPostId: id,
+        ),
+      );
+      changed = true;
+    }
+    if (changed) {
+      _invalidateDataCaches();
+      _scheduleLocalSave();
+    }
+    return changed;
   }
 
 
@@ -2362,7 +2405,7 @@ class MockDataService extends ChangeNotifier {
     _scheduleLocalSave();
   }
 
-  /// Builds the in-app bell notification for a post. Used for posts this
+/// Builds the in-app bell notification for a post. Used for posts this
   /// device published (publishedByMe) and for posts synced from other devices.
   NotificationModel _postNotification(
     PostModel post, {
@@ -2373,8 +2416,8 @@ class MockDataService extends ChangeNotifier {
         ? NotificationCategory.events
         : post.category == PostCategory.urgent ||
               post.category == PostCategory.urgentAnnouncement
-        ? NotificationCategory.academic
-        : NotificationCategory.general;
+            ? NotificationCategory.academic
+            : NotificationCategory.general;
     return NotificationModel(
       id: 'notif_${DateTime.now().microsecondsSinceEpoch}_${post.id}',
       title: publishedByMe
