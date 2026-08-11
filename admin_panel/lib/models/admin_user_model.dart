@@ -4,6 +4,7 @@ class AdminUserModel {
   final String fullName;
   final String? avatarUrl;
   final String role; // student, host, faculty, admin, banned, deleted
+  final List<String> roles;
   final String? studentId; // student_or_employee_id (MIT ID)
   final String? branch; // department
   final String? year;
@@ -20,6 +21,7 @@ class AdminUserModel {
     required this.fullName,
     this.avatarUrl,
     required this.role,
+    this.roles = const ['student'],
     this.studentId,
     this.branch,
     this.year,
@@ -32,21 +34,37 @@ class AdminUserModel {
   });
 
   factory AdminUserModel.fromMap(Map<String, dynamic> map) {
-    String userRole = 'student';
     List<String> rolesList = [];
 
     if (map['roles'] is List) {
-      rolesList = (map['roles'] as List).map((e) => e.toString()).toList();
-      if (rolesList.isNotEmpty) {
-        userRole = rolesList.first;
-      }
+      rolesList = (map['roles'] as List).map((e) => e.toString().toLowerCase()).toList();
     } else if (map['role'] != null) {
-      userRole = map['role'].toString();
-      rolesList = [userRole];
+      final singleRole = map['role'].toString().toLowerCase();
+      rolesList = [singleRole == 'eventhost' || singleRole == 'event_host' ? 'host' : singleRole];
     }
 
-    final bool banned = rolesList.contains('banned') || userRole == 'banned' || map['is_banned'] == true;
-    final bool deleted = rolesList.contains('deleted') || userRole == 'deleted' || map['is_deleted'] == true;
+    if (rolesList.isEmpty) {
+      rolesList = ['student'];
+    }
+
+    // Determine primary display role (prioritize active granted roles: host, faculty, admin)
+    String primaryRole = 'student';
+    final hasHost = rolesList.contains('host') || rolesList.contains('eventhost') || rolesList.contains('event_host');
+    final hasFaculty = rolesList.contains('faculty');
+    final hasAdmin = rolesList.contains('admin');
+
+    if (hasHost) {
+      primaryRole = 'host';
+    } else if (hasFaculty) {
+      primaryRole = 'faculty';
+    } else if (hasAdmin) {
+      primaryRole = 'admin';
+    } else if (rolesList.isNotEmpty) {
+      primaryRole = rolesList.first;
+    }
+
+    final bool banned = rolesList.contains('banned') || primaryRole == 'banned' || map['is_banned'] == true;
+    final bool deleted = rolesList.contains('deleted') || primaryRole == 'deleted' || map['is_deleted'] == true;
 
     final updatedAt = map['updated_at'] != null ? DateTime.tryParse(map['updated_at'].toString()) : null;
     final createdAt = map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) : updatedAt;
@@ -56,7 +74,8 @@ class AdminUserModel {
       email: map['email']?.toString() ?? 'No Email',
       fullName: map['name']?.toString() ?? map['full_name']?.toString() ?? 'Student',
       avatarUrl: map['avatar_url']?.toString(),
-      role: userRole,
+      role: primaryRole,
+      roles: rolesList,
       studentId: map['student_or_employee_id']?.toString() ?? map['student_id']?.toString() ?? map['mit_id']?.toString(),
       branch: map['department']?.toString() ?? map['branch']?.toString(),
       year: map['year']?.toString(),
@@ -75,7 +94,7 @@ class AdminUserModel {
       'email': email,
       'name': fullName,
       'avatar_url': avatarUrl,
-      'roles': isBanned ? ['banned'] : isDeleted ? ['deleted'] : [role],
+      'roles': isBanned ? ['banned'] : isDeleted ? ['deleted'] : roles,
       'student_or_employee_id': studentId,
       'department': branch,
       'year': year,

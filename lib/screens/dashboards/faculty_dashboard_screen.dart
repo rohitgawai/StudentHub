@@ -152,6 +152,56 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen>
             noticeCount: myNotices.length,
             galleryCount: myGalleries.length,
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Material(
+              color: _accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const RegistrationStatsScreen(),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.query_stats, color: _accent),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '📊 Registration Stats',
+                              style: TextStyle(
+                                color: _accent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Registrations, attendance tracking & CSV/PDF export for your events — tap to open.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: Colors.grey.shade500),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
           Container(
             color: Theme.of(context).cardColor,
             child: TabBar(
@@ -225,6 +275,7 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen>
           currentUserId: user.id,
           onToggleSave: () => dataService.toggleSavePost(post.id),
           onToggleRegister: () => dataService.toggleEventRegistration(post.id),
+          onToggleCongratulate: () => dataService.toggleCongratulate(post.id),
           onToggleLike: () => dataService.toggleLikePost(post.id),
           onEdit: () => _showEditDialog(context, dataService, post),
           onDelete: () => _confirmDelete(context, dataService, post),

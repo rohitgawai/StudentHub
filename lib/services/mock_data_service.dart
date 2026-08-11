@@ -1157,21 +1157,32 @@ class MockDataService extends ChangeNotifier {
         .whereType<String>()
         .map(_roleFromName)
         .toList();
-    final granted = serverRoles
-        .where((r) => !currentUser.roles.contains(r))
-        .toList();
-
     final serverHasCompleted = row['has_completed_progressive_form'] as bool? ?? currentUser.hasCompletedProgressiveForm;
 
-    if (granted.isEmpty && serverHasCompleted == currentUser.hasCompletedProgressiveForm) {
+    final localSet = currentUser.roles.toSet();
+    final serverSet = serverRoles.toSet();
+    final rolesChanged =
+        localSet.length != serverSet.length || !localSet.containsAll(serverSet);
+
+    if (!rolesChanged && serverHasCompleted == currentUser.hasCompletedProgressiveForm) {
       return false;
     }
 
+    // The server is the source of truth for granted roles: adopt it wholesale
+    // (additions AND removals) so admin grants/revocations land on every
+    // device without a re-login. An empty server list means "nothing granted
+    // yet", so the local default (Student) survives for fresh profiles.
+    final effectiveRoles = serverRoles.isEmpty ? currentUser.roles : serverRoles;
     currentUser = currentUser.copyWith(
-      roles: [...currentUser.roles, ...granted],
+      roles: effectiveRoles,
       isVerified: row['is_verified'] as bool? ?? currentUser.isVerified,
       hasCompletedProgressiveForm: serverHasCompleted,
     );
+    if (!effectiveRoles.contains(activeRole)) {
+      activeRole = effectiveRoles.isNotEmpty
+          ? effectiveRoles.first
+          : UserRole.student;
+    }
     _scheduleLocalSave();
     return true;
   }

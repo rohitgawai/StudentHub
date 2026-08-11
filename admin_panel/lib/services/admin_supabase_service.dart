@@ -135,8 +135,16 @@ class AdminSupabaseService extends ChangeNotifier {
 
   Future<bool> updateUserRole(String userId, String newRole) async {
     try {
+      final roleKey = newRole.toLowerCase();
+      List<String> targetRoles = ['student'];
+      if (roleKey == 'host' || roleKey == 'eventhost' || roleKey == 'event_host') {
+        targetRoles = ['student', 'host'];
+      } else if (roleKey == 'faculty') {
+        targetRoles = ['faculty'];
+      }
+
       await _client.from('profiles').update({
-        'roles': [newRole],
+        'roles': targetRoles,
       }).eq('user_id', userId);
 
       await fetchUsers();
@@ -320,15 +328,29 @@ class AdminSupabaseService extends ChangeNotifier {
   }) async {
     try {
       final status = approve ? 'approved' : 'rejected';
-      
+
       await _client.from('role_requests').update({
         'status': status,
-        'review_notes': note ?? (approve ? 'Approved by Admin' : 'Rejected by Admin'),
+        'admin_notes': note ?? (approve ? 'Approved by Admin' : 'Rejected by Admin'),
       }).eq('id', requestId);
 
       if (approve) {
+        final rows = await _client
+            .from('profiles')
+            .select('roles')
+            .eq('user_id', userId)
+            .limit(1);
+        final existingRoles = (rows as List<dynamic>).isNotEmpty
+            ? ((rows.first as Map)['roles'] as List?) ?? const <dynamic>[]
+            : const <dynamic>[];
+        // Merge instead of replace so switching between roles keeps working;
+        // Faculty is a strict upgrade that drops the Student role.
+        var merged = {...existingRoles.whereType<String>(), targetRole}.toList();
+        if (targetRole == 'faculty') {
+          merged = merged.where((r) => r != 'student').toList();
+        }
         await _client.from('profiles').update({
-          'roles': [targetRole],
+          'roles': merged,
         }).eq('user_id', userId);
       }
 

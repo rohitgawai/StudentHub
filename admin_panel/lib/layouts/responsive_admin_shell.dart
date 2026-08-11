@@ -364,7 +364,12 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => setState(() => _currentTab = tab),
+          onTap: () {
+            setState(() => _currentTab = tab);
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(

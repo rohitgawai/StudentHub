@@ -33,7 +33,7 @@ class _UserDirectoryScreenState extends State<UserDirectoryScreen> {
 
   void _showRoleChangeDialog(BuildContext context, AdminUserModel user) {
     String selectedRole = user.role.toLowerCase();
-    if (selectedRole == 'eventhost') selectedRole = 'host';
+    if (selectedRole == 'eventhost' || selectedRole == 'event_host') selectedRole = 'host';
     if (selectedRole == 'banned' || selectedRole == 'admin') selectedRole = 'student';
 
     showDialog(
@@ -51,7 +51,7 @@ class _UserDirectoryScreenState extends State<UserDirectoryScreen> {
               Text('User: ${user.fullName} (${user.email})', style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 13)),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: ['student', 'host', 'faculty'].contains(selectedRole) ? selectedRole : 'student',
+                value: ['student', 'host', 'faculty'].contains(selectedRole) ? selectedRole : 'student',
                 dropdownColor: AdminTheme.surfaceDark,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(

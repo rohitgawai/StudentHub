@@ -98,7 +98,9 @@ class _RoleRemovalsScreenState extends State<RoleRemovalsScreen> {
     // Filter users who currently hold special roles (Host or Faculty)
     final roleHolders = service.allUsers.where((u) {
       final r = u.role.toLowerCase();
-      final isRoleHolder = r == 'host' || r == 'eventhost' || r == 'faculty';
+      final hasHostInList = u.roles.contains('host') || u.roles.contains('eventhost') || u.roles.contains('event_host');
+      final hasFacultyInList = u.roles.contains('faculty');
+      final isRoleHolder = r == 'host' || r == 'eventhost' || r == 'faculty' || hasHostInList || hasFacultyInList;
       if (!isRoleHolder) return false;
       if (_search.isEmpty) return true;
       final q = _search.toLowerCase();

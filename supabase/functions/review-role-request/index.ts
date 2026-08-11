@@ -97,9 +97,14 @@ Deno.serve(async (req) => {
     const existingRoles = Array.isArray(applicants?.[0]?.roles)
       ? applicants![0].roles
       : []
-    const updatedRoles = existingRoles.includes(role)
-      ? existingRoles
+    // Faculty is a strict upgrade: it replaces the Student role everywhere.
+    const baseRoles = existingRoles.includes(role)
+      ? [...existingRoles]
       : [...existingRoles, role]
+    const updatedRoles =
+      role === 'faculty'
+        ? baseRoles.filter((r) => r !== 'student')
+        : baseRoles
 
     if (applicants && applicants.length > 0) {
       const { error: grantError } = await supabase
