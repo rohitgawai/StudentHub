@@ -208,7 +208,7 @@ class AdminSupabaseService extends ChangeNotifier {
       } catch (_) {}
 
       if (targetBannedState) {
-        // Dispatch Ban notification
+        // Dispatch Ban push notification & in-app bell notification
         try {
           await http.post(
             Uri.parse(SupabaseConfig.pushFunctionUrl),
@@ -218,8 +218,8 @@ class AdminSupabaseService extends ChangeNotifier {
             },
             body: jsonEncode({
               'post_id': 'ban_${DateTime.now().millisecondsSinceEpoch}',
-              'title': 'Account Suspended',
-              'body': 'You are banned, so you cant use any features.',
+              'title': 'Account Suspended 🚫',
+              'body': 'Your account has been suspended by Administrator. You cannot access features until resolved.',
               'recipient_user_id': userId,
               'category': 'personal',
               'type': 'account_ban',
@@ -227,6 +227,51 @@ class AdminSupabaseService extends ChangeNotifier {
           );
         } catch (e) {
           debugPrint('Push ban notice error: $e');
+        }
+
+        try {
+          await _client.from('notifications').insert({
+            'user_id': userId,
+            'title': 'Account Suspended 🚫',
+            'body': 'Your account has been suspended by Administrator. Please contact support if you have any questions.',
+            'category': 'personal',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        } catch (e) {
+          debugPrint('In-app ban notice error: $e');
+        }
+      } else {
+        // Dispatch Unban push notification & in-app bell notification
+        try {
+          await http.post(
+            Uri.parse(SupabaseConfig.pushFunctionUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Push-Secret': SupabaseConfig.pushSecret,
+            },
+            body: jsonEncode({
+              'post_id': 'unban_${DateTime.now().millisecondsSinceEpoch}',
+              'title': 'Account Restored! 🎉',
+              'body': 'Your account has been unbanned by Administrator. You now have full access to StudentHub.',
+              'recipient_user_id': userId,
+              'category': 'personal',
+              'type': 'account_unban',
+            }),
+          );
+        } catch (e) {
+          debugPrint('Push unban notice error: $e');
+        }
+
+        try {
+          await _client.from('notifications').insert({
+            'user_id': userId,
+            'title': 'Account Restored! 🎉',
+            'body': 'Your account has been unbanned by Administrator. You now have full access to StudentHub.',
+            'category': 'personal',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        } catch (e) {
+          debugPrint('In-app unban notice error: $e');
         }
       }
 

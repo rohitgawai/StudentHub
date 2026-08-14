@@ -1,9 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/app_config.dart';
 import '../models/post_model.dart';
+import '../services/mock_data_service.dart';
 import '../screens/form_fill_screen.dart';
 import '../utils/date_formatter.dart';
 import '../utils/external_links.dart';
@@ -703,31 +705,109 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                 ),
               ),
             )
-          else if (widget.post.form != null)
-            // Events with an attached form: Register opens the in-app form.
-            _RegisterButton(
-              config: widget.config,
-              isRegistered: widget.isRegistered,
-              isFull: widget.post.isRegistrationFull && !widget.isRegistered,
-              onPressed:
-                  (widget.post.isRegistrationFull ||
-                          _isRegistrationClosed(widget.post)) &&
-                      !widget.isRegistered
-                      ? null
-                      : () => openRegistrationForm(context, widget.post),
-            )
           else
             _RegisterButton(
               config: widget.config,
               isRegistered: widget.isRegistered,
               isFull: post.isRegistrationFull && !widget.isRegistered,
-              onPressed: post.isRegistrationFull && !widget.isRegistered
+              onPressed: (widget.post.isRegistrationFull ||
+                          _isRegistrationClosed(widget.post)) &&
+                      !widget.isRegistered
                   ? null
-                  : widget.onToggleRegister,
+                  : () => _handleRegisterPress(context),
             ),
         ],
       ],
     );
+  }
+
+  void _handleRegisterPress(BuildContext context) {
+    final dataService = context.read<MockDataService>();
+    final post = widget.post;
+
+    if (widget.isRegistered) {
+      showDialog(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 24),
+              SizedBox(width: 8),
+              Text('Cancel Registration?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'You cant register again,So are tou sure cancel registration ?',
+            style: TextStyle(fontSize: 14, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: const Text('No', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.of(dialogCtx).pop();
+                dataService.cancelRegistrationPermanently(post.id);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Registration cancelled.'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              },
+              child: const Text('Yes', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } else {
+      if (dataService.currentUser.cancelledEventIds.contains(post.id)) {
+        showDialog(
+          context: context,
+          builder: (dialogCtx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.block_rounded, color: Colors.red, size: 24),
+                SizedBox(width: 8),
+                Text('Registration Blocked', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: const Text(
+              'sorry,you cant no more register for event,if you eager contact host/faculty',
+              style: TextStyle(fontSize: 14, height: 1.4),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: widget.config.primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      if (widget.post.form != null) {
+        openRegistrationForm(context, widget.post);
+      } else if (widget.onToggleRegister != null) {
+        widget.onToggleRegister!();
+      } else {
+        dataService.toggleEventRegistration(post.id);
+      }
+    }
   }
 
   /// Past the registration deadline: quick toggle is blocked (form events are

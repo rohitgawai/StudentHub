@@ -27,12 +27,41 @@ class PushService {
   final ValueNotifier<PostCategory?> openCategory =
       ValueNotifier<PostCategory?>(null);
 
-  /// Set when the user taps a notification targeting a specific post; the app
-  /// opens the post detail modal directly.
+  /// Set when the user taps a notification targeting a specific post
   final ValueNotifier<String?> targetPostId = ValueNotifier<String?>(null);
+
+  /// Set when user opens an account ban/unban notification
+  final ValueNotifier<String?> accountNotice = ValueNotifier<String?>(null);
 
   MockDataService? _dataService;
   bool _initialized = false;
+
+  void _onMessageOpenedApp(RemoteMessage message) {
+    final category = message.data['category'];
+    final type = message.data['type'];
+    final postId = message.data['post_id']?.toString();
+    final body = message.notification?.body ?? message.data['body']?.toString();
+
+    if (type == 'account_ban' || (postId != null && postId.startsWith('ban_'))) {
+      accountNotice.value = body ?? 'Your account has been suspended by Administrator.';
+      return;
+    }
+    if (type == 'account_unban') {
+      accountNotice.value = body ?? 'Your account has been unbanned. Welcome back!';
+      return;
+    }
+
+    openCategory.value = 'event' == category || 'workshop' == category
+        ? PostCategory.event
+        : PostCategory.announcement;
+    if (postId != null &&
+        postId.isNotEmpty &&
+        !postId.startsWith('ban_') &&
+        !postId.startsWith('role_removal_')) {
+      targetPostId.value = postId;
+    }
+    _maybeSyncAfterPush(message.data);
+  }
 
   Future<void> init({required MockDataService dataService}) async {
     if (_initialized) return;
@@ -137,18 +166,6 @@ class PushService {
       return;
     }
     unawaited(service.syncNow());
-  }
-
-  void _onMessageOpenedApp(RemoteMessage message) {
-    final category = message.data['category'];
-    final postId = message.data['post_id']?.toString();
-    openCategory.value = 'event' == category || 'workshop' == category
-        ? PostCategory.event
-        : PostCategory.announcement;
-    if (postId != null && postId.isNotEmpty) {
-      targetPostId.value = postId;
-    }
-    _maybeSyncAfterPush(message.data);
   }
 }
 

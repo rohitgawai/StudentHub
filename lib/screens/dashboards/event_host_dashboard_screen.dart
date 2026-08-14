@@ -117,6 +117,15 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
     final myGalleries =
         myPosts.where((p) => p.category == PostCategory.gallery).toList();
 
+    final totalRegistrations = myEvents.fold<int>(
+      0,
+      (sum, p) {
+        final subCount = dataService.submissionsForPost(p.id).length;
+        final regCount = p.registeredUserIds.length;
+        return sum + (regCount > subCount ? regCount : subCount);
+      },
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('🎯 Host Dashboard'),
@@ -149,6 +158,7 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
             name: user.name,
             accent: _accent,
             eventCount: myEvents.length,
+            totalRegistrations: totalRegistrations,
             noticeCount: myNotices.length,
             galleryCount: myGalleries.length,
           ),
@@ -243,13 +253,24 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
     String emptyMsg,
   ) {
     if (postsList.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      return RefreshIndicator(
+        onRefresh: () => dataService.refreshFeed(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            const Icon(Icons.inbox_outlined, size: 56, color: Colors.grey),
-            const SizedBox(height: 10),
-            Text(emptyMsg, style: const TextStyle(color: Colors.grey)),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.4,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.inbox_outlined, size: 56, color: Colors.grey),
+                    const SizedBox(height: 10),
+                    Text(emptyMsg, style: const TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       );
@@ -258,38 +279,42 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
     final user = dataService.currentUser;
     final config = dataService.config;
 
-    return ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 24),
-      itemCount: postsList.length,
-      itemBuilder: (ctx, idx) {
-        final post = postsList[idx];
-        final isMine = post.authorId == user.id;
-        return ManagedPostCard(
-          post: post,
-          config: config,
-          isSaved: user.savedPostIds.contains(post.id),
-          isRegistered: user.registeredEventIds.contains(post.id),
-          isCongratulated: user.congratulatedPostIds.contains(post.id),
-          isLiked: user.likedPostIds.contains(post.id),
-          userYear: user.year,
-          currentUserId: user.id,
-          onToggleSave: () => dataService.toggleSavePost(post.id),
-          onToggleRegister: () => dataService.toggleEventRegistration(post.id),
-          onToggleCongratulate: () => dataService.toggleCongratulate(post.id),
-          onToggleLike: () => dataService.toggleLikePost(post.id),
-          onEdit: () => _showEditDialog(context, dataService, post),
-          onDelete: () => _confirmDelete(context, dataService, post),
-          onViewRegistrants: isMine && post.isEvent
-              ? () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => RegistrantsScreen(post: post),
-                    ),
-                  );
-                }
-              : null,
-        );
-      },
+    return RefreshIndicator(
+      onRefresh: () => dataService.refreshFeed(),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(top: 8, bottom: 24),
+        itemCount: postsList.length,
+        itemBuilder: (ctx, idx) {
+          final post = postsList[idx];
+          final isMine = post.authorId == user.id;
+          return ManagedPostCard(
+            post: post,
+            config: config,
+            isSaved: user.savedPostIds.contains(post.id),
+            isRegistered: user.registeredEventIds.contains(post.id),
+            isCongratulated: user.congratulatedPostIds.contains(post.id),
+            isLiked: user.likedPostIds.contains(post.id),
+            userYear: user.year,
+            currentUserId: user.id,
+            onToggleSave: () => dataService.toggleSavePost(post.id),
+            onToggleRegister: () => dataService.toggleEventRegistration(post.id),
+            onToggleCongratulate: () => dataService.toggleCongratulate(post.id),
+            onToggleLike: () => dataService.toggleLikePost(post.id),
+            onEdit: () => _showEditDialog(context, dataService, post),
+            onDelete: () => _confirmDelete(context, dataService, post),
+            onViewRegistrants: isMine && post.isEvent
+                ? () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => RegistrantsScreen(post: post),
+                      ),
+                    );
+                  }
+                : null,
+          );
+        },
+      ),
     );
   }
 }
@@ -300,6 +325,7 @@ class _StatsHeader extends StatelessWidget {
   final String name;
   final Color accent;
   final int eventCount;
+  final int totalRegistrations;
   final int noticeCount;
   final int galleryCount;
 
@@ -307,6 +333,7 @@ class _StatsHeader extends StatelessWidget {
     required this.name,
     required this.accent,
     required this.eventCount,
+    required this.totalRegistrations,
     required this.noticeCount,
     required this.galleryCount,
   });
@@ -315,42 +342,75 @@ class _StatsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFC2410C), Color(0xFFFB8C00)],
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFC2410C), Color(0xFFEA580C), Color(0xFFF97316)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFC2410C).withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Welcome, $name',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.stars_rounded, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Welcome, $name',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: _StatTile(
                   icon: Icons.event_available,
                   count: eventCount,
-                  label: 'Events & Workshops',
+                  label: 'Events',
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.how_to_reg,
+                  count: totalRegistrations,
+                  label: 'Registrations',
+                ),
+              ),
+              const SizedBox(width: 6),
               Expanded(
                 child: _StatTile(
                   icon: Icons.campaign,
                   count: noticeCount,
-                  label: 'Campus Posts',
+                  label: 'Notices',
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Expanded(
                 child: _StatTile(
                   icon: Icons.photo_library_outlined,
@@ -380,36 +440,41 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: const Color(0xFFC2410C)),
-          const SizedBox(height: 4),
+          Icon(icon, size: 20, color: const Color(0xFFC2410C)),
+          const SizedBox(height: 5),
           Text(
             '$count',
             style: const TextStyle(
-              fontSize: 17,
+              fontSize: 18,
               fontWeight: FontWeight.w900,
               color: Color(0xFFC2410C),
             ),
           ),
+          const SizedBox(height: 2),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 9, color: Colors.black54),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.black54,
+            ),
           ),
         ],
       ),

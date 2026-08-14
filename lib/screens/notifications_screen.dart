@@ -155,6 +155,49 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               );
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_outlined),
+            tooltip: 'Clear All Notifications',
+            onPressed: notifs.isEmpty
+                ? null
+                : () {
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        title: const Text('Clear All Notifications?'),
+                        content: const Text(
+                          'Are you sure you want to clear all campus notifications?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: () {
+                              Navigator.of(ctx).pop();
+                              dataService.clearAllNotifications();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Notifications cleared.'),
+                                ),
+                              );
+                            },
+                            child: const Text('Clear All'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+          ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Column(

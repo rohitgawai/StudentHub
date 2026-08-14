@@ -390,6 +390,13 @@ class _RegistrantTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = submission;
+    final service = Provider.of<MockDataService>(context, listen: false);
+    final displayName = s.name.isEmpty ? 'Student' : s.name;
+
+    final displayId = s.studentOrEmployeeId.isEmpty ? 'No ID' : s.studentOrEmployeeId;
+
+    final displayYear = s.year.isEmpty ? (service.currentUser.year.isNotEmpty ? service.currentUser.year : 'Student') : s.year;
+
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
@@ -417,7 +424,7 @@ class _RegistrantTile extends StatelessWidget {
                 radius: 22,
                 backgroundColor: accent.withValues(alpha: 0.14),
                 child: Text(
-                  s.name.isEmpty ? '?' : s.name.substring(0, 1).toUpperCase(),
+                  displayName.isEmpty ? '?' : displayName.substring(0, 1).toUpperCase(),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: accent,
@@ -430,7 +437,7 @@ class _RegistrantTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      s.name,
+                      displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -445,7 +452,7 @@ class _RegistrantTile extends StatelessWidget {
                           child: Text(
                             s.department.isEmpty
                                 ? '—'
-                                : '${s.department} · ${s.year.isEmpty ? '' : s.year}',
+                                : '${s.department} · $displayYear',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -458,7 +465,7 @@ class _RegistrantTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${s.studentOrEmployeeId.isEmpty ? 'No ID' : s.studentOrEmployeeId} · ${formatEventDateTime(s.submittedAt)}',
+                      '$displayId · ${formatEventDateTime(s.submittedAt)}',
                       style: TextStyle(
                         fontSize: 10,
                         color: Colors.grey.shade500,

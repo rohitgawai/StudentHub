@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -23,6 +24,8 @@ class MockDataService extends ChangeNotifier {
   List<NotificationModel> _notifications = [];
   List<ActiveAnnouncement> _announcements = [];
   List<FormSubmission> _formSubmissions = [];
+  bool _notificationsCleared = false;
+  DateTime? _notificationsClearedAt;
 
   /// Post ids this device has confirmed exist on the server. The server is
   /// authoritative for them: they are never re-uploaded from a stale local
@@ -655,6 +658,10 @@ class MockDataService extends ChangeNotifier {
   bool get isLoggedOut => _isLoggedOut;
   String? logoutReason;
 
+  /// Device id this install was already security-logged-out for.
+  String? _kickedForDeviceId;
+  String? _syncedDeviceId;
+
   Future<void> loginUser({
     required String name,
     required String email,
@@ -662,6 +669,8 @@ class MockDataService extends ChangeNotifier {
   }) async {
     _isLoggedOut = false;
     logoutReason = null;
+    _kickedForDeviceId = null;
+    _syncedDeviceId = null;
     final deviceId = await LocalStoreService.instance.getDeviceId();
     final client = _client;
 
@@ -708,9 +717,12 @@ class MockDataService extends ChangeNotifier {
             'updated_at': DateTime.now().toIso8601String(),
           }).eq('user_id', currentUser.id);
 
+          _syncedDeviceId = deviceId;
           _invalidateDataCaches();
           notifyListeners();
           _scheduleLocalSave();
+          // Pull latest posts and registrations right after login so counts are fresh
+          await syncNow();
           return;
         }
       } catch (e) {
@@ -736,10 +748,12 @@ class MockDataService extends ChangeNotifier {
     );
     activeRole = UserRole.student;
 
+    _syncedDeviceId = deviceId;
     _invalidateDataCaches();
     notifyListeners();
     await _persistProfile();
     _scheduleLocalSave();
+    await syncNow();
   }
 
   /// Checks whether an MIT ID (student/employee ID) is available or already
@@ -810,6 +824,7 @@ class MockDataService extends ChangeNotifier {
   Future<void> logout({String? reason}) async {
     _isLoggedOut = true;
     logoutReason = reason;
+    _syncedDeviceId = null;
     if (currentUser.name.isNotEmpty && currentUser.email.isNotEmpty) {
       lastKnownUser = currentUser;
     }
@@ -830,6 +845,155 @@ class MockDataService extends ChangeNotifier {
     );
     _invalidateDataCaches();
     notifyListeners();
+  }
+
+  /// Pulls form submissions (form fills + quick registrations) from the
+  /// backend and merges them with device-local rows. This is what lets a host
+  /// on another device see real attendee profile data (name, MIT ID,
+  /// department, year, mobile) instead of synthetic placeholders.
+  Future<bool> _syncFormSubmissions(SupabaseClient client) async {
+    final rows = await client
+        .from('form_submissions')
+        .select()
+        .order('submitted_at', ascending: false)
+        .limit(500)
+        .timeout(const Duration(seconds: 5));
+    var changed = false;
+    final localById = <String, FormSubmission>{
+      for (final s in _formSubmissions) s.id: s,
+    };
+    final merged = List<FormSubmission>.from(_formSubmissions);
+    for (final row in rows) {
+      final id = row['id']?.toString() ?? '';
+      final postId = row['post_id']?.toString() ?? '';
+      if (id.isEmpty || postId.isEmpty) continue;
+      final remote = FormSubmission(
+        id: id,
+        postId: postId,
+        formId: row['form_id']?.toString().isEmpty == true
+            ? null
+            : row['form_id']?.toString(),
+        userId: row['user_id']?.toString() ?? '',
+        name: row['name']?.toString() ?? '',
+        studentOrEmployeeId: row['student_or_employee_id']?.toString() ?? '',
+        department: row['department']?.toString() ?? '',
+        year: row['year']?.toString() ?? '',
+        mobileNumber: row['mobile_number']?.toString() ?? '',
+        answers:
+            ((row['answers'] as Map?) ?? const {}).cast<String, dynamic>(),
+        submittedAt: _parseDate(row['submitted_at']) ?? DateTime.now(),
+      );
+      final local = localById[id];
+      if (local == null) {
+        final missing = <String, FormSubmission>{
+          for (final s in merged) '${s.postId}|${s.userId}': s,
+        };
+        final key = '${remote.postId}|${remote.userId}';
+        final existing = missing[key];
+        if (existing != null) {
+          final idx = merged.indexOf(existing);
+          merged[idx] = existing.copyWith(
+            name: existing.name.isNotEmpty ? existing.name : remote.name,
+            studentOrEmployeeId: existing.studentOrEmployeeId.isNotEmpty
+                ? existing.studentOrEmployeeId
+                : remote.studentOrEmployeeId,
+            department: existing.department.isNotEmpty
+                ? existing.department
+                : remote.department,
+            year: existing.year.isNotEmpty ? existing.year : remote.year,
+            mobileNumber: existing.mobileNumber.isNotEmpty
+                ? existing.mobileNumber
+                : remote.mobileNumber,
+          );
+        } else {
+          merged.add(remote);
+        }
+        changed = true;
+      } else {
+        final enriched = local.copyWith(
+          name: local.name.isNotEmpty ? local.name : remote.name,
+          studentOrEmployeeId: local.studentOrEmployeeId.isNotEmpty
+              ? local.studentOrEmployeeId
+              : remote.studentOrEmployeeId,
+          department: local.department.isNotEmpty
+              ? local.department
+              : remote.department,
+          year: local.year.isNotEmpty ? local.year : remote.year,
+          mobileNumber: local.mobileNumber.isNotEmpty
+              ? local.mobileNumber
+              : remote.mobileNumber,
+        );
+        final idx = merged.indexOf(local);
+        if (idx != -1 && !_sameSubmission(local, enriched)) {
+          merged[idx] = enriched;
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      _formSubmissions = merged;
+    }
+    return changed;
+  }
+
+  static bool _sameSubmission(FormSubmission a, FormSubmission b) =>
+      a.name == b.name &&
+      a.studentOrEmployeeId == b.studentOrEmployeeId &&
+      a.department == b.department &&
+      a.year == b.year &&
+      a.mobileNumber == b.mobileNumber;
+
+  final Map<String, UserModel> _knownProfiles = {};
+
+  /// Syncs profiles for all registrants and submission authors from Supabase
+  /// `profiles` table into [_knownProfiles]. This ensures hosts see the real
+  /// student name, MIT ID, department, year, and mobile number even for
+  /// historical registrations or when form_submissions table row is missing.
+  Future<bool> _syncProfilesForRegistrants(SupabaseClient client) async {
+    final uids = <String>{
+      for (final p in _posts) ...p.registeredUserIds,
+      for (final s in _formSubmissions) s.userId,
+    }.where((id) => id.isNotEmpty && id != currentUser.id).toList();
+
+    if (uids.isEmpty) return false;
+
+    try {
+      final filterList = uids.take(100).map((id) => 'user_id.eq.$id').join(',');
+      final rows = await client
+          .from('profiles')
+          .select()
+          .or(filterList)
+          .timeout(const Duration(seconds: 5));
+
+      var changed = false;
+      for (final row in rows) {
+        final uid = row['user_id']?.toString() ?? '';
+        if (uid.isEmpty) continue;
+        final user = UserModel(
+          id: uid,
+          name: row['name']?.toString() ?? '',
+          email: row['email']?.toString() ?? '',
+          studentOrEmployeeId: row['student_or_employee_id']?.toString() ?? '',
+          department: row['department']?.toString() ?? '',
+          year: row['year']?.toString() ?? '',
+          mobileNumber: row['mobile_number']?.toString() ?? '',
+          avatarUrl: row['avatar_url']?.toString() ?? '',
+          roles: const [UserRole.student],
+          savedPostIds: const [],
+          registeredEventIds: const [],
+        );
+        if (_knownProfiles[uid] == null ||
+            _knownProfiles[uid]!.name != user.name ||
+            _knownProfiles[uid]!.mobileNumber != user.mobileNumber) {
+          _knownProfiles[uid] = user;
+          changed = true;
+        }
+      }
+      return changed;
+    } catch (e) {
+      debugPrint('StudentHub: profiles lookup failed: $e');
+      return false;
+    }
   }
 
   void switchActiveRole(UserRole newRole) {
@@ -1005,8 +1169,13 @@ class MockDataService extends ChangeNotifier {
             .where((p) => !_posts.any((local) => local.id == p.id))
             .toList();
 
-        // In-app notification for every post synced from server if not already present.
+        // In-app notification for every post synced from server if not already present or cleared.
         for (final post in fetched) {
+          if (_notificationsCleared &&
+              _notificationsClearedAt != null &&
+              post.timestamp.isBefore(_notificationsClearedAt!)) {
+            continue;
+          }
           if (!_notifications.any((n) => n.relatedPostId == post.id)) {
             _notifications.insert(
               0,
@@ -1043,6 +1212,16 @@ class MockDataService extends ChangeNotifier {
       debugPrint('StudentHub: profile sync failed: $e');
     }
     try {
+      if (await _syncFormSubmissions(client)) changed = true;
+    } catch (e) {
+      debugPrint('StudentHub: form submissions sync failed: $e');
+    }
+    try {
+      if (await _syncProfilesForRegistrants(client)) changed = true;
+    } catch (e) {
+      debugPrint('StudentHub: registrant profiles sync failed: $e');
+    }
+    try {
       if (await _syncRoleRequests(client)) changed = true;
     } catch (e) {
       debugPrint('StudentHub: role request sync failed: $e');
@@ -1072,6 +1251,12 @@ class MockDataService extends ChangeNotifier {
       if (id == null || id.isEmpty) continue;
       final title = row['title']?.toString() ?? '';
       if (title.isEmpty) continue;
+      final createdAt = _parseDate(row['created_at']) ?? DateTime.now();
+      if (_notificationsCleared &&
+          _notificationsClearedAt != null &&
+          createdAt.isBefore(_notificationsClearedAt!)) {
+        continue;
+      }
       final broadcastNotifId = 'notif_admin_broadcast_$id';
       if (_notifications.any((n) => n.id == broadcastNotifId)) continue;
       _notifications.insert(
@@ -1081,7 +1266,7 @@ class MockDataService extends ChangeNotifier {
           title: '📢 $title',
           body: '${row['body']?.toString() ?? ''}\n\nBy Admin',
           category: NotificationCategory.academic,
-          timestamp: _parseDate(row['created_at']) ?? DateTime.now(),
+          timestamp: createdAt,
           relatedPostId: id,
         ),
       );
@@ -1122,6 +1307,7 @@ class MockDataService extends ChangeNotifier {
   }
 
   Future<bool> _syncOwnProfile(SupabaseClient client) async {
+    if (isLoggedOut || currentUser.id.isEmpty) return false;
     final currentDeviceId = await LocalStoreService.instance.getDeviceId();
     final rows = await client
         .from('profiles')
@@ -1131,6 +1317,7 @@ class MockDataService extends ChangeNotifier {
         .timeout(const Duration(seconds: 5));
     if (rows.isEmpty) {
       await _pushSeedProfileToBackend(client);
+      _syncedDeviceId = currentDeviceId;
       return false;
     }
 
@@ -1138,19 +1325,37 @@ class MockDataService extends ChangeNotifier {
     final serverActiveDeviceId = row['active_device_id']?.toString() ?? '';
 
     if (serverActiveDeviceId.isNotEmpty && serverActiveDeviceId != currentDeviceId) {
-      debugPrint('StudentHub: Active device changed on server. Triggering auto-logout & security notification.');
-      _notifications.insert(
-        0,
-        NotificationModel(
-          id: 'notif_sec_${DateTime.now().microsecondsSinceEpoch}',
-          title: '🚨 Security Alert: New Device Login',
-          body: 'Someone logged into your account from another device. For safety, this previous session was automatically terminated.',
-          category: NotificationCategory.personal,
-          timestamp: DateTime.now(),
-        ),
-      );
-      unawaited(logout(reason: '🚨 Security Alert: Someone logged into your account from another device. Session terminated for safety.'));
-      return true;
+      if (_syncedDeviceId != null &&
+          _syncedDeviceId == currentDeviceId &&
+          _kickedForDeviceId != serverActiveDeviceId) {
+        _kickedForDeviceId = serverActiveDeviceId;
+        debugPrint('StudentHub: Active device changed on server. Triggering auto-logout & security notification.');
+        _notifications.insert(
+          0,
+          NotificationModel(
+            id: 'notif_sec_${DateTime.now().microsecondsSinceEpoch}',
+            title: '🚨 Security Alert: New Device Login',
+            body: 'Someone logged into your account from another device. For safety, this previous session was automatically terminated.',
+            category: NotificationCategory.personal,
+            timestamp: DateTime.now(),
+          ),
+        );
+        unawaited(logout(reason: '🚨 Security Alert: Someone logged into your account from another device. Session terminated for safety.'));
+        return true;
+      } else {
+        try {
+          await client.from('profiles').update({
+            'active_device_id': currentDeviceId,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('user_id', currentUser.id);
+          _syncedDeviceId = currentDeviceId;
+          currentUser = currentUser.copyWith(activeDeviceId: currentDeviceId);
+        } catch (e) {
+          debugPrint('StudentHub: active_device_id update failed: $e');
+        }
+      }
+    } else if (serverActiveDeviceId == currentDeviceId) {
+      _syncedDeviceId = currentDeviceId;
     }
 
     final serverRoles = ((row['roles'] as List?) ?? const [])
@@ -1211,6 +1416,7 @@ class MockDataService extends ChangeNotifier {
       'liked_post_ids': currentUser.likedPostIds,
       'is_verified': currentUser.isVerified,
     }, onConflict: 'user_id');
+    _syncedDeviceId = deviceId;
   }
 
   Future<void> _persistProfile() async {
@@ -1241,6 +1447,7 @@ class MockDataService extends ChangeNotifier {
         'is_verified': currentUser.isVerified,
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'user_id');
+      _syncedDeviceId = deviceId;
     } catch (e) {
       debugPrint('StudentHub: profile not persisted: $e');
     }
@@ -1761,9 +1968,7 @@ class MockDataService extends ChangeNotifier {
       _serverKnownIds.add(post.id);
     } catch (e) {
       debugPrint('StudentHub: post ${post.id} persistence failed: $e');
-      _posts.removeWhere((p) => p.id == post.id);
-      _invalidateDataCaches();
-      notifyListeners();
+      _scheduleLocalSave();
     }
   }
 
@@ -2081,35 +2286,47 @@ class MockDataService extends ChangeNotifier {
     // flow (submitForm), never by the raw one-tap toggle.
     if (post.form != null) return;
 
+    // Check if user previously cancelled and is permanently blocked
+    if (currentUser.cancelledEventIds.contains(postId)) return;
+
     List<String> regUsers = List.from(post.registeredUserIds);
     List<String> userRegEvents = List.from(currentUser.registeredEventIds);
 
     if (regUsers.contains(currentUser.id)) {
-      regUsers.remove(currentUser.id);
-      userRegEvents.remove(postId);
+      regUsers.removeWhere((id) => id == currentUser.id);
+      userRegEvents.removeWhere((id) => id == postId);
       _formSubmissions.removeWhere(
         (s) => s.postId == postId && s.userId == currentUser.id,
       );
+      unawaited(_deleteFormSubmission(postId, currentUser.id));
     } else {
       if (!_canRegister(post)) return;
-      regUsers.add(currentUser.id);
-      userRegEvents.add(postId);
+      if (!regUsers.contains(currentUser.id)) {
+        regUsers.add(currentUser.id);
+      }
+      if (!userRegEvents.contains(postId)) {
+        userRegEvents.add(postId);
+      }
 
       // Quick (no-form) registration records a submission entry with a
       // profile snapshot, so hosts see attendee data in Registration Stats.
-      _formSubmissions.add(
-        FormSubmission(
-          id: 'sub_${DateTime.now().microsecondsSinceEpoch}',
-          postId: postId,
-          userId: currentUser.id,
-          name: currentUser.name,
-          studentOrEmployeeId: currentUser.studentOrEmployeeId,
-          department: currentUser.department,
-          year: currentUser.year,
-          mobileNumber: currentUser.mobileNumber,
-          submittedAt: DateTime.now(),
-        ),
+      _formSubmissions.removeWhere(
+        (s) => s.postId == postId && s.userId == currentUser.id,
       );
+      final quickSubmission = FormSubmission(
+        id: 'sub_${postId}_${currentUser.id}',
+        postId: postId,
+        formId: '',
+        userId: currentUser.id,
+        name: currentUser.name,
+        studentOrEmployeeId: currentUser.studentOrEmployeeId,
+        department: currentUser.department,
+        year: currentUser.year,
+        mobileNumber: currentUser.mobileNumber,
+        submittedAt: DateTime.now(),
+      );
+      _formSubmissions.add(quickSubmission);
+      unawaited(_persistFormSubmission(quickSubmission));
 
       // Add event registration notification
       _notifications.insert(
@@ -2118,7 +2335,7 @@ class MockDataService extends ChangeNotifier {
           id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
           title: 'Registration Confirmed! 🎉',
           body:
-              'You have registered for ${post.title}. Keep an eye on updates.',
+              'You have registered for "${post.title}". Keep an eye on updates.',
           category: NotificationCategory.events,
           timestamp: DateTime.now(),
           relatedPostId: post.id,
@@ -2156,9 +2373,35 @@ class MockDataService extends ChangeNotifier {
       }
     }
 
-    _posts[index] = post.copyWith(registeredUserIds: regUsers);
-    currentUser = currentUser.copyWith(registeredEventIds: userRegEvents);
+    _posts[index] = post.copyWith(registeredUserIds: regUsers.toSet().toList());
+    currentUser = currentUser.copyWith(registeredEventIds: userRegEvents.toSet().toList());
     _persistPost(_posts[index]);
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+  }
+
+  /// Cancels registration permanently for an event and blocks future re-registration.
+  void cancelRegistrationPermanently(String postId) {
+    final idx = _posts.indexWhere((p) => p.id == postId);
+    if (idx == -1) return;
+    final post = _posts[idx];
+
+    final regUsers = List<String>.from(post.registeredUserIds)..removeWhere((id) => id == currentUser.id);
+    final userRegEvents = List<String>.from(currentUser.registeredEventIds)..removeWhere((id) => id == postId);
+    final cancelledEvents = Set<String>.from(currentUser.cancelledEventIds)..add(postId);
+
+    _formSubmissions.removeWhere(
+      (s) => s.postId == postId && s.userId == currentUser.id,
+    );
+    unawaited(_deleteFormSubmission(postId, currentUser.id));
+
+    _posts[idx] = post.copyWith(registeredUserIds: regUsers.toSet().toList());
+    currentUser = currentUser.copyWith(
+      registeredEventIds: userRegEvents.toSet().toList(),
+      cancelledEventIds: cancelledEvents.toList(),
+    );
+    _persistPost(_posts[idx]);
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
@@ -2307,6 +2550,7 @@ class MockDataService extends ChangeNotifier {
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
+    unawaited(_persistFormSubmission(_formSubmissions[idx]));
   }
 
   /// Withdraws the current user's registration + form submission for an event.
@@ -2321,6 +2565,7 @@ class MockDataService extends ChangeNotifier {
     _formSubmissions.removeWhere(
       (s) => s.postId == postId && s.userId == currentUser.id,
     );
+    unawaited(_deleteFormSubmission(postId, currentUser.id));
     _posts[idx] = post.copyWith(registeredUserIds: regUsers);
     currentUser = currentUser.copyWith(registeredEventIds: userRegEvents);
     _persistPost(_posts[idx]);
@@ -2329,17 +2574,88 @@ class MockDataService extends ChangeNotifier {
     _scheduleLocalSave();
   }
 
-  /// All submissions for a post, newest first.
+  /// All submissions for a post, newest first, deduplicated by user ID. For events,
+  /// guarantees every user in [registeredUserIds] is included so stats and registrant
+  /// lists always display complete attendee data.
   List<FormSubmission> submissionsForPost(String postId) {
+    final postList = _posts.where((p) => p.id == postId).toList();
+    final post = postList.isNotEmpty ? postList.first : null;
+
     final list = _formSubmissions
         .where((s) => s.postId == postId)
         .toList()
       ..sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
-    return list;
+    final seen = <String>{};
+    final deduplicated = <FormSubmission>[];
+    for (final sub in list) {
+      if (seen.add(sub.userId)) {
+        final known = _knownProfiles[sub.userId];
+        final enriched = (known != null && (sub.mobileNumber.isEmpty || sub.mobileNumber == 'N/A' || sub.name.startsWith('Registered Student')))
+            ? sub.copyWith(
+                name: known.name.isNotEmpty ? known.name : sub.name,
+                studentOrEmployeeId: known.studentOrEmployeeId.isNotEmpty ? known.studentOrEmployeeId : sub.studentOrEmployeeId,
+                department: known.department.isNotEmpty ? known.department : sub.department,
+                year: known.year.isNotEmpty ? known.year : sub.year,
+                mobileNumber: known.mobileNumber.isNotEmpty ? known.mobileNumber : sub.mobileNumber,
+              )
+            : sub;
+        deduplicated.add(enriched);
+      }
+    }
+
+    if (post != null && post.isEvent) {
+      for (final uid in post.registeredUserIds) {
+        if (seen.add(uid)) {
+          final isMe = uid == currentUser.id;
+          final known = _knownProfiles[uid];
+          final name = isMe
+              ? currentUser.name
+              : (known != null && known.name.isNotEmpty
+                  ? known.name
+                  : 'Registered Student ($uid)');
+          final sid = isMe
+              ? currentUser.studentOrEmployeeId
+              : (known != null && known.studentOrEmployeeId.isNotEmpty
+                  ? known.studentOrEmployeeId
+                  : uid);
+          final dept = isMe
+              ? currentUser.department
+              : (known != null && known.department.isNotEmpty
+                  ? known.department
+                  : post.department);
+          final yr = isMe
+              ? currentUser.year
+              : (known != null && known.year.isNotEmpty
+                  ? known.year
+                  : 'Student');
+          final phone = isMe
+              ? currentUser.mobileNumber
+              : (known != null && known.mobileNumber.isNotEmpty
+                  ? known.mobileNumber
+                  : 'N/A');
+
+          deduplicated.add(
+            FormSubmission(
+              id: 'sub_synced_${postId}_$uid',
+              postId: postId,
+              userId: uid,
+              name: name,
+              studentOrEmployeeId: sid,
+              department: dept,
+              year: yr,
+              mobileNumber: phone,
+              submittedAt: post.timestamp,
+            ),
+          );
+        }
+      }
+    }
+
+    return deduplicated;
   }
 
   /// One-click broadcast (OS push + in-app bell) to everyone registered /
-  /// who filled a form for this post.
+  /// who filled a form for this post. Includes sender and event details.
   Future<void> sendMessageToRegistrants({
     required PostModel post,
     required String title,
@@ -2352,30 +2668,32 @@ class MockDataService extends ChangeNotifier {
           .map((s) => s.userId),
     }.where((id) => id.isNotEmpty).toList();
 
+    final authorRole = currentUser.roles.isNotEmpty ? currentUser.roles.first.displayName : 'Host';
     final notifTitle = title.trim().isEmpty
-        ? '📍 Update from ${post.authorName}'
-        : title.trim();
+        ? '📢 Update for ${post.title}'
+        : '📢 ${title.trim()} - ${post.title}';
     final notifBody = body.trim().isEmpty
-        ? 'A new update for "${post.title}".'
-        : body.trim();
+        ? 'A new update was sent for "${post.title}".\n(Sent by ${currentUser.name} [$authorRole])'
+        : '${body.trim()}\n\n(Sent by ${currentUser.name} [$authorRole] for "${post.title}")';
 
     for (final uid in userIds) {
-      final isMe = uid == currentUser.id;
-      if (isMe) {
-        _notifications.insert(
-          0,
-          NotificationModel(
-            id: 'notif_${DateTime.now().microsecondsSinceEpoch}_msg',
-            title: notifTitle,
-            body: notifBody,
-            category: post.isEvent
-                ? NotificationCategory.events
-                : NotificationCategory.general,
-            timestamp: DateTime.now(),
-            relatedPostId: post.id,
-          ),
-        );
-      } else {
+      // In-app bell notification entry for every target user
+      _notifications.insert(
+        0,
+        NotificationModel(
+          id: 'notif_${DateTime.now().microsecondsSinceEpoch}_${uid.substring(0, math.min(4, uid.length))}',
+          title: notifTitle,
+          body: notifBody,
+          category: post.isEvent
+              ? NotificationCategory.events
+              : NotificationCategory.general,
+          timestamp: DateTime.now(),
+          relatedPostId: post.id,
+        ),
+      );
+
+      // Push notification broadcast if not current user
+      if (uid != currentUser.id) {
         _pushBroadcast(
           post,
           type: 'registrant_message',
@@ -2397,9 +2715,9 @@ class MockDataService extends ChangeNotifier {
     if (client == null) return;
     try {
       await client.from('form_submissions').upsert({
-        'id': s.id,
+        'id': s.id.isEmpty ? 'sub_${s.postId}_${s.userId}' : s.id,
         'post_id': s.postId,
-        'form_id': s.formId,
+        'form_id': s.formId ?? '',
         'user_id': s.userId,
         'name': s.name,
         'student_or_employee_id': s.studentOrEmployeeId,
@@ -2411,6 +2729,21 @@ class MockDataService extends ChangeNotifier {
       }, onConflict: 'id');
     } catch (e) {
       debugPrint('StudentHub: submission ${s.id} not persisted: $e');
+    }
+  }
+
+  /// Removes a form submission row from backend (e.g., when a student unregisters).
+  Future<void> _deleteFormSubmission(String postId, String userId) async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      await client
+          .from('form_submissions')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', userId);
+    } catch (e) {
+      debugPrint('StudentHub: submission deletion failed: $e');
     }
   }
 
@@ -3001,6 +3334,15 @@ class MockDataService extends ChangeNotifier {
     _notifications = _notifications
         .map((n) => n.copyWith(isRead: true))
         .toList();
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+  }
+
+  void clearAllNotifications() {
+    _notificationsCleared = true;
+    _notificationsClearedAt = DateTime.now();
+    _notifications.clear();
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();

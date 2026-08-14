@@ -25,7 +25,6 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
   late final TextEditingController headerCtrl;
   final _formKey = GlobalKey<FormState>();
   late List<FormFieldSpec> _fields;
-  bool _allowResubmit = false;
   String _selectedTemplate = 'Blank';
 
   bool get _isEditing => widget.initial != null;
@@ -39,7 +38,6 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
     );
     headerCtrl = TextEditingController(text: initial?.headerText ?? '');
     _fields = initial == null ? <FormFieldSpec>[] : List.of(initial.fields);
-    _allowResubmit = initial?.allowResubmit ?? false;
   }
 
   @override
@@ -117,7 +115,7 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
         title: title,
         headerText: headerCtrl.text.trim(),
         fields: _fields,
-        allowResubmit: _allowResubmit,
+        allowResubmit: false,
       ),
     );
   }
@@ -240,27 +238,10 @@ class _FormBuilderScreenState extends State<FormBuilderScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  _allowResubmit
-                      ? 'Students can edit responses'
-                      : 'One response per student',
+                  'One response per student',
                   style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
                 ),
               ],
-            ),
-            const SizedBox(height: 4),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: const Text(
-                'Allow re-submission / editing',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              subtitle: const Text(
-                'Students can edit their response until the deadline',
-                style: TextStyle(fontSize: 11),
-              ),
-              value: _allowResubmit,
-              onChanged: (v) => setState(() => _allowResubmit = v),
             ),
             const SizedBox(height: 8),
 

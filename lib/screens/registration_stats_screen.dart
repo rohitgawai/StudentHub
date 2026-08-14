@@ -20,11 +20,11 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
   static const Color _accent = Color(0xFF1565C0);
 
   List<PostModel> _buildRows(MockDataService service) {
-    final myId = service.currentUser.id;
+    final user = service.currentUser;
     return service.posts
         .where(
           (p) =>
-              p.authorId == myId &&
+              (p.authorId == user.id || p.authorName.contains(user.name)) &&
               (p.form != null ||
                   p.registeredUserIds.isNotEmpty ||
                   service.submissionsForPost(p.id).isNotEmpty),
@@ -33,8 +33,9 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
   }
 
   int _countFor(MockDataService service, PostModel post) {
-    if (post.isEvent) return post.registeredUserIds.length;
-    return service.submissionsForPost(post.id).length;
+    final subCount = service.submissionsForPost(post.id).length;
+    final regCount = post.registeredUserIds.length;
+    return regCount > subCount ? regCount : subCount;
   }
 
   @override

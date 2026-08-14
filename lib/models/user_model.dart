@@ -32,6 +32,7 @@ class UserModel {
   final List<UserRole> roles;
   final List<String> savedPostIds;
   final List<String> registeredEventIds;
+  final List<String> cancelledEventIds;
   final List<String> congratulatedPostIds;
   final List<String> likedPostIds;
   final bool isVerified;
@@ -52,6 +53,7 @@ class UserModel {
     required this.roles,
     required this.savedPostIds,
     required this.registeredEventIds,
+    this.cancelledEventIds = const [],
     this.congratulatedPostIds = const [],
     this.likedPostIds = const [],
     this.isVerified = true,
@@ -79,6 +81,7 @@ class UserModel {
     List<UserRole>? roles,
     List<String>? savedPostIds,
     List<String>? registeredEventIds,
+    List<String>? cancelledEventIds,
     List<String>? congratulatedPostIds,
     List<String>? likedPostIds,
     bool? isVerified,
@@ -99,6 +102,7 @@ class UserModel {
       roles: roles ?? this.roles,
       savedPostIds: savedPostIds ?? this.savedPostIds,
       registeredEventIds: registeredEventIds ?? this.registeredEventIds,
+      cancelledEventIds: cancelledEventIds ?? this.cancelledEventIds,
       congratulatedPostIds:
           congratulatedPostIds ?? this.congratulatedPostIds,
       likedPostIds: likedPostIds ?? this.likedPostIds,

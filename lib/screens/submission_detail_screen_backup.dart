@@ -30,7 +30,7 @@ class SubmissionDetailScreen extends StatelessWidget {
       }
     }
 
-    final displayName = s.name.isEmpty ? 'Student' : s.name;
+final displayName = s.name.isEmpty ? 'Student' : s.name;
 
     final displayId = s.studentOrEmployeeId.isEmpty ? 'No MIT ID provided' : s.studentOrEmployeeId;
 

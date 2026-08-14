@@ -13,6 +13,39 @@ Future<void> openRegistrationForm(
   BuildContext context,
   PostModel post,
 ) async {
+  final service = Provider.of<MockDataService>(context, listen: false);
+  if (service.currentUser.cancelledEventIds.contains(post.id)) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.block_rounded, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Text('Registration Blocked', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'sorry,you cant no more register for event,if you eager contact host/faculty',
+          style: TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: service.config.primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
+
   await Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => FormFillScreen(post: post),
@@ -300,25 +333,6 @@ class _FormFillScreenState extends State<FormFillScreen> {
         backgroundColor: accent,
         foregroundColor: Colors.white,
         title: Text(isEvent ? '📝 Event Registration' : '📝 Form'),
-        actions: [
-          if (isEvent && submitted && form.allowResubmit)
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
-              onPressed: () async {
-                final edit = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(
-                    builder: (_) => FormFillScreen(
-                      post: post,
-                      initialAnswers: mySubmission?.answers,
-                      editing: true,
-                    ),
-                  ),
-                );
-                if (edit == true && mounted) setState(() {});
-              },
-              child: const Text('Edit', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-        ],
       ),
       body: Form(
         key: _formKey,
@@ -453,12 +467,56 @@ class _FormFillScreenState extends State<FormFillScreen> {
                       foregroundColor: Colors.red.shade600,
                     ),
                     onPressed: () {
-                      _service.withdrawRegistration(widget.post.id);
-                      setState(() {});
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Registration cancelled.'),
-                          backgroundColor: Colors.red,
+                      showDialog(
+                        context: context,
+                        builder: (dialogCtx) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          title: const Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded,
+                                  color: Colors.amber, size: 24),
+                              SizedBox(width: 8),
+                              Text('Cancel Registration?',
+                                  style: TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          content: const Text(
+                            'You cant register again,So are tou sure cancel registration ?',
+                            style: TextStyle(fontSize: 14, height: 1.4),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(dialogCtx).pop(),
+                              child: const Text('No',
+                                  style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.of(dialogCtx).pop();
+                                _service.cancelRegistrationPermanently(widget.post.id);
+                                if (mounted) Navigator.of(context).pop();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Registration cancelled.'),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                              },
+                              child: const Text('Yes',
+                                  style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
                         ),
                       );
                     },
