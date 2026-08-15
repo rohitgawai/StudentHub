@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/notification_model.dart';
 import '../services/mock_data_service.dart';
+import '../widgets/post_detail_modal.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -13,12 +14,21 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   String selectedCat = 'All';
 
-  void _showNotificationDetail(BuildContext context, NotificationModel n) {
+  void _handleNotificationTap(BuildContext context, NotificationModel n) {
     final dataService = context.read<MockDataService>();
     if (!n.isRead) {
       dataService.markNotificationRead(n.id);
     }
 
+    if (n.relatedPostId != null && n.relatedPostId!.isNotEmpty) {
+      // Direct deep link to post / event / gallery detail modal!
+      PostDetailModal.show(context, n.relatedPostId!);
+    } else {
+      _showNotificationDetail(context, n);
+    }
+  }
+
+  void _showNotificationDetail(BuildContext context, NotificationModel n) {
     final catColor = _getCatColor(n.category);
 
     showDialog(
@@ -31,7 +41,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Category Header Row (Gmail Inbox Style)
               Row(
                 children: [
                   CircleAvatar(
@@ -70,22 +79,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               const Divider(height: 1),
               const SizedBox(height: 16),
 
-              // Title
               SelectableText(
                 n.title,
                 style: const TextStyle(
-                  fontSize: 18,
+                  fontSize: 17,
                   fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
                 ),
               ),
               const SizedBox(height: 12),
 
-              // Full Message Body
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
+                  color: const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.grey.shade200),
                 ),
@@ -94,13 +102,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   style: const TextStyle(
                     fontSize: 14,
                     height: 1.5,
-                    color: Colors.black87,
+                    color: Color(0xFF334155),
                   ),
                 ),
               ),
               const SizedBox(height: 20),
 
-              // Action Buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -132,28 +139,43 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final filtered = selectedCat == 'All'
         ? notifs
         : notifs
-              .where(
-                (n) =>
-                    n.category.displayName.toLowerCase() ==
-                    selectedCat.toLowerCase(),
-              )
-              .toList();
+            .where(
+              (n) =>
+                  n.category.displayName.toLowerCase() ==
+                  selectedCat.toLowerCase(),
+            )
+            .toList();
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('🔔 Campus Notifications'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        title: const Text(
+          'Notifications',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 20,
+            color: Color(0xFF0F172A),
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.done_all),
+            icon: const Icon(Icons.done_all_rounded),
             tooltip: 'Mark All as Read',
-            onPressed: () {
-              dataService.markAllNotificationsRead();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('All notifications marked as read.'),
-                ),
-              );
-            },
+            onPressed: notifs.isEmpty
+                ? null
+                : () {
+                    dataService.markAllNotificationsRead();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('All notifications marked as read.'),
+                        behavior: SnackBarBehavior.floating,
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
           ),
           IconButton(
             icon: const Icon(Icons.delete_sweep_outlined),
@@ -187,6 +209,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Notifications cleared.'),
+                                  behavior: SnackBarBehavior.floating,
                                 ),
                               );
                             },
@@ -202,136 +225,206 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
       body: Column(
         children: [
-          // Filter Chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: ['All', 'Academic', 'Events', 'General', 'Personal']
-                  .map((cat) {
-                    final isSelected = selectedCat == cat;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: Text(cat),
-                        selected: isSelected,
-                        onSelected: (sel) => setState(() => selectedCat = cat),
-                      ),
-                    );
-                  })
-                  .toList(),
+          // Sleek Minimal Filter Pills
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: ['All', 'Academic', 'Events', 'General', 'Personal']
+                    .map((cat) {
+                      final isSelected = selectedCat == cat;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(cat),
+                          selected: isSelected,
+                          selectedColor: const Color(0xFF0F172A),
+                          backgroundColor: const Color(0xFFF1F5F9),
+                          labelStyle: TextStyle(
+                            color: isSelected ? Colors.white : const Color(0xFF475569),
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                            fontSize: 12.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide.none,
+                          ),
+                          onSelected: (sel) => setState(() => selectedCat = cat),
+                        ),
+                      );
+                    })
+                    .toList(),
+              ),
             ),
           ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
+          // Dynamic Modern Social Feed List
           Expanded(
             child: filtered.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
+                      children: [
                         Icon(
-                          Icons.notifications_none,
+                          Icons.notifications_none_rounded,
                           size: 64,
-                          color: Colors.grey,
+                          color: Colors.grey.shade400,
                         ),
-                        SizedBox(height: 12),
+                        const SizedBox(height: 12),
                         Text(
-                          'No notifications in this category',
-                          style: TextStyle(color: Colors.grey),
+                          'No notifications in $selectedCat',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: filtered.length,
+                    separatorBuilder: (context, index) => const Divider(
+                      height: 1,
+                      indent: 72,
+                      endIndent: 16,
+                      color: Color(0xFFF1F5F9),
+                    ),
                     itemBuilder: (context, index) {
                       final n = filtered[index];
                       final catColor = _getCatColor(n.category);
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        elevation: n.isRead ? 1 : 3,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          side: BorderSide(
-                            color: n.isRead ? Colors.transparent : catColor.withValues(alpha: 0.3),
-                            width: 1,
+                      final isUnread = !n.isRead;
+
+                      return InkWell(
+                        onTap: () => _handleNotificationTap(context, n),
+                        child: Container(
+                          color: isUnread
+                              ? const Color(0xFFF0F9FF) // Subtle light-blue tint for unread
+                              : Colors.transparent,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
                           ),
-                        ),
-                        color: n.isRead
-                            ? Theme.of(context).cardColor
-                            : catColor.withValues(alpha: 0.05),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          leading: Stack(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: catColor.withValues(alpha: 0.2),
-                                child: Icon(
-                                  _getCatIcon(n.category),
-                                  color: catColor,
-                                  size: 20,
-                                ),
-                              ),
-                              if (!n.isRead)
-                                Positioned(
-                                  top: 0,
-                                  right: 0,
-                                  child: Container(
-                                    width: 10,
-                                    height: 10,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          title: Text(
-                            n.title,
-                            style: TextStyle(
-                              fontWeight: n.isRead ? FontWeight.w600 : FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          subtitle: Column(
+                          child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const SizedBox(height: 4),
-                              Text(
-                                n.body,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12.5),
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
+                              // Avatar Badge with Category Icon
+                              Stack(
+                                alignment: Alignment.bottomRight,
                                 children: [
-                                  Text(
-                                    _formatTime(n.timestamp),
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.grey,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    'Tap to read full →',
-                                    style: TextStyle(
-                                      fontSize: 11,
+                                  CircleAvatar(
+                                    radius: 22,
+                                    backgroundColor: catColor.withValues(alpha: 0.12),
+                                    child: Icon(
+                                      _getCatIcon(n.category),
                                       color: catColor,
-                                      fontWeight: FontWeight.bold,
+                                      size: 22,
                                     ),
                                   ),
+                                  if (isUnread)
+                                    Positioned(
+                                      top: 0,
+                                      right: 0,
+                                      child: Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF2563EB),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                 ],
+                              ),
+                              const SizedBox(width: 12),
+
+                              // Notification Text Content
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            n.title,
+                                            style: TextStyle(
+                                              fontWeight: isUnread
+                                                  ? FontWeight.w800
+                                                  : FontWeight.w600,
+                                              fontSize: 14,
+                                              color: const Color(0xFF0F172A),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _formatTime(n.timestamp),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isUnread
+                                                ? const Color(0xFF2563EB)
+                                                : Colors.grey.shade500,
+                                            fontWeight: isUnread
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      n.body,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        height: 1.35,
+                                        color: isUnread
+                                            ? const Color(0xFF1E293B)
+                                            : const Color(0xFF64748B),
+                                        fontWeight: isUnread
+                                            ? FontWeight.w500
+                                            : FontWeight.normal,
+                                      ),
+                                    ),
+                                    if (n.relatedPostId != null &&
+                                        n.relatedPostId!.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.open_in_new_rounded,
+                                            size: 13,
+                                            color: catColor,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Tap to view post',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: catColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
                             ],
                           ),
-                          onTap: () {
-                            _showNotificationDetail(context, n);
-                          },
                         ),
                       );
                     },
@@ -345,34 +438,36 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Color _getCatColor(NotificationCategory cat) {
     switch (cat) {
       case NotificationCategory.academic:
-        return Colors.blue.shade700;
+        return const Color(0xFF2563EB); // Modern Indigo/Blue
       case NotificationCategory.events:
-        return Colors.orange.shade800;
+        return const Color(0xFFEA580C); // Modern Orange
       case NotificationCategory.general:
-        return Colors.blueGrey;
+        return const Color(0xFF0D9488); // Modern Teal
       case NotificationCategory.personal:
-        return Colors.purple;
+        return const Color(0xFFE11D48); // Modern Rose/Pink
     }
   }
 
   IconData _getCatIcon(NotificationCategory cat) {
     switch (cat) {
       case NotificationCategory.academic:
-        return Icons.school;
+        return Icons.school_rounded;
       case NotificationCategory.events:
-        return Icons.event;
+        return Icons.event_available_rounded;
       case NotificationCategory.general:
-        return Icons.campaign;
+        return Icons.campaign_rounded;
       case NotificationCategory.personal:
-        return Icons.person;
+        return Icons.favorite_rounded;
     }
   }
 
   String _formatTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inHours < 1) return '${diff.inMinutes} mins ago';
-    if (diff.inHours < 24) return '${diff.inHours} hours ago';
-    return '${diff.inDays} days ago';
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    return '${dt.day}/${dt.month}';
   }
 
   String _formatFullDateTime(DateTime dt) {

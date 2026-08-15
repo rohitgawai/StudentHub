@@ -24,6 +24,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
   String? targetYear;
   String? selectedImageUrl;
   PostCategory eventKind = PostCategory.event;
+  bool _isPublishing = false;
 
   List<PostLink> links = [];
   FormDefinition? form;
@@ -78,9 +79,12 @@ class _CreateEventModalState extends State<CreateEventModal> {
       return;
     }
 
+    setState(() => _isPublishing = true);
+
     final online = await dataService.checkBackendReachable();
     if (!mounted) return;
     if (!online) {
+      setState(() => _isPublishing = false);
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -115,6 +119,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
       authorName: dataService.currentUser.name,
       authorRole: dataService.activeRole,
       authorId: dataService.currentUser.id,
+      authorAvatarUrl: dataService.currentUser.avatarUrl,
       timestamp: DateTime.now(),
       imageUrl: selectedImageUrl,
       venue: venueController.text.trim(),
@@ -163,34 +168,63 @@ class _CreateEventModalState extends State<CreateEventModal> {
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
-    final yearOptions = ['All Academic Years', ...dataService.config.academicYears];
+    final cfg = dataService.config;
+    final yearOptions = ['All Academic Years', ...cfg.academicYears];
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('🎉 Create Event & Workshops'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.event_available_rounded, color: Colors.orange, size: 20),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'Create Event & Workshops',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.close),
+            icon: const Icon(Icons.close_rounded),
+            tooltip: 'Close',
             onPressed: () => Navigator.of(context).pop(),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          physics: const BouncingScrollPhysics(),
           children: [
+            // Kind Selector
             SegmentedButton<PostCategory>(
               segments: const [
                 ButtonSegment(
                   value: PostCategory.event,
-                  label: Text('🎪 Event'),
-                  icon: Icon(Icons.event),
+                  label: Text('🎪 Campus Event', style: TextStyle(fontWeight: FontWeight.bold)),
+                  icon: Icon(Icons.event_rounded),
                 ),
                 ButtonSegment(
                   value: PostCategory.workshop,
-                  label: Text('🛠️ Workshop'),
-                  icon: Icon(Icons.construction),
+                  label: Text('🛠️ Workshop', style: TextStyle(fontWeight: FontWeight.bold)),
+                  icon: Icon(Icons.construction_rounded),
                 ),
               ],
               selected: {eventKind},
@@ -200,165 +234,378 @@ class _CreateEventModalState extends State<CreateEventModal> {
             ),
             const SizedBox(height: 14),
 
-            TextFormField(
-              controller: titleController,
-              decoration: InputDecoration(
-                labelText: 'Event Title',
-                prefixIcon: const Icon(Icons.event_note),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            // Event Details Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Enter event title' : null,
-            ),
-            const SizedBox(height: 12),
-
-            TextFormField(
-              controller: descController,
-              maxLines: 3,
-              decoration: InputDecoration(
-                labelText: 'Event Description',
-                prefixIcon: const Icon(Icons.description_outlined),
-                alignLabelWithHint: true,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Enter event details' : null,
-            ),
-            const SizedBox(height: 12),
-
-            TextFormField(
-              controller: venueController,
-              decoration: InputDecoration(
-                labelText: 'Venue / Hall / Room ',
-                hintText: 'e.g. Main Auditorium / Lab 102',
-                prefixIcon: const Icon(Icons.location_on_outlined),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Enter venue' : null,
-            ),
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: maxSeatsController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Max Capacity',
-                      prefixIcon: const Icon(Icons.groups_outlined),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Event Details',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1E293B),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: CustomDropdownField<String>(
-                    value: department,
-                    labelText: 'Host Dept',
-                    items: dataService.config.departments,
-                    itemLabel: (d) => d,
-                    onChanged: (val) {
-                      if (val != null) setState(() => department = val);
+                  const SizedBox(height: 14),
+
+                  TextFormField(
+                    controller: titleController,
+                    decoration: InputDecoration(
+                      labelText: 'Event Title *',
+                      hintText: 'e.g. HackCampus 2026 24-Hour Hackathon',
+                      prefixIcon: const Icon(Icons.event_note_rounded, color: Colors.orange),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter event title' : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  TextFormField(
+                    controller: descController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: 'Event Description *',
+                      hintText: 'Rules, prerequisites, agenda and team details...',
+                      prefixIcon: const Icon(Icons.description_outlined, color: Colors.orange),
+                      alignLabelWithHint: true,
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter event details' : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  TextFormField(
+                    controller: venueController,
+                    decoration: InputDecoration(
+                      labelText: 'Venue / Hall / Lab *',
+                      hintText: 'e.g. Main Auditorium / Lab 302',
+                      prefixIcon: const Icon(Icons.location_on_outlined, color: Colors.orange),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter venue' : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: maxSeatsController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: 'Max Capacity',
+                            prefixIcon: const Icon(Icons.groups_outlined, color: Colors.orange),
+                            filled: true,
+                            fillColor: const Color(0xFFF8FAFC),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: CustomDropdownField<String>(
+                          value: department,
+                          labelText: 'Host Dept',
+                          items: cfg.departments,
+                          itemLabel: (d) => d,
+                          onChanged: (val) {
+                            if (val != null) setState(() => department = val);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Target Academic Year Card (No "(Optional)")
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: CustomDropdownField<String>(
+                value: targetYear ?? 'All Academic Years',
+                labelText: 'Target Academic Year',
+                prefixIcon: Icons.calendar_month_outlined,
+                items: yearOptions,
+                itemLabel: (y) => y,
+                onChanged: (val) {
+                  setState(() {
+                    targetYear = (val == 'All Academic Years') ? null : val;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Required Cover Image Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Event Cover Poster *',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  ImagePickerField(
+                    label: 'Cover Image',
+                    initialUrl: selectedImageUrl,
+                    onImageSelected: (url) {
+                      setState(() => selectedImageUrl = url);
                     },
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Date & Deadline Schedule Cards
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Date & Schedule',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    tileColor: const Color(0xFFF8FAFC),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.event_rounded, color: Colors.orange, size: 20),
+                    ),
+                    title: const Text(
+                      'Event Date & Time',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    subtitle: Text(formatEventDateTime(eventDate)),
+                    trailing: const Icon(Icons.edit_calendar_rounded, size: 20),
+                    onTap: () async {
+                      final d = await _pickEventDateTime(
+                        initial: eventDate,
+                        first: DateTime.now(),
+                        last: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (d != null) {
+                        setState(() => eventDate = d);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    tileColor: const Color(0xFFF8FAFC),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.timer_outlined, color: Colors.red, size: 20),
+                    ),
+                    title: const Text(
+                      'Registration Deadline',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    subtitle: Text(formatEventDateTime(regDeadline)),
+                    trailing: const Icon(Icons.edit_calendar_rounded, size: 20),
+                    onTap: () async {
+                      final d = await _pickEventDateTime(
+                        initial: regDeadline,
+                        first: DateTime.now(),
+                        last: eventDate,
+                      );
+                      if (d != null) {
+                        setState(() => regDeadline = d);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Registration Form & Custom Fields
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: LinkFormEditor(
+                accent: cfg.eventColor,
+                initialFormLabel: titleController.text.trim().isEmpty
+                    ? 'Event Registration'
+                    : titleController.text.trim(),
+                onLinksChanged: (links) => setState(() => this.links = links),
+                onFormChanged: (form) => setState(() => this.form = form),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Glowing Publish Button
+            Container(
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFEA580C), Color(0xFFF97316)],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Target Academic Year
-            CustomDropdownField<String>(
-              value: targetYear ?? 'All Academic Years',
-              labelText: 'Target Academic Year (Optional)',
-              prefixIcon: Icons.calendar_month_outlined,
-              items: yearOptions,
-              itemLabel: (y) => y,
-              onChanged: (val) {
-                setState(() {
-                  targetYear = (val == 'All Academic Years') ? null : val;
-                });
-              },
-            ),
-            const SizedBox(height: 14),
-
-            // Required cover image upload
-            ImagePickerField(
-              label: 'Cover Image',
-              initialUrl: selectedImageUrl,
-              onImageSelected: (url) {
-                setState(() => selectedImageUrl = url);
-              },
-            ),
-            const SizedBox(height: 14),
-
-            // Date Pickers
-            ListTile(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF97316).withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              leading: const Icon(Icons.event, color: Colors.orange),
-              title: const Text('Event Date & Time', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: Text(formatEventDateTime(eventDate)),
-              trailing: const Icon(Icons.edit_calendar),
-              onTap: () async {
-                final d = await _pickEventDateTime(
-                  initial: eventDate,
-                  first: DateTime.now(),
-                  last: DateTime.now().add(const Duration(days: 365)),
-                );
-                if (d != null) {
-                  setState(() => eventDate = d);
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-
-            ListTile(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey.shade300),
-              ),
-              leading: const Icon(Icons.timer, color: Colors.red),
-              title: const Text('Registration Deadline', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: Text(formatEventDateTime(regDeadline)),
-              trailing: const Icon(Icons.edit_calendar),
-              onTap: () async {
-                final d = await _pickEventDateTime(
-                  initial: regDeadline,
-                  first: DateTime.now(),
-                  last: eventDate,
-                );
-                if (d != null) {
-                  setState(() => regDeadline = d);
-                }
-              },
-            ),
-
-            const SizedBox(height: 24),
-
-            LinkFormEditor(
-              accent: dataService.config.eventColor,
-              initialFormLabel: titleController.text.trim().isEmpty
-                  ? 'Event Registration'
-                  : titleController.text.trim(),
-              onLinksChanged: (links) => setState(() => this.links = links),
-              onFormChanged: (form) => setState(() => this.form = form),
-            ),
-
-            const SizedBox(height: 24),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-                backgroundColor: dataService.config.eventColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () {
-                _publishEvent();
-              },
-              child: const Text(
-                'Publish Event',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: _isPublishing ? null : _publishEvent,
+                child: _isPublishing
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Publish Event',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ],
@@ -367,3 +614,4 @@ class _CreateEventModalState extends State<CreateEventModal> {
     );
   }
 }
+

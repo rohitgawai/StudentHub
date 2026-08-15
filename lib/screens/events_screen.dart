@@ -53,23 +53,15 @@ class _EventsScreenState extends State<EventsScreen>
     final dataService = context.watch<MockDataService>();
     final cfg = dataService.config;
     final user = dataService.currentUser;
-
-    // Same underlying feed, filtered down to Events + Workshops with year match.
-    final allEvents = dataService.posts
-        .where((p) => p.isEvent && dataService.matchesYear(p))
+    // Filter by Event, Workshop, and Registered
+    final eventsOnly = dataService.posts
+        .where((p) => p.category == PostCategory.event && dataService.matchesYear(p))
         .toList();
-    final registeredEvents = allEvents
-        .where((e) => user.registeredEventIds.contains(e.id))
+    final workshopsOnly = dataService.posts
+        .where((p) => p.category == PostCategory.workshop && dataService.matchesYear(p))
         .toList();
-    final myHostedEvents = dataService.posts
-        .where(
-          (e) =>
-              e.isEvent &&
-              (e.authorId == user.id ||
-                  (user.name.isNotEmpty &&
-                      e.authorName.trim().toLowerCase() ==
-                          user.name.trim().toLowerCase())),
-        )
+    final registeredEvents = dataService.posts
+        .where((e) => e.isEvent && user.registeredEventIds.contains(e.id))
         .toList();
 
     final savedIds = user.savedPostIds.toSet();
@@ -117,9 +109,9 @@ class _EventsScreenState extends State<EventsScreen>
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
               tabs: [
-                Tab(text: 'All (${allEvents.length})'),
+                Tab(text: 'Events (${eventsOnly.length})'),
+                Tab(text: 'Workshops (${workshopsOnly.length})'),
                 Tab(text: 'Registered (${registeredEvents.length})'),
-                Tab(text: 'Hosted (${myHostedEvents.length})'),
               ],
             ),
           ),
@@ -130,13 +122,26 @@ class _EventsScreenState extends State<EventsScreen>
         children: [
           _buildEventList(
             context,
-            allEvents,
+            eventsOnly,
             cfg: cfg,
             savedIds: savedIds,
             registeredIds: registeredIds,
             congratulatedIds: congratulatedIds,
             likedIds: likedIds,
             dataService: dataService,
+            emptyMessage: 'No upcoming events found.',
+            onRefresh: () => _handleRefresh(dataService),
+          ),
+          _buildEventList(
+            context,
+            workshopsOnly,
+            cfg: cfg,
+            savedIds: savedIds,
+            registeredIds: registeredIds,
+            congratulatedIds: congratulatedIds,
+            likedIds: likedIds,
+            dataService: dataService,
+            emptyMessage: 'No workshops scheduled currently.',
             onRefresh: () => _handleRefresh(dataService),
           ),
           _buildEventList(
@@ -149,18 +154,6 @@ class _EventsScreenState extends State<EventsScreen>
             likedIds: likedIds,
             dataService: dataService,
             emptyMessage: 'You have not registered for any events yet.',
-            onRefresh: () => _handleRefresh(dataService),
-          ),
-          _buildEventList(
-            context,
-            myHostedEvents,
-            cfg: cfg,
-            savedIds: savedIds,
-            registeredIds: registeredIds,
-            congratulatedIds: congratulatedIds,
-            likedIds: likedIds,
-            dataService: dataService,
-            emptyMessage: 'You have not hosted any events yet.',
             onRefresh: () => _handleRefresh(dataService),
           ),
         ],

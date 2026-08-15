@@ -98,7 +98,18 @@ class PushService {
   void _configureAndroidNotifications() {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
-    _localNotifications.initialize(settings: settings);
+    _localNotifications.initialize(
+      settings: settings,
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload != null &&
+            payload.isNotEmpty &&
+            !payload.startsWith('ban_') &&
+            !payload.startsWith('role_removal_')) {
+          targetPostId.value = payload;
+        }
+      },
+    );
   }
 
   Future<void> _registerToken() async {
@@ -115,6 +126,7 @@ class PushService {
     final data = message.data;
     final title = message.notification?.title ?? data['title'];
     final body = message.notification?.body ?? data['body'];
+    final postId = data['post_id']?.toString();
     if (title != null) {
       const details = NotificationDetails(
         android: AndroidNotificationDetails(
@@ -130,6 +142,7 @@ class PushService {
         title: title,
         body: body ?? '',
         notificationDetails: details,
+        payload: postId,
       );
     }
 

@@ -22,6 +22,8 @@ class MockDataService extends ChangeNotifier {
   List<RoleRequestModel> _roleRequests = [];
   List<NotificationModel> _notifications = [];
   List<FormSubmission> _formSubmissions = [];
+  final Map<String, int> _profileLikes = {};
+  final Set<String> _likedProfileAuthorIds = {};
   bool _notificationsCleared = false;
   DateTime? _notificationsClearedAt;
 
@@ -79,8 +81,11 @@ class MockDataService extends ChangeNotifier {
     _invalidateDataCaches();
     _initData(initialConfig);
   }
+  bool _isDisposed = false;
+
   @override
   void dispose() {
+    _isDisposed = true;
     _expiryTimer?.cancel();
     _syncTimer?.cancel();
     super.dispose();
@@ -89,6 +94,7 @@ class MockDataService extends ChangeNotifier {
   Future<void> _initData(AppConfig? initialConfig) async {
     if (initialConfig == null) {
       AppConfig.loadFromAssets().then((c) {
+        if (_isDisposed) return;
         config = c;
         _invalidateDataCaches();
         notifyListeners();
@@ -96,6 +102,7 @@ class MockDataService extends ChangeNotifier {
     }
 
     final restored = await _loadLocalState();
+    if (_isDisposed) return;
 
     if (restored != null) {
       currentUser = restored.currentUser;
@@ -115,10 +122,18 @@ class MockDataService extends ChangeNotifier {
       _deviceOnlyPostIds
         ..clear()
         ..addAll(restored.deviceOnlyPostIds);
+      _profileLikes
+        ..clear()
+        ..addAll(restored.profileLikes);
+      _likedProfileAuthorIds
+        ..clear()
+        ..addAll(restored.likedProfileAuthorIds);
       checkForExpiredRoles();
       _invalidateDataCaches();
       notifyListeners();
     }
+
+    if (_isDisposed) return;
 
     _expiryTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       checkForExpiredRoles();
@@ -178,6 +193,15 @@ class MockDataService extends ChangeNotifier {
     _generateMockRoleRequests();
     _generateMockNotifications();
     _generateMockSubmissions();
+
+    _profileLikes.addAll({
+      'fac_101': 48,
+      'fac_102': 32,
+      'fac_103': 64,
+      'host_202': 115,
+      'adm_001': 89,
+      'usr_101': 24,
+    });
   }
 
   // --- On-device persistence ---
@@ -283,6 +307,8 @@ class MockDataService extends ChangeNotifier {
         'serverKnownIds': _serverKnownIds.toList(),
         'deviceOnlyPostIds': _deviceOnlyPostIds.toList(),
         'showAllYearsFeed': _showAllYearsFeed,
+        'profileLikes': _profileLikes,
+        'likedProfileAuthorIds': _likedProfileAuthorIds.toList(),
       };
 
       await _localStore.saveSnapshot(jsonEncode(payload));
@@ -332,6 +358,15 @@ class MockDataService extends ChangeNotifier {
               .whereType<String>()
               .toSet();
       final showAllYearsFeed = payload['showAllYearsFeed'] as bool? ?? false;
+      final rawLikes = (payload['profileLikes'] as Map?) ?? const {};
+      final profileLikes = <String, int>{};
+      rawLikes.forEach((k, v) {
+        if (v is int) profileLikes[k.toString()] = v;
+      });
+      final likedProfileAuthorIds =
+          ((payload['likedProfileAuthorIds'] as List?) ?? const [])
+              .whereType<String>()
+              .toSet();
 
       return _LocalState(
         currentUser: user,
@@ -343,6 +378,8 @@ class MockDataService extends ChangeNotifier {
         serverKnownIds: serverKnownIds,
         deviceOnlyPostIds: deviceOnlyPostIds,
         showAllYearsFeed: showAllYearsFeed,
+        profileLikes: profileLikes,
+        likedProfileAuthorIds: likedProfileAuthorIds,
       );
     } catch (_) {
       return null;
@@ -1771,6 +1808,8 @@ class MockDataService extends ChangeNotifier {
         orElse: () => UserRole.student,
       ),
       authorId: row['author_id']?.toString() ?? '',
+      authorAvatarUrl: (row['author_avatar_url'] as String?) ??
+          _resolveAuthorAvatar(row['author_id']?.toString(), row['author_name']?.toString()),
       timestamp: _parseDate(row['created_at']) ?? DateTime.now(),
       imageUrl: row['image_url'] as String?,
       imageUrls: ((row['image_urls'] as List?) ?? const []).cast<String>(),
@@ -1794,6 +1833,25 @@ class MockDataService extends ChangeNotifier {
       registeredUserIds: ((row['registered_user_ids'] as List?) ?? const [])
           .cast<String>(),
     );
+  }
+
+  String? _resolveAuthorAvatar(String? authorId, String? authorName) {
+    if (authorId == null && authorName == null) return null;
+    if (authorId == currentUser.id ||
+        (authorName != null &&
+            authorName.trim().isNotEmpty &&
+            authorName.trim().toLowerCase() == currentUser.name.trim().toLowerCase())) {
+      return currentUser.avatarUrl;
+    }
+    for (final p in _posts) {
+      if ((authorId != null && p.authorId == authorId) ||
+          (authorName != null && p.authorName.toLowerCase() == authorName.toLowerCase())) {
+        if (p.authorAvatarUrl != null && p.authorAvatarUrl!.isNotEmpty) {
+          return p.authorAvatarUrl;
+        }
+      }
+    }
+    return null;
   }
 
   Map<String, dynamic> _rowFromPost(PostModel p) {
@@ -2175,9 +2233,27 @@ class MockDataService extends ChangeNotifier {
     } else {
       updatedSaved.add(postId);
       if (postIndex != -1) {
-        _posts[postIndex] = _posts[postIndex].copyWith(
-          saveCount: _posts[postIndex].saveCount + 1,
+        final targetPost = _posts[postIndex];
+        _posts[postIndex] = targetPost.copyWith(
+          saveCount: targetPost.saveCount + 1,
         );
+
+        // Instant social notification for the post creator
+        if (targetPost.authorId != currentUser.id &&
+            targetPost.authorName.trim().toLowerCase() !=
+                currentUser.name.trim().toLowerCase()) {
+          _notifications.insert(
+            0,
+            NotificationModel(
+              id: 'notif_save_${DateTime.now().millisecondsSinceEpoch}',
+              title: '🔖 Post Saved',
+              body: '${currentUser.name} saved your post "${targetPost.title}"',
+              category: NotificationCategory.personal,
+              timestamp: DateTime.now(),
+              relatedPostId: targetPost.id,
+            ),
+          );
+        }
       }
     }
 
@@ -2207,6 +2283,24 @@ class MockDataService extends ChangeNotifier {
         postCongratulated.add(currentUser.id);
       }
       userCongratulated.add(postId);
+
+      // Instant congratulation notification
+      if (post.authorId != currentUser.id &&
+          post.authorName.trim().toLowerCase() !=
+              currentUser.name.trim().toLowerCase()) {
+        _notifications.insert(
+          0,
+          NotificationModel(
+            id: 'notif_congrat_${DateTime.now().millisecondsSinceEpoch}',
+            title: '👏 New Congratulation!',
+            body:
+                '${currentUser.name} congratulated you on "${post.title}"',
+            category: NotificationCategory.personal,
+            timestamp: DateTime.now(),
+            relatedPostId: post.id,
+          ),
+        );
+      }
     }
 
     _posts[index] = post.copyWith(
@@ -2236,6 +2330,23 @@ class MockDataService extends ChangeNotifier {
     } else {
       liked.add(currentUser.id);
       userLiked.add(postId);
+
+      // Instant social notification for post creator
+      if (post.authorId != currentUser.id &&
+          post.authorName.trim().toLowerCase() !=
+              currentUser.name.trim().toLowerCase()) {
+        _notifications.insert(
+          0,
+          NotificationModel(
+            id: 'notif_like_${DateTime.now().millisecondsSinceEpoch}',
+            title: '❤️ New Like',
+            body: '${currentUser.name} liked your post "${post.title}"',
+            category: NotificationCategory.personal,
+            timestamp: DateTime.now(),
+            relatedPostId: post.id,
+          ),
+        );
+      }
     }
 
     _posts[index] = post.copyWith(
@@ -2244,6 +2355,51 @@ class MockDataService extends ChangeNotifier {
     );
     currentUser = currentUser.copyWith(likedPostIds: userLiked);
     _persistPost(_posts[index]);
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+  }
+
+  // --- Profile Likes (Creator Appreciations) ---
+  int getProfileLikes(String authorId) {
+    if (authorId.isEmpty) return 0;
+    return _profileLikes[authorId] ?? 0;
+  }
+
+  bool isProfileLiked(String authorId) {
+    if (authorId.isEmpty) return false;
+    return _likedProfileAuthorIds.contains(authorId);
+  }
+
+  void toggleLikeProfile(String authorId, String authorName) {
+    if (authorId.isEmpty) return;
+    final isLiked = _likedProfileAuthorIds.contains(authorId);
+    final currentLikes = _profileLikes[authorId] ?? 0;
+
+    if (isLiked) {
+      _likedProfileAuthorIds.remove(authorId);
+      _profileLikes[authorId] = math.max(0, currentLikes - 1);
+    } else {
+      _likedProfileAuthorIds.add(authorId);
+      _profileLikes[authorId] = currentLikes + 1;
+
+      // Instant notification for creator if not self
+      if (authorId != currentUser.id &&
+          authorName.trim().toLowerCase() !=
+              currentUser.name.trim().toLowerCase()) {
+        _notifications.insert(
+          0,
+          NotificationModel(
+            id: 'notif_prof_like_${DateTime.now().millisecondsSinceEpoch}',
+            title: '⭐ Profile Liked!',
+            body: '${currentUser.name} appreciated your creator profile.',
+            category: NotificationCategory.personal,
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+    }
+
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
@@ -2721,6 +2877,9 @@ class MockDataService extends ChangeNotifier {
   }
 
   void addPost(PostModel newPost) {
+    if (newPost.authorAvatarUrl == null || newPost.authorAvatarUrl!.isEmpty) {
+      newPost = newPost.copyWith(authorAvatarUrl: currentUser.avatarUrl);
+    }
     _posts.insert(0, newPost);
     _notifications.insert(0, _postNotification(newPost, publishedByMe: true));
     _invalidateDataCaches();
@@ -3296,6 +3455,8 @@ class MockDataService extends ChangeNotifier {
         authorName: 'Dr. Ramesh K. Verma (Dean Academics)',
         authorRole: UserRole.faculty,
         authorId: 'fac_101',
+        authorAvatarUrl:
+            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400',
         timestamp: now.subtract(const Duration(hours: 2)),
         isUrgent: true,
         isPinned: true,
@@ -3322,6 +3483,8 @@ class MockDataService extends ChangeNotifier {
         authorName: 'Prof. Ananya Sen',
         authorRole: UserRole.faculty,
         authorId: 'fac_102',
+        authorAvatarUrl:
+            'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400',
         timestamp: now.subtract(const Duration(days: 1)),
         attachments: [
           PostAttachment(
@@ -3343,6 +3506,8 @@ class MockDataService extends ChangeNotifier {
         authorName: 'Mobile Dev Club',
         authorRole: UserRole.eventHost,
         authorId: 'host_202',
+        authorAvatarUrl:
+            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400',
         timestamp: now.subtract(const Duration(days: 1, hours: 4)),
         imageUrl:
             'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=800',
@@ -3363,6 +3528,8 @@ class MockDataService extends ChangeNotifier {
         authorName: 'Sports Directorate',
         authorRole: UserRole.admin,
         authorId: 'adm_001',
+        authorAvatarUrl:
+            'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=400',
         timestamp: now.subtract(const Duration(days: 2)),
         imageUrl:
             'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&q=80&w=800',
@@ -3381,6 +3548,8 @@ class MockDataService extends ChangeNotifier {
         authorName: 'Placement Cell',
         authorRole: UserRole.faculty,
         authorId: 'fac_103',
+        authorAvatarUrl:
+            'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400',
         timestamp: now.subtract(const Duration(days: 2, hours: 8)),
         attachments: [
           PostAttachment(
@@ -3513,6 +3682,8 @@ class _LocalState {
     required this.serverKnownIds,
     required this.deviceOnlyPostIds,
     this.showAllYearsFeed = false,
+    this.profileLikes = const {},
+    this.likedProfileAuthorIds = const {},
   });
 
   final UserModel currentUser;
@@ -3524,6 +3695,8 @@ class _LocalState {
   final Set<String> serverKnownIds;
   final Set<String> deviceOnlyPostIds;
   final bool showAllYearsFeed;
+  final Map<String, int> profileLikes;
+  final Set<String> likedProfileAuthorIds;
 }
 
 Uint8List _decodeBase64Helper(String base64) => base64Decode(base64);

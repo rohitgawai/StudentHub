@@ -59,6 +59,7 @@ class PostModel {
   final String authorName;
   final UserRole authorRole;
   final String authorId;
+  final String? authorAvatarUrl;
   final DateTime timestamp;
   final String? imageUrl;
   final List<String> imageUrls; // gallery posts: 3-6 images
@@ -92,6 +93,7 @@ class PostModel {
     required this.authorName,
     required this.authorRole,
     required this.authorId,
+    this.authorAvatarUrl,
     required this.timestamp,
     this.imageUrl,
     this.imageUrls = const [],
@@ -126,6 +128,7 @@ class PostModel {
     String? authorName,
     UserRole? authorRole,
     String? authorId,
+    String? authorAvatarUrl,
     DateTime? timestamp,
     String? imageUrl,
     List<String>? imageUrls,
@@ -155,6 +158,7 @@ class PostModel {
       authorName: authorName ?? this.authorName,
       authorRole: authorRole ?? this.authorRole,
       authorId: authorId ?? this.authorId,
+      authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
       timestamp: timestamp ?? this.timestamp,
       imageUrl: imageUrl ?? this.imageUrl,
       imageUrls: imageUrls ?? this.imageUrls,

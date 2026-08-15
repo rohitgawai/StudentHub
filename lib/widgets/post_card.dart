@@ -14,6 +14,7 @@ import 'role_badge.dart';
 import 'pdf_viewer_modal.dart';
 import 'app_image.dart';
 import 'gallery_viewer_modal.dart';
+import '../screens/user_profile_screen.dart';
 
 /// A post card that stays decoupled from the data service (it never
 /// subscribes), so unrelated data changes don't rebuild cards. It owns the
@@ -135,57 +136,111 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            CircleAvatar(
-                              radius: 18,
-                              backgroundColor: const Color(0xFFF1F5F9),
-                              child: Text(
-                                post.authorName.isNotEmpty
-                                    ? post.authorName.substring(0, 1).toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF334155),
-                                  fontSize: 13,
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) => UserProfileScreen(
+                                      authorId: post.authorId,
+                                      authorName: post.authorName,
+                                      authorRole: post.authorRole,
+                                      authorAvatarUrl: post.authorAvatarUrl,
+                                      department: post.department,
+                                      year: post.targetYear,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: CircleAvatar(
+                                radius: 18,
+                                backgroundColor: const Color(0xFFF1F5F9),
+                                child: ClipOval(
+                                  child: post.authorAvatarUrl != null &&
+                                          post.authorAvatarUrl!.isNotEmpty
+                                      ? AppImage(
+                                          source: post.authorAvatarUrl!,
+                                          fit: BoxFit.cover,
+                                          width: 36,
+                                          height: 36,
+                                          errorChild: Text(
+                                            post.authorName.isNotEmpty
+                                                ? post.authorName.substring(0, 1).toUpperCase()
+                                                : '?',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF334155),
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        )
+                                      : Text(
+                                          post.authorName.isNotEmpty
+                                              ? post.authorName.substring(0, 1).toUpperCase()
+                                              : '?',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF334155),
+                                            fontSize: 13,
+                                          ),
+                                        ),
                                 ),
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          post.authorName,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 14,
-                                            color: Color(0xFF0F172A),
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (c) => UserProfileScreen(
+                                        authorId: post.authorId,
+                                        authorName: post.authorName,
+                                        authorRole: post.authorRole,
+                                        authorAvatarUrl: post.authorAvatarUrl,
+                                        department: post.department,
+                                        year: post.targetYear,
                                       ),
-                                      if (post.authorRole != UserRole.student) ...[
-                                        const SizedBox(width: 6),
-                                        RoleBadge(
-                                          role: post.authorRole,
-                                          isCompact: true,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${post.department} • ${_formatTimestamp(post.timestamp)}',
-                                    style: const TextStyle(
-                                      fontSize: 11.5,
-                                      color: Color(0xFF64748B),
-                                      fontWeight: FontWeight.w500,
                                     ),
-                                  ),
-                                ],
+                                  );
+                                },
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            post.authorName,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14,
+                                              color: Color(0xFF0F172A),
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (post.authorRole != UserRole.student) ...[
+                                          const SizedBox(width: 6),
+                                          RoleBadge(
+                                            role: post.authorRole,
+                                            isCompact: true,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${post.department} • ${_formatTimestamp(post.timestamp)}',
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: Color(0xFF64748B),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
