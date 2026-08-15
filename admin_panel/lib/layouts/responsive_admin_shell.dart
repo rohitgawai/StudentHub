@@ -186,6 +186,7 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
             icon: const Icon(Icons.refresh_rounded, color: AdminTheme.textMuted),
             tooltip: 'Refresh Data',
             onPressed: () {
+              service.refreshOnlinePresence();
               service.fetchUsers();
               service.fetchRoleRequests();
               service.fetchReportedContent();

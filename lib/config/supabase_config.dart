@@ -42,6 +42,15 @@ class SupabaseConfig {
         'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/review-role-request',
   );
 
+  /// Server-side account password storage & verification. Hashes live in the
+  /// private `profile_credentials` table (no anon RLS); the function handles
+  /// setting, verifying and resetting the password.
+  static const String credentialsFunctionUrl = String.fromEnvironment(
+    'CREDENTIALS_FUNCTION_URL',
+    defaultValue:
+        'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/account-credentials',
+  );
+
   /// Shared secret gate for the send-push function. Must equal the
   /// `PUSH_SECRET` secret set on the deployed Edge Function:
   ///   supabase secrets set PUSH_SECRET=...

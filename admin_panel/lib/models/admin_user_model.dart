@@ -105,10 +105,4 @@ class AdminUserModel {
       'updated_at': lastSeen?.toIso8601String(),
     };
   }
-
-  bool get isOnline {
-    if (lastSeen == null) return false;
-    // Strict active presence check (60 seconds)
-    return DateTime.now().difference(lastSeen!).inSeconds < 60;
-  }
 }

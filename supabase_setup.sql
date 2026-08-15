@@ -171,7 +171,27 @@ drop policy if exists "device_tokens_select_anon" on public.device_tokens;
 create policy "device_tokens_select_anon" on public.device_tokens for select using (true);
 
 -- ============================================================================
--- 5. STORAGE BUCKETS
+-- 5. ACCOUNT CREDENTIALS (PASSWORD PROTECTION)
+-- ============================================================================
+-- Password hashes live in a private table with NO anon/authenticated RLS
+-- policies: only the `account-credentials` Edge Function (service role) can
+-- read/write it. `profiles.has_password` is the only password-related flag the
+-- app can see (it decides "Set Password" vs "Enter Password" UI).
+alter table public.profiles add column if not exists has_password boolean not null default false;
+
+create table if not exists public.profile_credentials (
+  user_id text primary key references public.profiles(user_id) on delete cascade,
+  password_hash text not null,
+  created_device_id text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+-- Deny everything for anon/authenticated (no policies = deny all). Only the
+-- service role (inside Edge Functions) bypasses RLS.
+alter table public.profile_credentials enable row level security;
+
+-- ============================================================================
+-- 6. STORAGE BUCKETS
 -- ============================================================================
 insert into storage.buckets (id, name, public)
 values ('documents', 'documents', true)

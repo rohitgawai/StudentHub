@@ -218,7 +218,7 @@ class _OnlineUsersScreenState extends State<OnlineUsersScreen> {
                                       const Spacer(),
                                       Text(
                                         user.lastSeen != null
-                                            ? DateFormat('hh:mm a').format(user.lastSeen!)
+                                            ? DateFormat('hh:mm a').format(user.lastSeen!.toLocal())
                                             : 'Just now',
                                         style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 11),
                                       ),

@@ -44,37 +44,30 @@ class AdminSupabaseService extends ChangeNotifier {
     try {
       _presenceChannel = _client.channel('online-students');
       _presenceChannel?.onPresenceSync((_) {
-        _syncOnlinePresence();
+        refreshOnlinePresence();
       }).subscribe();
     } catch (e) {
       debugPrint('Presence tracking init warning: $e');
     }
   }
 
-  void _syncOnlinePresence() {
+  void refreshOnlinePresence() {
     if (_presenceChannel == null) return;
     try {
       final state = _presenceChannel!.presenceState();
       final List<AdminUserModel> active = [];
 
-      for (dynamic presenceObj in state) {
-        if (presenceObj is Map) {
-          if (presenceObj.containsKey('id') || presenceObj.containsKey('user_id')) {
-            final u = AdminUserModel.fromMap(Map<String, dynamic>.from(presenceObj));
+      // Each entry is one connected socket; its presences carry the payload
+      // the mobile app tracked (the user profile).
+      for (final entry in state) {
+        for (final presence in entry.presences) {
+          final payload = presence.payload;
+          if (payload.containsKey('id') || payload.containsKey('user_id')) {
+            final u = AdminUserModel.fromMap(Map<String, dynamic>.from(payload));
             if (!_deletedUserIds.contains(u.id) && !u.isDeleted) {
               active.add(u);
             }
           }
-        } else {
-          try {
-            final payload = (presenceObj as dynamic).payload;
-            if (payload != null && payload is Map && (payload.containsKey('id') || payload.containsKey('user_id'))) {
-              final u = AdminUserModel.fromMap(Map<String, dynamic>.from(payload));
-              if (!_deletedUserIds.contains(u.id) && !u.isDeleted) {
-                active.add(u);
-              }
-            }
-          } catch (_) {}
         }
       }
 
@@ -96,9 +89,12 @@ class AdminSupabaseService extends ChangeNotifier {
 
       dynamic response;
       try {
-        response = await query.order('updated_at', ascending: false);
+        response = await query
+            .order('updated_at', ascending: false)
+            .timeout(const Duration(seconds: 12));
       } catch (_) {
-        response = await query;
+        response = await query
+            .timeout(const Duration(seconds: 12));
       }
 
       final List<dynamic> data = response as List<dynamic>;
@@ -107,11 +103,6 @@ class AdminSupabaseService extends ChangeNotifier {
           .map((json) => AdminUserModel.fromMap(json))
           .where((u) => !_deletedUserIds.contains(u.id) && !u.isDeleted && u.role != 'deleted')
           .toList();
-
-      // Only include online presence users
-      if (_presenceChannel == null || _onlineUsers.isEmpty) {
-        _onlineUsers = _allUsers.where((u) => u.isOnline).toList();
-      }
     } catch (e) {
       debugPrint('Fetch users error: $e');
     } finally {
@@ -307,33 +298,33 @@ class AdminSupabaseService extends ChangeNotifier {
   }
 
   Future<bool> deleteUser(String userId) async {
-    // Mark as deleted in local set & remove immediately from active UI lists
-    _deletedUserIds.add(userId);
-    _allUsers.removeWhere((u) => u.id == userId);
-    _onlineUsers.removeWhere((u) => u.id == userId);
-    notifyListeners();
-
+    // Permanent server-side deletion runs through the delete-user Edge
+    // Function (service role): it removes device tokens, form submissions,
+    // role requests, the user's posts, push log entries, reports and finally
+    // the profile row (cascading password credentials). The deleted user's app
+    // detects the missing row and force-logs-out + wipes the local account.
+    // The local UI list is only updated AFTER the server confirms.
     try {
-      // 1. Delete user role requests
-      try {
-        await _client.from('role_requests').delete().eq('user_id', userId);
-      } catch (_) {}
+      final res = await http
+          .post(
+            Uri.parse(SupabaseConfig.deleteUserFunctionUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Push-Secret': SupabaseConfig.pushSecret,
+            },
+            body: jsonEncode({'user_id': userId}),
+          )
+          .timeout(const Duration(seconds: 15));
 
-      // 2. Mark profile roles as deleted to prevent re-upsert from mobile app sync
-      try {
-        await _client.from('profiles').update({
-          'roles': ['deleted'],
-          'name': '[DELETED USER]',
-        }).eq('user_id', userId);
-      } catch (_) {}
-
-      // 3. Delete user profile from profiles table
-      try {
-        await _client.from('profiles').delete().eq('user_id', userId);
-      } catch (e) {
-        debugPrint('DB delete notice: $e');
+      if (res.statusCode != 200) {
+        debugPrint('Delete user rejected: ${res.statusCode} ${res.body}');
+        return false;
       }
 
+      _deletedUserIds.add(userId);
+      _allUsers.removeWhere((u) => u.id == userId);
+      _onlineUsers.removeWhere((u) => u.id == userId);
+      notifyListeners();
       await fetchUsers();
       return true;
     } catch (e) {
@@ -349,7 +340,8 @@ class AdminSupabaseService extends ChangeNotifier {
       final response = await _client
           .from('role_requests')
           .select()
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .timeout(const Duration(seconds: 12));
 
       final List<dynamic> data = response as List<dynamic>;
       _roleRequests = data
@@ -415,7 +407,8 @@ class AdminSupabaseService extends ChangeNotifier {
       final response = await _client
           .from('reported_posts')
           .select()
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .timeout(const Duration(seconds: 12));
 
       final List<dynamic> data = response as List<dynamic>;
       _reportedPosts = data.map((json) => ReportedContentModel.fromMap(json)).toList();

@@ -117,18 +117,58 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
 
   double get _progressValue => (_currentStep + 1) / 3.0;
 
+  void _confirmLogout(MockDataService dataService) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Log Out'),
+        content: const Text(
+          'Go back to the login screen? Your academic setup will not be saved.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Stay'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              dataService.logout(
+                reason: 'Logged out from academic setup.',
+              );
+            },
+            child: const Text('Log Out', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
     final cfg = dataService.config;
 
-    return Scaffold(
+return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: const Text('Academic Setup'),
         automaticallyImplyLeading: false,
         elevation: 0,
-        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'Log out and go back to login',
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () => _confirmLogout(dataService),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

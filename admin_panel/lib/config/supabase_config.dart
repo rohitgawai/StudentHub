@@ -28,6 +28,12 @@ class SupabaseConfig {
         'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/review-role-request',
   );
 
+  static const String deleteUserFunctionUrl = String.fromEnvironment(
+    'DELETE_USER_FUNCTION_URL',
+    defaultValue:
+        'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/delete-user',
+  );
+
   static const String pushSecret = String.fromEnvironment(
     'PUSH_SECRET',
     defaultValue: 'studenthub-dev-push-secret',

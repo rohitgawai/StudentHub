@@ -17,15 +17,25 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLoading = false;
   bool _showNewAccountForm = false;
 
+  /// Null = account needs no password on this device. Set/enter = the
+  /// password section is shown instead of the 3-field login form.
+  PasswordMode? _passwordMode;
+  String _passwordError = '';
+  bool _obscurePassword = true;
+
   final nameController = TextEditingController();
   final emailController = TextEditingController();
   final mobileController = TextEditingController();
+  final passwordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
 
   @override
   void dispose() {
     nameController.dispose();
     emailController.dispose();
     mobileController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -35,7 +45,10 @@ class _AuthScreenState extends State<AuthScreen> {
     final loginMobile = mobile ?? mobileController.text.trim();
 
     if (name == null && !_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _passwordError = '';
+    });
 
     final dataService = Provider.of<MockDataService>(context, listen: false);
 
@@ -44,9 +57,19 @@ class _AuthScreenState extends State<AuthScreen> {
         name: loginName,
         email: loginEmail,
         mobileNumber: loginMobile,
+        continueAs: name != null,
       );
       if (mounted) {
         widget.onLoginComplete();
+      }
+    } on PasswordRequiredException catch (e) {
+      if (mounted) {
+        setState(() {
+          _passwordMode = e.mode;
+          _passwordError = '';
+          passwordController.clear();
+          confirmPasswordController.clear();
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -64,11 +87,204 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  Future<void> _handlePasswordSubmit() async {
+    final password = passwordController.text;
+    if (password.length < 6) {
+      setState(() => _passwordError = 'Password must be at least 6 characters.');
+      return;
+    }
+    if (_passwordMode == PasswordMode.set &&
+        password != confirmPasswordController.text) {
+      setState(() => _passwordError = 'Passwords do not match.');
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _passwordError = '';
+    });
+
+    final dataService = Provider.of<MockDataService>(context, listen: false);
+    final name = nameController.text.trim();
+    final email = emailController.text.trim();
+    final mobile = mobileController.text.trim();
+
+    try {
+      if (_passwordMode == PasswordMode.set) {
+        await dataService.setPasswordForLogin(
+          name: name,
+          email: email,
+          mobileNumber: mobile,
+          password: password,
+        );
+      } else {
+        await dataService.loginWithPassword(
+          name: name,
+          email: email,
+          mobileNumber: mobile,
+          password: password,
+        );
+      }
+      if (mounted) {
+        widget.onLoginComplete();
+      }
+    } on PasswordRequiredException catch (e) {
+      if (mounted) {
+        setState(() {
+          // e.g. a password was set from another device while this user was
+          // picking one: switch to verifying it instead.
+          _passwordMode = e.mode;
+          _passwordError = '';
+          passwordController.clear();
+          confirmPasswordController.clear();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _passwordError = e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _showForgotPasswordDialog() {
+    final email = emailController.text.trim();
+    final newPasswordController = TextEditingController();
+    final confirmController = TextEditingController();
+    final dataService = Provider.of<MockDataService>(context, listen: false);
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          String errorText = '';
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text(
+              'Reset Password',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Account: $email',
+                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Reset is only allowed from the device where the password was originally set.',
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: newPasswordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'New Password (min 6 characters)',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm New Password',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                if (errorText.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    errorText,
+                    style: const TextStyle(fontSize: 12, color: Colors.red),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF312E81),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () async {
+                  final newPassword = newPasswordController.text;
+                  if (newPassword.length < 6) {
+                    setDialogState(() => errorText = 'Password must be at least 6 characters.');
+                    return;
+                  }
+                  if (newPassword != confirmController.text) {
+                    setDialogState(() => errorText = 'Passwords do not match.');
+                    return;
+                  }
+                  try {
+                    await dataService.resetPassword(
+                      email: email,
+                      password: newPassword,
+                    );
+                    if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                    if (mounted) {
+                      setState(() {
+                        _passwordError = '';
+                        passwordController.clear();
+                        confirmPasswordController.clear();
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            '✅ Password reset! Enter your new password to continue.',
+                          ),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    setDialogState(() => errorText = e.toString());
+                  }
+                },
+                child: const Text('Reset Password'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
     final cfg = dataService.config;
-    final lastUser = dataService.lastKnownUser;
+    // The seed/demo identity (usr_101) is never a real account and must not
+    // be offered as a continue-as option. Same for anything restored from an
+    // old snapshot that isn't a genuine onboarding-completed user.
+    final storedLast = dataService.lastKnownUser;
+    final sessionCandidate = (!dataService.isLoggedOut &&
+            dataService.currentUser.id.isNotEmpty &&
+            dataService.currentUser.id != 'usr_101')
+        ? dataService.currentUser
+        : null;
+    final lastUser = (storedLast != null && storedLast.id != 'usr_101'
+            ? storedLast
+            : null) ??
+        sessionCandidate;
     final hasLastUser = lastUser != null && lastUser.email.isNotEmpty;
 
     return Scaffold(
@@ -236,6 +452,8 @@ class _AuthScreenState extends State<AuthScreen> {
                             ),
                           ),
                         ),
+                      ] else if (_passwordMode != null) ...[
+                        _buildPasswordSection(),
                       ] else ...[
                         // Full Login Form
                         Form(
@@ -368,9 +586,12 @@ class _AuthScreenState extends State<AuthScreen> {
                         children: [
                           Icon(Icons.shield_outlined, size: 14, color: Colors.grey.shade600),
                           const SizedBox(width: 4),
-                          Text(
-                            'Secure Single-Device Active Session',
-                            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                          const Flexible(
+                            child: Text(
+                              'Secure Single-Device Active Session',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
                           ),
                         ],
                       ),
@@ -381,6 +602,157 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordSection() {
+    final cfg = Provider.of<MockDataService>(context).config;
+    final isSetMode = _passwordMode == PasswordMode.set;
+    final accountName = nameController.text.trim();
+    final accountEmail = emailController.text.trim();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cfg.primaryColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cfg.primaryColor.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(Icons.lock_rounded, size: 40, color: cfg.primaryColor),
+          const SizedBox(height: 12),
+          Text(
+            isSetMode ? 'Set a Password' : 'Enter Your Password',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            isSetMode
+                ? 'Choose a password to secure this account. It will only be asked when logging in from a new device.'
+                : 'This account is password protected. Verify it\u2019s you to continue.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '$accountName${accountName.isNotEmpty ? ' • ' : ''}$accountEmail',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: cfg.primaryColor,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: passwordController,
+            obscureText: _obscurePassword,
+            decoration: InputDecoration(
+              labelText: isSetMode ? 'Password (min 6 characters)' : 'Password',
+              prefixIcon: const Icon(Icons.lock_outline),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              filled: true,
+              fillColor: Colors.grey.shade50,
+            ),
+          ),
+          if (isSetMode) ...[
+            const SizedBox(height: 14),
+            TextField(
+              controller: confirmPasswordController,
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: 'Confirm Password',
+                prefixIcon: const Icon(Icons.lock_outline),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Colors.grey.shade50,
+              ),
+            ),
+          ],
+          if (_passwordError.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              '⚠️ $_passwordError',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12.5, color: Colors.red),
+            ),
+          ],
+          const SizedBox(height: 18),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: cfg.primaryColor,
+              foregroundColor: Colors.white,
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: _isLoading ? null : _handlePasswordSubmit,
+            child: _isLoading
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    isSetMode ? 'Set Password & Continue' : 'Log In Securely',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
+          if (!isSetMode) ...[
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: _showForgotPasswordDialog,
+              child: Text(
+                'Forgot password?',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: cfg.primaryColor,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          TextButton(
+            onPressed: () => setState(() {
+              _passwordMode = null;
+              _passwordError = '';
+              passwordController.clear();
+              confirmPasswordController.clear();
+            }),
+            child: const Text(
+              'Use a different account',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }

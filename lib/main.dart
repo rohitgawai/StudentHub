@@ -89,7 +89,10 @@ class MainNavigationContainer extends StatefulWidget {
 
 class _MainNavigationContainerState extends State<MainNavigationContainer> {
   int currentIndex = 0;
-  bool isAuthenticated = true;
+  // Starts false: anonymous/seed auto-login is not allowed. The app opens
+  // straight to the feed only after a real login or a restored session that
+  // completed onboarding (see restoredCompletedSession below).
+  bool isAuthenticated = false;
 
   final List<Widget> screens = const [
     HomeFeedScreen(),
@@ -156,7 +159,13 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       );
     }
 
-    if (!isAuthenticated) {
+    if (dataService.isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!isAuthenticated && !dataService.restoredCompletedSession) {
       return AuthScreen(
         onLoginComplete: () => setState(() => isAuthenticated = true),
       );

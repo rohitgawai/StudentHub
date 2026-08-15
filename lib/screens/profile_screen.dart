@@ -115,6 +115,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                 );
               } else if (val == 'feed_scope') {
                 _showFeedScopeDialog(context, dataService, user.year);
+              } else if (val == 'reset_password') {
+                _showResetPasswordDialog(context, dataService, user.email);
               } else if (val == 'logout') {
                 showDialog(
                   context: context,
@@ -201,6 +203,24 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                   ),
                 ],
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'reset_password',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.lock_reset_rounded, size: 18, color: Color(0xFF312E81)),
+                      SizedBox(width: 10),
+                      Text(
+                        'Reset Password',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'logout',
@@ -848,6 +868,131 @@ class _ProfileScreenState extends State<ProfileScreen>
           },
         );
       },
+    );
+  }
+
+  void _showResetPasswordDialog(
+    BuildContext context,
+    MockDataService dataService,
+    String email,
+  ) {
+    final newPasswordController = TextEditingController();
+    final confirmController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          String errorText = '';
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              children: const [
+                Icon(Icons.lock_reset_rounded, color: Color(0xFF312E81), size: 22),
+                SizedBox(width: 10),
+                Text(
+                  'Reset Password',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Account: $email',
+                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Reset is only allowed from the device where the password was originally set.',
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: newPasswordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'New Password (min 6 characters)',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm New Password',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                if (errorText.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    errorText,
+                    style: const TextStyle(fontSize: 12, color: Colors.red),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF312E81),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () async {
+                  final newPassword = newPasswordController.text;
+                  if (newPassword.length < 6) {
+                    setDialogState(
+                      () => errorText = 'Password must be at least 6 characters.',
+                    );
+                    return;
+                  }
+                  if (newPassword != confirmController.text) {
+                    setDialogState(
+                      () => errorText = 'Passwords do not match.',
+                    );
+                    return;
+                  }
+                  try {
+                    await dataService.resetPassword(
+                      email: email,
+                      password: newPassword,
+                    );
+                    if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('✅ Password reset successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } catch (e) {
+                    setDialogState(() => errorText = e.toString());
+                  }
+                },
+                child: const Text('Reset Password'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 

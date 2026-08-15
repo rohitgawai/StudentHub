@@ -13,6 +13,41 @@ import '../models/notification_model.dart';
 import '../models/form_models.dart';
 import 'local_store_service.dart';
 
+/// Which password interaction the login form must show next.
+enum PasswordMode {
+  /// User must choose a first password (new or legacy account).
+  set,
+
+  /// User must enter the existing password (new device login).
+  enter,
+}
+
+/// Thrown by [MockDataService.loginUser] when the account is password
+/// protected and this login attempt cannot continue without one. The auth
+/// screen switches to the matching password UI using [mode].
+class PasswordRequiredException implements Exception {
+  final PasswordMode mode;
+  final String email;
+  final String userId;
+  final String accountName;
+
+  /// True when the account row already exists on the server but never set a
+  /// password (legacy user forced into the set-password flow).
+  final bool isExistingAccount;
+
+  const PasswordRequiredException({
+    required this.mode,
+    required this.email,
+    this.userId = '',
+    this.accountName = '',
+    this.isExistingAccount = false,
+  });
+
+  @override
+  String toString() =>
+      mode == PasswordMode.set ? 'set_password' : 'enter_password';
+}
+
 class MockDataService extends ChangeNotifier {
   late AppConfig config;
   late UserModel currentUser;
@@ -41,6 +76,19 @@ class MockDataService extends ChangeNotifier {
 
   bool _isLoading = true;
   bool get isLoading => _isLoading;
+
+  /// True when a locally-restored session completed onboarding. Lets the app
+  /// open straight to the feed for real users while stubs (seed/demo or
+  /// phantom accounts) always land on the login screen.
+  bool _restoredCompletedSession = false;
+  bool get restoredCompletedSession => _restoredCompletedSession;
+
+  /// True once this identity has (or had) a real row on the server. Lets the
+  /// sync distinguish "never had a server profile" (seed/phantom stubs, which
+  /// are silently ignored) from "had one and it disappeared" (account deleted
+  /// by an admin — force logout + wipe the device).
+  bool _hadServerProfile = false;
+  bool get hadServerProfile => _hadServerProfile;
 
   Timer? _expiryTimer;
   Timer? _syncTimer;
@@ -110,6 +158,13 @@ class MockDataService extends ChangeNotifier {
           (currentUser.roles.isNotEmpty
               ? currentUser.roles.first
               : UserRole.student);
+
+      // A restored profile that completed onboarding is a genuine session and
+      // may skip the login screen on restart. Stubs (seed/demo users and
+      // phantom accounts created by older builds) never are.
+      _restoredCompletedSession =
+          currentUser.id.isNotEmpty && currentUser.hasCompletedProgressiveForm;
+      _hadServerProfile = restored.hadServerProfile;
 
       _posts = restored.posts;
       _notifications = restored.notifications;
@@ -309,6 +364,7 @@ class MockDataService extends ChangeNotifier {
         'showAllYearsFeed': _showAllYearsFeed,
         'profileLikes': _profileLikes,
         'likedProfileAuthorIds': _likedProfileAuthorIds.toList(),
+        'hadServerProfile': _hadServerProfile,
       };
 
       await _localStore.saveSnapshot(jsonEncode(payload));
@@ -367,6 +423,8 @@ class MockDataService extends ChangeNotifier {
           ((payload['likedProfileAuthorIds'] as List?) ?? const [])
               .whereType<String>()
               .toSet();
+      final hadServerProfile =
+          payload['hadServerProfile'] as bool? ?? false;
 
       return _LocalState(
         currentUser: user,
@@ -380,6 +438,7 @@ class MockDataService extends ChangeNotifier {
         showAllYearsFeed: showAllYearsFeed,
         profileLikes: profileLikes,
         likedProfileAuthorIds: likedProfileAuthorIds,
+        hadServerProfile: hadServerProfile,
       );
     } catch (_) {
       return null;
@@ -644,10 +703,20 @@ class MockDataService extends ChangeNotifier {
   String? _kickedForDeviceId;
   String? _syncedDeviceId;
 
+  /// Required before an account can be used: either a password must be chosen
+  /// (new/legacy account) or the correct one entered (password-protected
+  /// account on a different device). The auth screen uses [mode] to pick the
+  /// "Set Password" vs "Enter Password" UI.
+  ///
+  /// When [continueAs] is true (the "Continue as..." card) the account MUST
+  /// already exist on the server: the lookup is never allowed to fabricate a
+  /// fresh identity, so a failed/empty lookup surfaces a clear error instead
+  /// of trapping the user in the onboarding form.
   Future<void> loginUser({
     required String name,
     required String email,
     required String mobileNumber,
+    bool continueAs = false,
   }) async {
     _isLoggedOut = false;
     logoutReason = null;
@@ -658,61 +727,77 @@ class MockDataService extends ChangeNotifier {
 
     if (client != null) {
       try {
-        final rows = await client
-            .from('profiles')
-            .select()
-            .eq('email', email.trim().toLowerCase())
-            .limit(1)
-            .timeout(const Duration(seconds: 6));
+        final r = await _bestProfileByEmail(email, client);
 
-        if (rows.isNotEmpty) {
-          final r = rows.first;
-          final serverRoles = ((r['roles'] as List?) ?? const ['student'])
-              .whereType<String>()
-              .map(_roleFromName)
-              .toList();
+        if (r != null) {
+          final hasPassword = r['has_password'] as bool? ?? false;
+          final serverActiveDeviceId = r['active_device_id']?.toString() ?? '';
 
-          currentUser = UserModel(
-            id: r['user_id']?.toString() ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
-            name: (r['name']?.toString() ?? '').isNotEmpty ? r['name'].toString() : name.trim(),
+          if (hasPassword &&
+              serverActiveDeviceId.isNotEmpty &&
+              serverActiveDeviceId != deviceId) {
+            // A password was set from another device: verify it here.
+            throw PasswordRequiredException(
+              mode: PasswordMode.enter,
+              email: email.trim().toLowerCase(),
+              userId: r['user_id']?.toString() ?? '',
+              accountName: r['name']?.toString() ?? name.trim(),
+            );
+          }
+          if (hasPassword) {
+            // Same device that set the password: log in as before, no prompt.
+            await _adoptServerProfile(
+              client,
+              r,
+              name: name,
+              email: email,
+              mobileNumber: mobileNumber,
+              deviceId: deviceId,
+            );
+            return;
+          }
+          // Legacy account that never set a password: force it now so every
+          // account ends up protected.
+          throw PasswordRequiredException(
+            mode: PasswordMode.set,
             email: email.trim().toLowerCase(),
-            studentOrEmployeeId: r['student_or_employee_id']?.toString() ?? '',
-            department: (r['department']?.toString() ?? '').isNotEmpty ? r['department'].toString() : config.departments.first,
-            year: (r['year']?.toString() ?? '').isNotEmpty ? r['year'].toString() : config.academicYears.first,
-            mobileNumber: (r['mobile_number']?.toString() ?? '').isNotEmpty ? r['mobile_number'].toString() : mobileNumber.trim(),
-            avatarUrl: r['avatar_url']?.toString() ?? '',
-            roles: serverRoles.isEmpty ? [UserRole.student] : serverRoles,
-            savedPostIds: ((r['saved_post_ids'] as List?) ?? const []).whereType<String>().toList(),
-            registeredEventIds: ((r['registered_event_ids'] as List?) ?? const []).whereType<String>().toList(),
-            congratulatedPostIds: ((r['congratulated_post_ids'] as List?) ?? const []).whereType<String>().toList(),
-            likedPostIds: ((r['liked_post_ids'] as List?) ?? const []).whereType<String>().toList(),
-            isVerified: r['is_verified'] as bool? ?? true,
-            hasCompletedProgressiveForm: r['has_completed_progressive_form'] as bool? ?? false,
-            activeDeviceId: deviceId,
+            userId: r['user_id']?.toString() ?? '',
+            accountName: r['name']?.toString() ?? name.trim(),
+            isExistingAccount: true,
           );
-
-          activeRole = currentUser.roles.first;
-
-          await client.from('profiles').update({
-            'active_device_id': deviceId,
-            'mobile_number': currentUser.mobileNumber,
-            'updated_at': DateTime.now().toIso8601String(),
-          }).eq('user_id', currentUser.id);
-
-          _syncedDeviceId = deviceId;
-          _invalidateDataCaches();
-          notifyListeners();
-          _scheduleLocalSave();
-          // Pull latest posts and registrations right after login so counts are fresh
-          await syncNow();
-          return;
         }
+
+        if (continueAs) {
+          // Never invent an account when "continuing as": the server row must
+          // exist for this device to pick it back up.
+          throw Exception(
+            'Your account was not found on the server. Log in with your details instead.',
+          );
+        }
+        // Email not registered yet: a password must be chosen to create it.
+        throw PasswordRequiredException(
+          mode: PasswordMode.set,
+          email: email.trim().toLowerCase(),
+          accountName: name.trim(),
+          isExistingAccount: false,
+        );
+      } on PasswordRequiredException {
+        rethrow;
       } catch (e) {
+        // Lookup failed (offline/timeout): never fabricate a fresh identity —
+        // a phantom local account is what traps users in the onboarding form.
         debugPrint('StudentHub: login profile query failed: $e');
+        throw Exception(
+          continueAs
+              ? "Couldn't verify your account on the server. Check your internet connection and try again."
+              : 'Could not connect to the server. Check your internet and try again.',
+        );
       }
     }
 
-    // New User or offline login: initialize account requiring progressive onboarding
+    // Truly offline (no backend configured at all): keep the legacy local
+    // account creation so the app stays usable without connectivity. The
+    // password is enforced once the server becomes reachable.
     currentUser = UserModel(
       id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
       name: name.trim(),
@@ -738,6 +823,327 @@ class MockDataService extends ChangeNotifier {
     await syncNow();
   }
 
+  /// Completes login after the user picked a first password (new account or
+  /// legacy account that never had one). The server rejects the call if a
+  /// password was already set elsewhere, in which case the caller switches to
+  /// "Enter Password" mode.
+  Future<void> setPasswordForLogin({
+    required String name,
+    required String email,
+    required String mobileNumber,
+    required String password,
+  }) async {
+    final client = _client;
+    if (client == null) {
+      throw Exception('You are offline. Connect to the internet to set a password.');
+    }
+    final deviceId = await LocalStoreService.instance.getDeviceId();
+    final serverRow = await _bestProfileByEmail(email, client);
+
+    if (serverRow != null) {
+      if (serverRow['has_password'] as bool? ?? false) {
+        // Another device already protected the account: fall back to verifying.
+        throw PasswordRequiredException(
+          mode: PasswordMode.enter,
+          email: email.trim().toLowerCase(),
+          userId: serverRow['user_id']?.toString() ?? '',
+          accountName: serverRow['name']?.toString() ?? name.trim(),
+        );
+      }
+      await _callCredentialsFunction(
+        action: 'set_password',
+        email: email,
+        password: password,
+        deviceId: deviceId,
+      );
+      await _adoptServerProfile(
+        client,
+        serverRow,
+        name: name,
+        email: email,
+        mobileNumber: mobileNumber,
+        deviceId: deviceId,
+      );
+      return;
+    }
+
+    // Brand-new account: create the profile row first so the function can find
+    // it by email, then store the password.
+    currentUser = UserModel(
+      id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      studentOrEmployeeId: '',
+      department: config.departments.first,
+      year: config.academicYears.first,
+      mobileNumber: mobileNumber.trim(),
+      avatarUrl: '',
+      roles: const [UserRole.student],
+      savedPostIds: const [],
+      registeredEventIds: const [],
+      hasCompletedProgressiveForm: false,
+      activeDeviceId: deviceId,
+    );
+    activeRole = UserRole.student;
+    _syncedDeviceId = deviceId;
+    _invalidateDataCaches();
+    notifyListeners();
+    await _persistProfile();
+    _hadServerProfile = true;
+    _subscribePresence();
+    await _callCredentialsFunction(
+      action: 'set_password',
+      email: email,
+      password: password,
+      deviceId: deviceId,
+    );
+    _scheduleLocalSave();
+    await syncNow();
+  }
+
+  /// Verifies the account password (used when logging in from a device that is
+  /// not the one that set the password). On success the account is adopted,
+  /// the active device rotates server-side (kicking the previous session), and
+  /// the owner's other devices are alerted about the new-device login.
+  Future<void> loginWithPassword({
+    required String name,
+    required String email,
+    required String mobileNumber,
+    required String password,
+  }) async {
+    final client = _client;
+    if (client == null) {
+      throw Exception('You are offline. Connect to the internet to log in.');
+    }
+    final deviceId = await LocalStoreService.instance.getDeviceId();
+    final serverRow = await _bestProfileByEmail(email, client);
+    if (serverRow == null) {
+      throw Exception('Account not found on server. Please check the email.');
+    }
+    await _callCredentialsFunction(
+      action: 'verify_login',
+      email: email,
+      password: password,
+      deviceId: deviceId,
+    );
+    await _adoptServerProfile(
+      client,
+      serverRow,
+      name: name,
+      email: email,
+      mobileNumber: mobileNumber,
+      deviceId: deviceId,
+    );
+    await _pushLoginAlert(
+      userId: serverRow['user_id']?.toString() ?? currentUser.id,
+      deviceId: deviceId,
+    );
+  }
+
+  /// Resets an existing account password. Only succeeds when called from the
+  /// device that originally set the password (server-enforced via
+  /// `created_device_id`).
+  Future<void> resetPassword({
+    required String email,
+    required String password,
+  }) async {
+    final client = _client;
+    if (client == null) {
+      throw Exception('You are offline. Connect to the internet to reset your password.');
+    }
+    final deviceId = await LocalStoreService.instance.getDeviceId();
+    await _callCredentialsFunction(
+      action: 'reset_password',
+      email: email,
+      password: password,
+      deviceId: deviceId,
+    );
+  }
+
+  /// Looks up the account for [email], preferring the most complete profile
+  /// when duplicate rows exist (e.g. a phantom row created by an older build
+  /// that fabricated local accounts). Completeness: a claimed MIT ID beats a
+  /// completed onboarding flag beats a verified flag, so the real account
+  /// always wins over an empty stub.
+  Future<Map<String, dynamic>?> _bestProfileByEmail(
+    String email,
+    SupabaseClient client,
+  ) async {
+    final rows = await client
+        .from('profiles')
+        .select()
+        .eq('email', email.trim().toLowerCase())
+        .timeout(const Duration(seconds: 15));
+    if (rows.isEmpty) return null;
+    Map<String, dynamic>? best;
+    var bestScore = -1;
+    for (final r in rows) {
+      // Deleted accounts (admin panel soft-delete residue) are never
+      // loggable — even if the row still exists with the deleted marker.
+      final deletedRoles = (r['roles'] as List?) ?? const [];
+      if (deletedRoles.any((x) => x.toString() == 'deleted') ||
+          (r['name']?.toString() ?? '') == '[DELETED USER]') {
+        continue;
+      }
+      var score = 0;
+      if ((r['student_or_employee_id']?.toString() ?? '').isNotEmpty) score += 4;
+      if (r['has_completed_progressive_form'] as bool? ?? false) score += 2;
+      if (r['is_verified'] as bool? ?? false) score += 1;
+      if (score > bestScore) {
+        bestScore = score;
+        best = r;
+      }
+    }
+    return best;
+  }
+
+  /// Shared tail of every successful login path: adopts the server profile as
+  /// the current user and refreshes device-local caches.
+  Future<void> _adoptServerProfile(
+    SupabaseClient client,
+    Map<String, dynamic> r, {
+    required String name,
+    required String email,
+    required String mobileNumber,
+    required String deviceId,
+  }) async {
+    final serverRoles = ((r['roles'] as List?) ?? const ['student'])
+        .whereType<String>()
+        .map(_roleFromName)
+        .toList();
+
+    currentUser = UserModel(
+      id: r['user_id']?.toString() ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
+      name: (r['name']?.toString() ?? '').isNotEmpty ? r['name'].toString() : name.trim(),
+      email: email.trim().toLowerCase(),
+      studentOrEmployeeId: r['student_or_employee_id']?.toString() ?? '',
+      department: (r['department']?.toString() ?? '').isNotEmpty ? r['department'].toString() : config.departments.first,
+      year: (r['year']?.toString() ?? '').isNotEmpty ? r['year'].toString() : config.academicYears.first,
+      mobileNumber: (r['mobile_number']?.toString() ?? '').isNotEmpty ? r['mobile_number'].toString() : mobileNumber.trim(),
+      avatarUrl: r['avatar_url']?.toString() ?? '',
+      roles: serverRoles.isEmpty ? [UserRole.student] : serverRoles,
+      savedPostIds: ((r['saved_post_ids'] as List?) ?? const []).whereType<String>().toList(),
+      registeredEventIds: ((r['registered_event_ids'] as List?) ?? const []).whereType<String>().toList(),
+      congratulatedPostIds: ((r['congratulated_post_ids'] as List?) ?? const []).whereType<String>().toList(),
+      likedPostIds: ((r['liked_post_ids'] as List?) ?? const []).whereType<String>().toList(),
+      isVerified: r['is_verified'] as bool? ?? true,
+      hasCompletedProgressiveForm: r['has_completed_progressive_form'] as bool? ?? false,
+      activeDeviceId: deviceId,
+    );
+
+    activeRole = currentUser.roles.first;
+
+    await client.from('profiles').update({
+      'active_device_id': deviceId,
+      'mobile_number': currentUser.mobileNumber,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('user_id', currentUser.id);
+
+    _syncedDeviceId = deviceId;
+    _hadServerProfile = true;
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+    _subscribeRealtimeOwnProfile();
+    _subscribePresence();
+    // Pull latest posts and registrations right after login so counts are fresh
+    await syncNow();
+  }
+
+  /// Calls the `account-credentials` edge function and maps server errors to
+  /// human-readable messages.
+  Future<Map<String, dynamic>> _callCredentialsFunction({
+    required String action,
+    required String email,
+    required String password,
+    required String deviceId,
+  }) async {
+    final res = await http
+        .post(
+          Uri.parse(SupabaseConfig.credentialsFunctionUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Push-Secret': SupabaseConfig.pushSecret,
+          },
+          body: jsonEncode({
+            'action': action,
+            'email': email.trim().toLowerCase(),
+            'password': password,
+            'device_id': deviceId,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    Map<String, dynamic> decoded = const {};
+    if (res.body.isNotEmpty) {
+      try {
+        decoded = jsonDecode(res.body) as Map<String, dynamic>;
+      } catch (_) {
+        // Non-JSON error body: fall through to the generic message.
+      }
+    }
+    if (res.statusCode >= 200 && res.statusCode < 300) return decoded;
+    switch (decoded['error']?.toString()) {
+      case 'wrong_password':
+        throw Exception('Incorrect password. Please try again.');
+      case 'device_mismatch':
+        throw Exception(
+          'Password reset is only allowed from the device where the password was originally set.',
+        );
+      case 'password_already_set':
+        throw PasswordRequiredException(
+          mode: PasswordMode.enter,
+          email: email.trim().toLowerCase(),
+        );
+      case 'account_not_found':
+        throw Exception('Account not found on server. Please check the email.');
+      case 'credentials_missing':
+        throw Exception(
+          'No password is set for this account yet. Log in without a password first to set one.',
+        );
+      default:
+        throw Exception('Login failed (${res.statusCode}). Please try again.');
+    }
+  }
+
+  /// Push alert to the account owner's other devices when a new device logs
+  /// in with the correct password. Uses the existing send-push function; the
+  /// logging-in device is excluded via skip_sender_device.
+  Future<void> _pushLoginAlert({
+    required String userId,
+    required String deviceId,
+  }) async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      final res = await http
+          .post(
+            Uri.parse(SupabaseConfig.pushFunctionUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Push-Secret': SupabaseConfig.pushSecret,
+            },
+            body: jsonEncode({
+              'type': 'login_alert',
+              'recipient_user_id': userId,
+              'device_id': deviceId,
+              'skip_sender_device': true,
+              'title': '🔐 New Device Login',
+              'body':
+                  'Someone logged into your account from a new device. If this was not you, reset your password from Profile → ⋮ → Reset Password.',
+              'category': 'announcement',
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        debugPrint(
+          'StudentHub: login alert push rejected: ${res.statusCode} ${res.body}',
+        );
+      }
+    } catch (e) {
+      debugPrint('StudentHub: login alert push failed: $e');
+    }
+  }
+
   /// Checks whether an MIT ID (student/employee ID) is available or already
   /// registered to another user account on the server.
   Future<bool> isMitIdAvailable(
@@ -753,7 +1159,7 @@ class MockDataService extends ChangeNotifier {
             .from('profiles')
             .select('user_id, student_or_employee_id')
             .eq('student_or_employee_id', trimmed)
-            .timeout(const Duration(seconds: 5));
+            .timeout(const Duration(seconds: 12));
         final targetExclude = excludeUserId ?? currentUser.id;
         final existingOther = rows.where(
           (r) =>
@@ -803,13 +1209,23 @@ class MockDataService extends ChangeNotifier {
 
   UserModel? lastKnownUser;
 
-  Future<void> logout({String? reason}) async {
+  Future<void> logout({String? reason, bool keepAsLastKnown = true}) async {
     _isLoggedOut = true;
     logoutReason = reason;
     _syncedDeviceId = null;
-    if (currentUser.name.isNotEmpty && currentUser.email.isNotEmpty) {
+    if (keepAsLastKnown &&
+        currentUser.name.isNotEmpty &&
+        currentUser.email.isNotEmpty) {
       lastKnownUser = currentUser;
+    } else if (!keepAsLastKnown &&
+        lastKnownUser?.id.isNotEmpty == true &&
+        lastKnownUser?.id == currentUser.id) {
+      lastKnownUser = null;
     }
+    _hadServerProfile = false;
+    _profilesRealtimeChannel?.unsubscribe();
+    _profilesRealtimeChannel = null;
+    _untrackPresence();
     await LocalStoreService.instance.clearSnapshot();
     currentUser = UserModel(
       id: '',
@@ -839,7 +1255,7 @@ class MockDataService extends ChangeNotifier {
         .select()
         .order('submitted_at', ascending: false)
         .limit(500)
-        .timeout(const Duration(seconds: 5));
+        .timeout(const Duration(seconds: 10));
     var changed = false;
     final localById = <String, FormSubmission>{
       for (final s in _formSubmissions) s.id: s,
@@ -945,7 +1361,7 @@ class MockDataService extends ChangeNotifier {
           .from('profiles')
           .select()
           .or(filterList)
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 10));
 
       var changed = false;
       for (final row in rows) {
@@ -1084,6 +1500,118 @@ class MockDataService extends ChangeNotifier {
     }
   }
 
+  RealtimeChannel? _profilesRealtimeChannel;
+
+  /// Subscribes to DELETE events on the caller's own profile row so an admin
+  /// panel deletion force-logs-out and wipes this device within seconds
+  /// instead of waiting for the next periodic sync.
+  void _subscribeRealtimeOwnProfile() {
+    final client = _client;
+    if (client == null || _profilesRealtimeChannel != null) return;
+    if (currentUser.id.isEmpty) return;
+    final userId = currentUser.id;
+    try {
+      _profilesRealtimeChannel = client
+          .channel('public:profiles')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.delete,
+            schema: 'public',
+            table: 'profiles',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: userId,
+            ),
+            callback: (payload) {
+              if (payload.oldRecord['user_id']?.toString() == userId) {
+                debugPrint(
+                    'StudentHub: own profile deleted on server — wiping device.');
+                unawaited(_wipeAccountForDeletion());
+              }
+            },
+          )
+          .subscribe();
+      debugPrint('StudentHub: Realtime own-profile channel subscribed.');
+    } catch (e) {
+      debugPrint('StudentHub: Realtime own-profile subscription error: $e');
+    }
+  }
+
+  /// Account permanently deleted on the server (admin panel). Force-log-out,
+  /// clear the local snapshot and never offer the deleted account as a
+  /// continue-as option again.
+  Future<void> _wipeAccountForDeletion() async {
+    if (isLoggedOut) return;
+    await logout(
+      reason: 'Your account was deleted by an administrator.',
+      keepAsLastKnown: false,
+    );
+  }
+
+  RealtimeChannel? _presenceChannel;
+  Timer? _presenceKeepaliveTimer;
+
+  /// Real live presence: joins the shared `online-students` channel so the
+  /// admin panel shows exactly who has the app open and logged in right now.
+  /// Presence entries are tied to this socket and disappear automatically
+  /// when it disconnects (app closed / network lost), so no false "online"
+  /// states can accumulate.
+  void _subscribePresence() {
+    final client = _client;
+    if (client == null || _presenceChannel != null) return;
+    if (isLoggedOut || currentUser.id.isEmpty) return;
+    final channel = client.channel('online-students');
+    try {
+      channel.onPresenceSync((_) {}).subscribe((status, error) async {
+        if (status == RealtimeSubscribeStatus.subscribed) {
+          await _trackPresence();
+          _presenceKeepaliveTimer?.cancel();
+          _presenceKeepaliveTimer = Timer.periodic(
+            const Duration(seconds: 30),
+            (_) => unawaited(_trackPresence()),
+          );
+        }
+      });
+      _presenceChannel = channel;
+      debugPrint('StudentHub: Realtime presence subscribed.');
+    } catch (e) {
+      debugPrint('StudentHub: Realtime presence subscription error: $e');
+    }
+  }
+
+  /// Publishes the current profile as this socket's presence payload, so the
+  /// admin panel sees a live user with real profile data.
+  Future<void> _trackPresence() async {
+    final channel = _presenceChannel;
+    if (channel == null || isLoggedOut || currentUser.id.isEmpty) return;
+    try {
+      await channel.track({
+        'user_id': currentUser.id,
+        'name': currentUser.name,
+        'email': currentUser.email,
+        'roles': currentUser.roles.map((r) => r.name).toList(),
+        'student_or_employee_id': currentUser.studentOrEmployeeId,
+        'department': currentUser.department,
+        'year': currentUser.year,
+        'mobile_number': currentUser.mobileNumber,
+        'avatar_url': currentUser.avatarUrl,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('StudentHub: presence track failed: $e');
+    }
+  }
+
+  void _untrackPresence() {
+    _presenceKeepaliveTimer?.cancel();
+    _presenceKeepaliveTimer = null;
+    try {
+      _presenceChannel?.untrack();
+    } catch (_) {}
+    _presenceChannel?.unsubscribe();
+    _presenceChannel = null;
+  }
+
   Future<({bool success, bool changed})> _syncFromBackend() async {
     final client = _client;
     if (client == null) {
@@ -1091,6 +1619,8 @@ class MockDataService extends ChangeNotifier {
       return (success: false, changed: false);
     }
     _subscribeRealtimePosts();
+    _subscribeRealtimeOwnProfile();
+    _subscribePresence();
 
     var changed = false;
     try {
@@ -1099,7 +1629,7 @@ class MockDataService extends ChangeNotifier {
           .select()
           .order('created_at', ascending: false)
           .limit(100)
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 15));
       final fetched = rows
           .map(_postFromRow)
           .whereType<PostModel>()
@@ -1207,7 +1737,7 @@ class MockDataService extends ChangeNotifier {
         .select()
         .order('created_at', ascending: false)
         .limit(50)
-        .timeout(const Duration(seconds: 5));
+        .timeout(const Duration(seconds: 10));
     var changed = false;
     for (final row in rows) {
       final id = row['id']?.toString();
@@ -1277,15 +1807,37 @@ class MockDataService extends ChangeNotifier {
         .select('user_id, roles, is_verified, active_device_id, has_completed_progressive_form')
         .eq('user_id', currentUser.id)
         .limit(1)
-        .timeout(const Duration(seconds: 5));
+        .timeout(const Duration(seconds: 12));
     if (rows.isEmpty) {
-      await _pushSeedProfileToBackend(client);
+      // The server has no row for this identity: either a stale seed/phantom
+      // stub (never had a server profile — ignore silently, never fabricate),
+      // or a real account that was permanently deleted by an admin. Only the
+      // latter wipes the device and force-logs-out.
       _syncedDeviceId = currentDeviceId;
+      if (_hadServerProfile || _restoredCompletedSession) {
+        debugPrint('StudentHub: own profile missing on server — account deleted.');
+        await _wipeAccountForDeletion();
+      }
       return false;
     }
 
     final row = rows.first;
     final serverActiveDeviceId = row['active_device_id']?.toString() ?? '';
+
+    // Password protection rollout: an existing account that never set a
+    // password is forced back to the login screen where a password must be
+    // chosen before entering. Skips the freshly-created seed rows below by
+    // checking the server's own flag.
+    if (!(row['has_password'] as bool? ?? true)) {
+      debugPrint('StudentHub: account has no password. Forcing set-password login.');
+      unawaited(
+        logout(
+          reason:
+              'Set a password to secure your account. It will be asked when you log in from a new device.',
+        ),
+      );
+      return true;
+    }
 
     if (serverActiveDeviceId.isNotEmpty && serverActiveDeviceId != currentDeviceId) {
       if (_syncedDeviceId != null &&
@@ -1353,33 +1905,6 @@ class MockDataService extends ChangeNotifier {
     }
     _scheduleLocalSave();
     return true;
-  }
-
-  Future<void> _pushSeedProfileToBackend(SupabaseClient client) async {
-    final avatar = await _uploadAvatarIfNeeded(client, currentUser.avatarUrl);
-    if (avatar != currentUser.avatarUrl) {
-      currentUser = currentUser.copyWith(avatarUrl: avatar);
-    }
-    final deviceId = await LocalStoreService.instance.getDeviceId();
-    await client.from('profiles').upsert({
-      'user_id': currentUser.id,
-      'name': currentUser.name,
-      'email': currentUser.email,
-      'student_or_employee_id': currentUser.studentOrEmployeeId,
-      'department': currentUser.department,
-      'year': currentUser.year,
-      'mobile_number': currentUser.mobileNumber,
-      'avatar_url': avatar,
-      'roles': currentUser.roles.map((r) => r.name).toList(),
-      'active_device_id': deviceId,
-      'has_completed_progressive_form': currentUser.hasCompletedProgressiveForm,
-      'saved_post_ids': currentUser.savedPostIds,
-      'registered_event_ids': currentUser.registeredEventIds,
-      'congratulated_post_ids': currentUser.congratulatedPostIds,
-      'liked_post_ids': currentUser.likedPostIds,
-      'is_verified': currentUser.isVerified,
-    }, onConflict: 'user_id');
-    _syncedDeviceId = deviceId;
   }
 
   Future<void> _persistProfile() async {
@@ -1495,7 +2020,7 @@ class MockDataService extends ChangeNotifier {
         .select()
         .order('submitted_at', ascending: false)
         .limit(200)
-        .timeout(const Duration(seconds: 5));
+        .timeout(const Duration(seconds: 10));
     final fetched = rows.map(_roleRequestFromRow).toList();
     if (fetched.isEmpty) {
       // Fresh backend: mirror the seeded requests once.
@@ -3684,6 +4209,7 @@ class _LocalState {
     this.showAllYearsFeed = false,
     this.profileLikes = const {},
     this.likedProfileAuthorIds = const {},
+    this.hadServerProfile = false,
   });
 
   final UserModel currentUser;
@@ -3697,6 +4223,7 @@ class _LocalState {
   final bool showAllYearsFeed;
   final Map<String, int> profileLikes;
   final Set<String> likedProfileAuthorIds;
+  final bool hadServerProfile;
 }
 
 Uint8List _decodeBase64Helper(String base64) => base64Decode(base64);

@@ -17,7 +17,14 @@ if %ERRORLEVEL% NEQ 0 (
 echo.
 echo 🌐 2/2 Uploading Live Update to Vercel...
 cd build\web
-call vercel --prod --yes
+echo Re-linking project (safe after every clean build)...
+call vercel link --yes --project web --scope akai11
+if %ERRORLEVEL% NEQ 0 (
+    echo ❌ Vercel link failed! Aborting deployment.
+    pause
+    exit /b %ERRORLEVEL%
+)
+call vercel --prod --yes --scope akai11
 
 echo.
 echo ========================================================

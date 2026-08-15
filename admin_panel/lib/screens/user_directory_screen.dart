@@ -132,12 +132,16 @@ class _UserDirectoryScreenState extends State<UserDirectoryScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               final service = Provider.of<AdminSupabaseService>(context, listen: false);
-              await service.deleteUser(user.id);
+              final deleted = await service.deleteUser(user.id);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('User account permanently deleted.'),
-                    backgroundColor: AdminTheme.statusOnline,
+                  SnackBar(
+                    content: Text(deleted
+                        ? 'User account permanently deleted from server and device.'
+                        : 'Delete failed. The account was NOT removed — check the server/network and try again.'),
+                    backgroundColor: deleted
+                        ? AdminTheme.statusOnline
+                        : AdminTheme.statusDanger,
                   ),
                 );
               }
