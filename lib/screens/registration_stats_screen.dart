@@ -55,28 +55,45 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
 
     setState(() => _isExporting = true);
     try {
-      final List<XFile> filesToShare = [];
+      int savedCount = 0;
       for (final post in rows) {
         final subs = service.submissionsForPost(post.id);
-        final file = await writeRegistrantExport(
+        if (subs.isEmpty) continue;
+        await saveRegistrantExportDirectly(
           post: post,
           submissions: subs,
           format: format,
           collegeName: 'StudentHub',
         );
-        filesToShare.add(XFile(file.path));
+        savedCount++;
       }
 
-      if (filesToShare.isNotEmpty) {
-        await Share.shareXFiles(
-          filesToShare,
-          text: 'Registration Export (${format.name.toUpperCase()}) - StudentHub',
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '📥 $savedCount ${format.name.toUpperCase()} ${savedCount == 1 ? "report" : "reports"} saved to Downloads folder',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e')),
+          SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.redAccent),
         );
       }
     } finally {

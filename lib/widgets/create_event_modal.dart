@@ -79,34 +79,6 @@ class _CreateEventModalState extends State<CreateEventModal> {
       return;
     }
 
-    setState(() => _isPublishing = true);
-
-    final online = await dataService.checkBackendReachable();
-    if (!mounted) return;
-    if (!online) {
-      setState(() => _isPublishing = false);
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          icon: const Icon(Icons.wifi_off, color: Colors.red, size: 40),
-          title: const Text('No Internet Connection'),
-          content: const Text(
-            'Please turn on your internet and try again. Your event was not published.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
     final maxCap = int.tryParse(maxSeatsController.text.trim()) ?? 100;
 
     final newEvent = PostModel(

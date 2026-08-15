@@ -16,10 +16,9 @@ import 'app_image.dart';
 import 'gallery_viewer_modal.dart';
 import '../screens/user_profile_screen.dart';
 
-/// A post card that stays decoupled from the data service (it never
-/// subscribes), so unrelated data changes don't rebuild cards. It owns the
-/// micro-interactions: press-lift, animated save/congratulate, and the
-/// type-aware smart action bar.
+/// A post card that stays decoupled from the data service, owning the
+/// micro-interactions: press-lift, animated save/like/congratulate, Instagram-style
+/// aspect ratio images, distinct category designs, and type-aware smart action bars.
 class PostCard extends StatefulWidget {
   final PostModel post;
   final AppConfig config;
@@ -64,13 +63,13 @@ class _PostCardState extends State<PostCard> {
       widget.config.colorForCategory(widget.post.category);
 
   bool get _isEvent => widget.post.isEvent;
+  bool get _isWorkshop => widget.post.category == PostCategory.workshop;
   bool get _isGallery => widget.post.category == PostCategory.gallery;
   bool get _isAchievement => widget.post.category == PostCategory.achievement;
 
   void _sharePostDynamic(BuildContext context) {
     final post = widget.post;
-    final String shareText =
-        '''
+    final String shareText = '''
 📢 ${post.title}
 
 ${post.description}
@@ -80,8 +79,31 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
 📲 Shared via StudentHub: https://studenthub.edu/post/${post.id}
 ''';
 
-    // Directly opens the system share sheet — no in-app dialog.
     Share.share(shareText, subject: post.title);
+  }
+
+  void _showActionFeedback(BuildContext context, String message, IconData icon, Color color) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -95,7 +117,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
         onPointerUp: (_) => setState(() => _pressed = false),
         onPointerCancel: (_) => setState(() => _pressed = false),
         child: AnimatedScale(
-          scale: _pressed ? 0.98 : 1.0,
+          scale: _pressed ? 0.985 : 1.0,
           duration: const Duration(milliseconds: 130),
           curve: Curves.easeOut,
           child: AnimatedContainer(
@@ -103,32 +125,45 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
                   color: post.isUrgent
                       ? widget.config.urgentColor.withValues(
-                          alpha: _pressed ? 0.35 : 0.22,
+                          alpha: _pressed ? 0.35 : 0.2,
                         )
-                      : Colors.black.withValues(
-                          alpha: _pressed ? 0.08 : 0.035,
-                        ),
-                  blurRadius: post.isUrgent ? 16 : (_pressed ? 16 : 10),
+                      : (_isAchievement
+                          ? const Color(0xFFF59E0B).withValues(alpha: 0.18)
+                          : (_isGallery
+                              ? const Color(0xFF0284C7).withValues(alpha: 0.14)
+                              : Colors.black.withValues(
+                                  alpha: _pressed ? 0.08 : 0.035,
+                                ))),
+                  blurRadius: post.isUrgent ? 16 : (_pressed ? 16 : 12),
                   offset: const Offset(0, 3),
                 ),
               ],
               border: Border.all(
-                color: Colors.grey.shade200,
-                width: 1,
+                color: _isAchievement
+                    ? const Color(0xFFFDE68A)
+                    : (_isGallery
+                        ? const Color(0xFFBAE6FD)
+                        : (_isWorkshop
+                            ? const Color(0xFFE0E7FF)
+                            : Colors.grey.shade200)),
+                width: (_isAchievement || _isGallery) ? 1.5 : 1,
               ),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Differentiating Category Top Banner Strip for Events & Workshops
+                  _buildCategoryBannerStrip(post, categoryColor),
+
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -153,7 +188,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                 );
                               },
                               child: CircleAvatar(
-                                radius: 18,
+                                radius: 19,
                                 backgroundColor: const Color(0xFFF1F5F9),
                                 child: ClipOval(
                                   child: post.authorAvatarUrl != null &&
@@ -161,8 +196,8 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                       ? AppImage(
                                           source: post.authorAvatarUrl!,
                                           fit: BoxFit.cover,
-                                          width: 36,
-                                          height: 36,
+                                          width: 38,
+                                          height: 38,
                                           errorChild: Text(
                                             post.authorName.isNotEmpty
                                                 ? post.authorName.substring(0, 1).toUpperCase()
@@ -214,7 +249,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                           child: Text(
                                             post.authorName,
                                             style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
+                                              fontWeight: FontWeight.w800,
                                               fontSize: 14,
                                               color: Color(0xFF0F172A),
                                             ),
@@ -253,9 +288,10 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                           post.title,
                           style: const TextStyle(
                             fontSize: 16.5,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w900,
                             color: Color(0xFF0F172A),
                             height: 1.3,
+                            letterSpacing: -0.2,
                           ),
                         ),
 
@@ -264,109 +300,35 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                         // Post Description
                         _ExpandableDescription(text: post.description),
 
-                        // Gallery Images — fixed-size slider with dots
+                        // Gallery Images — Instagram square aspect ratio carousel
                         if (_isGallery && post.imageUrls.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           _GalleryCarousel(images: post.imageUrls),
                         ] else if (post.imageUrl != null) ...[
                           const SizedBox(height: 12),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: AppImage(
-                              source: post.imageUrl,
-                              height: 190,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
+                          // Instagram post image framing (spacious, breathable 1.15 ratio)
+                          AspectRatio(
+                            aspectRatio: 1.15,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                color: const Color(0xFFF1F5F9),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: AppImage(
+                                source: post.imageUrl!,
+                                height: double.infinity,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
                         ],
 
-                        // Event Details Box (if post is an Event/Workshop)
+                        // Event & Workshop Details Box
                         if (post.isEvent) ...[
                           const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: Colors.grey.shade200,
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.location_on_outlined,
-                                      size: 16,
-                                      color: const Color(0xFF312E81),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        post.venue ?? 'Campus Auditorium',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF0F172A),
-                                        ),
-                                      ),
-                                    ),
-                                    if (post.maxParticipants != null) ...[
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: (post.isRegistrationFull
-                                                  ? Colors.red
-                                                  : Colors.green)
-                                              .withValues(alpha: 0.12),
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        child: Text(
-                                          '${post.currentRegistrations}/${post.maxParticipants} Seats',
-                                          style: TextStyle(
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.bold,
-                                            color: post.isRegistrationFull
-                                                ? Colors.red
-                                                : Colors.green.shade700,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                if (post.eventDate != null) ...[
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.access_time,
-                                        size: 16,
-                                        color: const Color(0xFF312E81),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        _formatEventDate(post.eventDate!),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade700,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
+                          _buildEventDetailsBox(post, categoryColor),
                         ],
 
                         // Modern PDF Attachment Tile
@@ -404,8 +366,8 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: const Icon(
-                                        Icons.picture_as_pdf,
-                                        color: Colors.red,
+                                        Icons.picture_as_pdf_rounded,
+                                        color: Colors.redAccent,
                                         size: 20,
                                       ),
                                     ),
@@ -457,9 +419,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                           ),
                         ],
 
-                        const SizedBox(height: 12),
-
-                        // External links (Meet, registration form, brochure…)
+                        // External links
                         if (post.links.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           Wrap(
@@ -469,7 +429,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                               for (final link in post.links)
                                 ActionChip(
                                   avatar: Icon(
-                                    Icons.open_in_new,
+                                    Icons.open_in_new_rounded,
                                     size: 14,
                                     color: categoryColor,
                                   ),
@@ -498,7 +458,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                           ),
                         ],
 
-                        // Response form attached to a post (only display if creator actually built a form)
+                        // Response form attached to a post
                         if (!_isEvent && post.form != null && post.form!.title.trim().isNotEmpty && post.form!.fields.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           InkWell(
@@ -609,65 +569,273 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
     );
   }
 
-  /// · Event/Workshop → Register (primary) · Save · Share
-  /// · Achievement    → Congratulate · Share
-  /// · Everything else → Save · Share
+  Widget _buildCategoryBannerStrip(PostModel post, Color categoryColor) {
+    if (_isWorkshop) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF4338CA), Color(0xFF6366F1)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+        ),
+        child: Row(
+          children: const [
+            Icon(Icons.psychology_alt_rounded, size: 14, color: Colors.white),
+            SizedBox(width: 6),
+            Text(
+              '🎓 Interactive Workshop · Hands-on Learning',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (post.isEvent) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+        ),
+        child: Row(
+          children: const [
+            Icon(Icons.event_rounded, size: 14, color: Colors.white),
+            SizedBox(width: 6),
+            Text(
+              '📅 Campus Event · Live & Interactive',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildEventDetailsBox(PostModel post, Color categoryColor) {
+    final eventDate = post.eventDate;
+    final maxSeats = post.maxParticipants;
+    final count = post.currentRegistrations;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Left Date Calendar Box
+          if (eventDate != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _monthShort(eventDate),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF4F46E5),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Text(
+                    '${eventDate.day}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
+
+          // Venue, Timing & Seats Details (Perfectly aligned with consistent icons and spacing)
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.location_on_rounded, size: 14, color: Color(0xFF4F46E5)),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        post.venue ?? 'Campus Auditorium',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (eventDate != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.access_time_filled_rounded, size: 14, color: Color(0xFF64748B)),
+                      const SizedBox(width: 5),
+                      Text(
+                        _formatEventDate(eventDate),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (maxSeats != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.event_seat_rounded, size: 14, color: Color(0xFF64748B)),
+                      const SizedBox(width: 5),
+                      Text(
+                        '$count / $maxSeats Seats Available',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: post.isRegistrationFull ? Colors.red : const Color(0xFF059669),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _monthShort(DateTime dt) {
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    return months[dt.month - 1];
+  }
+
   Widget _buildSmartActionBar(BuildContext context) {
     final post = widget.post;
-
     final List<Widget> actions = [];
 
-    // Like is available on every post.
+    // Like is available on every post
     actions.add(
       _SmartAction(
-        icon: Icons.favorite_border,
-        activeIcon: Icons.favorite,
+        icon: Icons.favorite_border_rounded,
+        activeIcon: Icons.favorite_rounded,
         active: widget.isLiked,
         label: widget.isLiked ? 'Liked' : 'Like',
         count: '${post.likeCount}',
-        color: Colors.redAccent,
+        color: const Color(0xFFE11D48),
         burstOnActivate: true,
-        onTap: widget.onToggleLike,
+        onTap: () {
+          widget.onToggleLike?.call();
+          _showActionFeedback(
+            context,
+            widget.isLiked ? 'Removed like' : '❤️ Liked post',
+            Icons.favorite_rounded,
+            const Color(0xFFE11D48),
+          );
+        },
       ),
     );
 
     if (_isAchievement) {
       actions.add(
         _SmartAction(
-          icon: Icons.celebration,
-          activeIcon: Icons.celebration,
+          icon: Icons.celebration_outlined,
+          activeIcon: Icons.celebration_rounded,
           active: widget.isCongratulated,
           label: widget.isCongratulated ? 'Congratulated' : 'Congratulate',
           count: '${post.congratulateCount}',
-          color: widget.config.achievementColor,
+          color: const Color(0xFFD97706),
           burstOnActivate: true,
           burstStyle: _BurstStyle.confetti,
-          onTap: widget.onToggleCongratulate,
+          onTap: () {
+            widget.onToggleCongratulate?.call();
+            _showActionFeedback(
+              context,
+              widget.isCongratulated ? 'Removed congratulations' : '🎉 Congratulated ${post.authorName}!',
+              Icons.celebration_rounded,
+              const Color(0xFFD97706),
+            );
+          },
         ),
       );
     } else {
       actions.add(
         _SmartAction(
-          icon: Icons.bookmark_border,
-          activeIcon: Icons.bookmark,
+          icon: Icons.bookmark_border_rounded,
+          activeIcon: Icons.bookmark_rounded,
           active: widget.isSaved,
           label: widget.isSaved ? 'Saved' : 'Save',
           count: '${post.saveCount}',
-          color: widget.config.primaryColor,
+          color: const Color(0xFF4F46E5),
           burstOnActivate: true,
-          burstIcon: Icons.bookmark_added,
-          onTap: widget.onToggleSave,
+          burstIcon: Icons.bookmark_added_rounded,
+          onTap: () {
+            widget.onToggleSave?.call();
+            _showActionFeedback(
+              context,
+              widget.isSaved ? 'Removed from Saved' : '🔖 Saved to bookmarks',
+              Icons.bookmark_rounded,
+              const Color(0xFF4F46E5),
+            );
+          },
         ),
       );
     }
 
     actions.add(
       _SmartAction(
-        icon: Icons.ios_share,
-        activeIcon: Icons.ios_share,
+        icon: Icons.ios_share_rounded,
+        activeIcon: Icons.ios_share_rounded,
         active: true,
         label: 'Share',
-        color: Colors.grey.shade600,
+        color: const Color(0xFF64748B),
         onTap: () => _sharePostDynamic(context),
       ),
     );
@@ -681,9 +849,6 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
         if (_isEvent) ...[
           if (widget.currentUserId != null &&
               widget.post.authorId == widget.currentUserId)
-            // The event host cannot register for their own event; show the
-            // current registrant count instead of a Register button. Tapping
-            // it (when wired) opens the registrant list.
             InkWell(
               borderRadius: BorderRadius.circular(20),
               onTap: widget.onViewRegistrants,
@@ -693,35 +858,35 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: widget.config.eventColor.withValues(alpha: 0.12),
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: widget.config.eventColor.withValues(alpha: 0.35),
+                    color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.people_alt_outlined,
-                      size: 16,
-                      color: widget.config.eventColor,
+                    const Icon(
+                      Icons.people_alt_rounded,
+                      size: 15,
+                      color: Color(0xFF4F46E5),
                     ),
                     const SizedBox(width: 5),
                     Text(
                       '${post.currentRegistrations} registered',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        color: widget.config.eventColor,
+                        color: Color(0xFF4F46E5),
                       ),
                     ),
                     if (widget.onViewRegistrants != null) ...[
                       const SizedBox(width: 3),
-                      Icon(
-                        Icons.chevron_right,
-                        size: 13,
-                        color: widget.config.eventColor,
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 14,
+                        color: Color(0xFF4F46E5),
                       ),
                     ],
                   ],
@@ -761,31 +926,26 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
             ],
           ),
           content: const Text(
-            'You cant register again,So are tou sure cancel registration ?',
+            'You cannot register again once cancelled. Are you sure you want to cancel your registration?',
             style: TextStyle(fontSize: 14, height: 1.4),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: const Text('No', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('Keep Registration', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: Colors.redAccent,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: () {
                 Navigator.of(dialogCtx).pop();
                 dataService.cancelRegistrationPermanently(post.id);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Registration cancelled.'),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
+                _showActionFeedback(context, 'Registration cancelled', Icons.cancel_outlined, Colors.redAccent);
               },
-              child: const Text('Yes', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('Cancel It', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -798,22 +958,17 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: const Row(
               children: [
-                Icon(Icons.block_rounded, color: Colors.red, size: 24),
+                Icon(Icons.block, color: Colors.red, size: 24),
                 SizedBox(width: 8),
-                Text('Registration Blocked', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                Text('Cannot Register', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
               ],
             ),
             content: const Text(
-              'sorry,you cant no more register for event,if you eager contact host/faculty',
+              'You have previously cancelled your registration for this event and cannot re-register.',
               style: TextStyle(fontSize: 14, height: 1.4),
             ),
             actions: [
               ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.config.primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
                 onPressed: () => Navigator.of(dialogCtx).pop(),
                 child: const Text('OK'),
               ),
@@ -823,36 +978,27 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
         return;
       }
 
-      if (widget.post.form != null) {
-        openRegistrationForm(context, widget.post);
-      } else if (widget.onToggleRegister != null) {
-        widget.onToggleRegister!();
+      if (post.form != null && post.form!.fields.isNotEmpty) {
+        openRegistrationForm(context, post);
       } else {
         dataService.toggleEventRegistration(post.id);
+        _showActionFeedback(context, '🎉 Registered successfully!', Icons.check_circle_rounded, const Color(0xFF059669));
       }
     }
   }
 
-  /// Past the registration deadline: quick toggle is blocked (form events are
-  /// guarded in submitForm), the button is disabled for everyone.
   bool _isRegistrationClosed(PostModel post) {
-    final deadline = post.registrationDeadline;
-    return deadline != null && DateTime.now().isAfter(deadline);
+    if (post.registrationDeadline != null &&
+        DateTime.now().isAfter(post.registrationDeadline!)) {
+      return true;
+    }
+    return false;
   }
 
-  String _formatTimestamp(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return '0m ago';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-
+  String _formatTimestamp(DateTime dt) => formatTimeAgo(dt);
   String _formatEventDate(DateTime dt) => formatEventDateTime(dt);
 }
 
-/// Instagram-style collapsible description: clipped to a few lines with a
-/// "View more" reveal and a "Show less" collapse back to the default height.
 class _ExpandableDescription extends StatefulWidget {
   final String text;
 
@@ -863,64 +1009,62 @@ class _ExpandableDescription extends StatefulWidget {
 }
 
 class _ExpandableDescriptionState extends State<_ExpandableDescription> {
-  static const int _collapsedLines = 3;
-
   bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
-    const style = TextStyle(fontSize: 14, height: 1.45);
-    final textStyle = style.copyWith(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-    );
+    if (widget.text.isEmpty) return const SizedBox.shrink();
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final plain = TextPainter(
-          text: TextSpan(text: widget.text, style: textStyle),
-          maxLines: _collapsedLines,
-          textDirection: TextDirection.ltr,
-        )..layout(maxWidth: constraints.maxWidth);
-        final didExceed = plain.didExceedMaxLines;
+    final isLong = widget.text.length > 140;
 
-        if (!didExceed) {
-          return Text(widget.text, style: textStyle);
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.text,
-              style: textStyle,
-              maxLines: _expanded ? null : _collapsedLines,
-              overflow: _expanded
-                  ? TextOverflow.visible
-                  : TextOverflow.ellipsis,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 180),
+          crossFadeState: _expanded || !isLong
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          firstChild: Text(
+            widget.text,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13.5,
+              color: Color(0xFF334155),
+              height: 1.45,
             ),
-            GestureDetector(
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  _expanded ? 'Show less' : 'View more',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+          ),
+          secondChild: Text(
+            widget.text,
+            style: const TextStyle(
+              fontSize: 13.5,
+              color: Color(0xFF334155),
+              height: 1.45,
+            ),
+          ),
+        ),
+        if (isLong)
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                _expanded ? 'Show less' : 'Read more',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF4F46E5),
                 ),
               ),
             ),
-          ],
-        );
-      },
+          ),
+      ],
     );
   }
 }
 
-/// Fixed-size swipeable slider for gallery posts. Every image is rendered at
-/// the same height/width (BoxFit.cover) and dots indicate the current slide.
+/// Instagram square aspect ratio swipeable slider for gallery posts.
 class _GalleryCarousel extends StatefulWidget {
   final List<String> images;
 
@@ -931,8 +1075,6 @@ class _GalleryCarousel extends StatefulWidget {
 }
 
 class _GalleryCarouselState extends State<_GalleryCarousel> {
-  static const double _imageHeight = 240;
-
   final _controller = PageController();
   int _current = 0;
 
@@ -950,20 +1092,19 @@ class _GalleryCarouselState extends State<_GalleryCarousel> {
       onTap: () =>
           showGalleryViewer(context, images: images, initialIndex: _current),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Stack(
           alignment: Alignment.bottomCenter,
           children: [
-            SizedBox(
-              height: _imageHeight,
-              width: double.infinity,
+            AspectRatio(
+              aspectRatio: 1.05, // Instagram square photo aspect ratio
               child: PageView.builder(
                 controller: _controller,
                 itemCount: images.length,
                 onPageChanged: (i) => setState(() => _current = i),
                 itemBuilder: (context, index) => AppImage(
                   source: images[index],
-                  height: _imageHeight,
+                  height: double.infinity,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
@@ -991,16 +1132,16 @@ class _GalleryCarouselState extends State<_GalleryCarousel> {
               ),
             if (images.length > 1)
               Positioned(
-                right: 10,
-                top: 10,
+                right: 12,
+                top: 12,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
+                    horizontal: 9,
+                    vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Text(
                     '${_current + 1}/${images.length}',
@@ -1019,21 +1160,18 @@ class _GalleryCarouselState extends State<_GalleryCarousel> {
   }
 }
 
-/// How a burst renders when an action transitions to active:
-/// a single rising icon, or an emoji-confetti explosion.
 enum _BurstStyle { single, confetti }
 
 const List<String> _confettiEmojis = ['🎉', '👏', '⭐', '🎊', '🏅'];
 
-/// A single confetti fragment thrown by a celebratory burst.
 class _ConfettiParticle {
-  final double angle; // radians, 0 = straight up
-  final double span; // travel distance in px at t=1
-  final double size; // px
-  final double spin; // total rotation in radians
-  final double delay; // 0..1 fraction of the burst
-  final String? emoji; // celebratory emoji particle
-  final IconData? icon; // icon particle
+  final double angle;
+  final double span;
+  final double size;
+  final double spin;
+  final double delay;
+  final String? emoji;
+  final IconData? icon;
 
   const _ConfettiParticle({
     required this.angle,
@@ -1046,8 +1184,7 @@ class _ConfettiParticle {
   });
 }
 
-/// A labeled action chip with a springy pop animation and an optional
-/// celebratory burst that fires when the action transitions to active.
+/// A labeled action chip with spring elastic bounce animation
 class _SmartAction extends StatefulWidget {
   final IconData icon;
   final IconData activeIcon;
@@ -1099,65 +1236,41 @@ class _SmartActionState extends State<_SmartAction>
   @override
   void didUpdateWidget(_SmartAction old) {
     super.didUpdateWidget(old);
-    if (widget.active != old.active) {
-      _pop.forward(from: 0.35);
-    }
-    if (widget.burstOnActivate && widget.active && !old.active) {
-      if (widget.burstStyle == _BurstStyle.confetti) {
-        _burst.duration = const Duration(milliseconds: 750);
-        _particles = _makeConfetti();
-      } else {
-        _burst.duration = const Duration(milliseconds: 600);
+    if (!old.active && widget.active) {
+      _pop.forward(from: 0.0);
+      if (widget.burstOnActivate) {
+        _spawnParticles();
+        _burst.forward(from: 0.0);
       }
-      _burst.forward(from: 0);
     }
   }
 
-  List<_ConfettiParticle> _makeConfetti() {
-    final rnd = math.Random();
-    return List.generate(
-      14,
-      (i) {
-        final fan = (rnd.nextDouble() - 0.5) * 2.1;
-        final isEmoji = i.isEven;
+  void _spawnParticles() {
+    final rng = math.Random();
+    if (widget.burstStyle == _BurstStyle.confetti) {
+      _particles = List.generate(8, (i) {
+        final angle = (i / 8) * 2 * math.pi + (rng.nextDouble() - 0.5) * 0.4;
         return _ConfettiParticle(
-          angle: -math.pi / 2 + fan,
-          span: 55 + rnd.nextDouble() * 95,
-          size: 11 + rnd.nextDouble() * 8,
-          spin: (rnd.nextDouble() - 0.5) * 2.4,
-          delay: rnd.nextDouble() * 0.25,
-          emoji: isEmoji
-              ? _confettiEmojis[(i ~/ 2) % _confettiEmojis.length]
-              : null,
-          icon: isEmoji
-              ? null
-              : (i ~/ 2).isEven
-                  ? Icons.celebration
-                  : Icons.auto_awesome,
+          angle: angle,
+          span: 24.0 + rng.nextDouble() * 20.0,
+          size: 11.0 + rng.nextDouble() * 4.0,
+          spin: (rng.nextDouble() - 0.5) * 3.0,
+          delay: rng.nextDouble() * 0.15,
+          emoji: _confettiEmojis[rng.nextInt(_confettiEmojis.length)],
         );
-      },
-    );
-  }
-
-  Widget _confettiParticle(_ConfettiParticle p, double t) {
-    final progress = t <= p.delay ? 0.0 : (t - p.delay) / (1 - p.delay);
-    final eased = Curves.easeInCubic.transform(progress);
-    final size = p.size + 9 * Curves.easeOutCubic.transform(progress);
-    final dx = math.cos(p.angle) * p.span * eased;
-    final dy = -math.sin(p.angle) * p.span * eased;
-    return Positioned(
-      left: 70 + dx - size / 2,
-      top: 60 + dy - size / 2,
-      child: Opacity(
-        opacity: (1 - progress) * 0.95,
-        child: Transform.rotate(
-          angle: p.spin * progress,
-          child: p.emoji != null
-              ? Text(p.emoji!, style: TextStyle(fontSize: size))
-              : Icon(p.icon, size: size, color: widget.color),
+      });
+    } else {
+      _particles = [
+        _ConfettiParticle(
+          angle: -math.pi / 2,
+          span: 28.0,
+          size: 16.0,
+          spin: 0,
+          delay: 0,
+          icon: widget.burstIcon,
         ),
-      ),
-    );
+      ];
+    }
   }
 
   @override
@@ -1169,54 +1282,66 @@ class _SmartActionState extends State<_SmartAction>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.active ? widget.color : Colors.grey.shade500;
+    final active = widget.active;
+    final color = active ? widget.color : const Color(0xFF64748B);
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: widget.onTap,
+      onTap: () {
+        _pop.forward(from: 0.0);
+        if (!active && widget.burstOnActivate) {
+          _spawnParticles();
+          _burst.forward(from: 0.0);
+        }
+        widget.onTap?.call();
+      },
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Stack(
-              clipBehavior: Clip.none,
               alignment: Alignment.center,
+              clipBehavior: Clip.none,
               children: [
                 ScaleTransition(
                   scale: _popCurve,
                   child: Icon(
-                    widget.active ? widget.activeIcon : widget.icon,
-                    size: 22,
+                    active ? widget.activeIcon : widget.icon,
+                    size: 20,
                     color: color,
                   ),
                 ),
-                // The burst exists only while the animation is playing; at
-                // rest it is not in the tree at all, so no icon sits over the
-                // action before it is performed.
                 if (widget.burstOnActivate)
                   AnimatedBuilder(
                     animation: _burst,
-                    builder: (context, child) {
+                    builder: (context, _) {
                       if (!_burst.isAnimating) return const SizedBox.shrink();
                       final t = _burst.value;
                       if (widget.burstStyle == _BurstStyle.confetti) {
-                        return Positioned(
-                          left: -59,
-                          top: -49,
-                          child: IgnorePointer(
-                            child: SizedBox(
-                              width: 140,
-                              height: 120,
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                alignment: Alignment.center,
-                                children: [
-                                  for (final p in _particles)
-                                    _confettiParticle(p, t),
-                                ],
-                              ),
-                            ),
+                        return Positioned.fill(
+                          child: Stack(
+                            alignment: Alignment.center,
+                            clipBehavior: Clip.none,
+                            children: _particles.map((p) {
+                              final pt = ((t - p.delay) / (1 - p.delay)).clamp(0.0, 1.0);
+                              final dx = math.cos(p.angle) * p.span * pt;
+                              final dy = math.sin(p.angle) * p.span * pt - (pt * pt * 10);
+                              final opacity = (1.0 - pt).clamp(0.0, 1.0);
+                              return Transform.translate(
+                                offset: Offset(dx, dy),
+                                child: Transform.rotate(
+                                  angle: p.spin * pt,
+                                  child: Opacity(
+                                    opacity: opacity,
+                                    child: Text(
+                                      p.emoji ?? '🎉',
+                                      style: TextStyle(fontSize: p.size),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
                           ),
                         );
                       }
@@ -1243,18 +1368,18 @@ class _SmartActionState extends State<_SmartAction>
                   widget.label,
                   style: TextStyle(
                     fontSize: 10,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     color: color,
                   ),
                 ),
-                if (widget.count != null) ...[
+                if (widget.count != null && widget.count != '0') ...[
                   const SizedBox(width: 3),
                   Text(
                     widget.count!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey,
+                      color: active ? widget.color : Colors.grey.shade600,
                     ),
                   ),
                 ],
@@ -1267,6 +1392,7 @@ class _SmartActionState extends State<_SmartAction>
   }
 }
 
+/// Fresh Modern Register button: Vibrant Indigo CTA when active, Fresh Emerald badge when registered
 class _RegisterButton extends StatelessWidget {
   final AppConfig config;
   final bool isRegistered;
@@ -1282,25 +1408,83 @@ class _RegisterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isRegistered
-            ? Colors.grey.shade300
-            : config.eventColor,
-        foregroundColor: isRegistered ? Colors.black87 : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        elevation: isRegistered ? 0 : 2,
+    if (isRegistered) {
+      return Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFECFDF5),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFA7F3D0), width: 1.2),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF059669)),
+            SizedBox(width: 5),
+            Text(
+              'Registered',
+              style: TextStyle(
+                color: Color(0xFF059669),
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      height: 36,
+      decoration: BoxDecoration(
+        gradient: isFull
+            ? null
+            : const LinearGradient(
+                colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        color: isFull ? Colors.grey.shade300 : null,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: isFull
+            ? null
+            : [
+                BoxShadow(
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
       ),
-      onPressed: onPressed,
-      icon: Icon(
-        isRegistered ? Icons.check_circle : Icons.how_to_reg,
-        size: 16,
-      ),
-      label: Text(
-        isRegistered
-            ? 'Registered'
-            : (isFull ? 'Registrations closed' : 'Register Now'),
-        style: const TextStyle(fontWeight: FontWeight.bold),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isFull ? Icons.lock_clock_outlined : Icons.how_to_reg_rounded,
+                  size: 16,
+                  color: isFull ? Colors.grey.shade600 : Colors.white,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  isFull ? 'Seats Full' : 'Register Now',
+                  style: TextStyle(
+                    color: isFull ? Colors.grey.shade700 : Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

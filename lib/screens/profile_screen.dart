@@ -830,42 +830,20 @@ class _ProfileScreenState extends State<ProfileScreen>
       itemBuilder: (ctx, idx) {
         final post = posts[idx] as PostModel;
         return PostCard(
+          key: ValueKey(post.id),
           post: post,
-          config: cfg,
+          config: dataService.config,
           isSaved:
-              isSavedForAll ||
               dataService.currentUser.savedPostIds.contains(post.id),
           isRegistered:
-              isRegisteredForAll ||
               dataService.currentUser.registeredEventIds.contains(post.id),
           isCongratulated: dataService.currentUser.congratulatedPostIds.contains(
             post.id,
           ),
           isLiked: dataService.currentUser.likedPostIds.contains(post.id),
           currentUserId: dataService.currentUser.id,
-          onToggleSave: () {
-            dataService.toggleSavePost(post.id);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Saved!'),
-                duration: Duration(seconds: 1),
-              ),
-            );
-          },
-          onToggleLike: () {
-            dataService.toggleLikePost(post.id);
-            final isLiked =
-                dataService.currentUser.likedPostIds.contains(post.id);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(isLiked ? '❤️ Liked!' : 'Removed like'),
-                backgroundColor: isLiked
-                    ? Colors.redAccent
-                    : Colors.orange,
-                duration: const Duration(seconds: 1),
-              ),
-            );
-          },
+          onToggleSave: () => dataService.toggleSavePost(post.id),
+          onToggleLike: () => dataService.toggleLikePost(post.id),
         );
       },
     );

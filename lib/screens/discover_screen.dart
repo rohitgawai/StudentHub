@@ -653,70 +653,18 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   void _handleToggleSave(MockDataService dataService, PostModel post) {
     dataService.toggleSavePost(post.id);
-    final isSaved = dataService.currentUser.savedPostIds.contains(post.id);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          isSaved ? 'Saved to Profile!' : 'Removed from saved posts',
-        ),
-        duration: const Duration(seconds: 1),
-      ),
-    );
   }
 
   void _handleToggleLike(MockDataService dataService, PostModel post) {
     dataService.toggleLikePost(post.id);
-    final isLiked = dataService.currentUser.likedPostIds.contains(post.id);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isLiked ? '❤️ Liked!' : 'Removed like'),
-        backgroundColor: isLiked ? Colors.redAccent : Colors.orange,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 1),
-      ),
-    );
   }
 
   void _handleToggleCongratulate(MockDataService dataService, PostModel post) {
     dataService.toggleCongratulate(post.id);
-    final isCongratulated =
-        dataService.currentUser.congratulatedPostIds.contains(post.id);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          isCongratulated
-              ? '👏 Congratulated ${post.authorName}!'
-              : 'Removed congratulations',
-        ),
-        backgroundColor: isCongratulated
-            ? const Color(0xFF8E24AA)
-            : Colors.orange,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 1),
-      ),
-    );
   }
 
   void _handleToggleRegister(MockDataService dataService, PostModel post) {
-    final wasRegistered = dataService.currentUser.registeredEventIds.contains(
-      post.id,
-    );
     dataService.toggleEventRegistration(post.id);
-    final isRegistered = dataService.currentUser.registeredEventIds.contains(
-      post.id,
-    );
-    if (wasRegistered == isRegistered) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          isRegistered
-              ? '🎉 Successfully registered for ${post.title}!'
-              : 'Unregistered from event.',
-        ),
-        backgroundColor: isRegistered ? Colors.green : Colors.orange,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 }
 

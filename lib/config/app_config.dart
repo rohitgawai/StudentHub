@@ -51,7 +51,7 @@ class AppConfig {
       collegeName: json['collegeName'] ?? 'Campus Institute',
       collegeShortCode: json['collegeShortCode'] ?? 'CAMPUS',
       primaryColorHex: json['primaryColorHex'] ?? '#1E88E5',
-      eventColorHex: json['eventColorHex'] ?? '#FB8C00',
+      eventColorHex: json['eventColorHex'] ?? '#4F46E5',
       urgentColorHex: json['urgentColorHex'] ?? '#E53935',
       achievementColorHex: json['achievementColorHex'] ?? '#8E24AA',
       successColorHex: json['successColorHex'] ?? '#4CAF50',

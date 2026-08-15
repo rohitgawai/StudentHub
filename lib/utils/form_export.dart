@@ -186,6 +186,54 @@ Future<Uint8List> buildRegistrantPdf({
   return doc.save();
 }
 
+/// Resolves the user's public Downloads directory across Android, iOS & Desktop.
+Future<Directory> _getDownloadsDir() async {
+  try {
+    if (Platform.isAndroid) {
+      final downloadDir = Directory('/storage/emulated/0/Download');
+      if (await downloadDir.exists()) {
+        return downloadDir;
+      }
+    }
+    final dir = await getDownloadsDirectory();
+    if (dir != null && await dir.exists()) {
+      return dir;
+    }
+  } catch (_) {}
+  try {
+    final extDir = await getExternalStorageDirectory();
+    if (extDir != null) return extDir;
+  } catch (_) {}
+  return await getApplicationDocumentsDirectory();
+}
+
+/// Saves the CSV or PDF export directly to the device's Downloads directory.
+Future<File> saveRegistrantExportDirectly({
+  required PostModel post,
+  required List<FormSubmission> submissions,
+  required ExportFormat format,
+  String collegeName = 'StudentHub',
+}) async {
+  final dir = await _getDownloadsDir();
+  final base = _safeFileName(post.title);
+  final ext = format == ExportFormat.csv ? 'csv' : 'pdf';
+  final file = File('${dir.path}/${base}_registrations.$ext');
+
+  if (format == ExportFormat.csv) {
+    await file.writeAsString(
+      buildRegistrantCsv(post: post, submissions: submissions),
+    );
+  } else {
+    final bytes = await buildRegistrantPdf(
+      post: post,
+      submissions: submissions,
+      collegeName: collegeName,
+    );
+    await file.writeAsBytes(bytes);
+  }
+  return file;
+}
+
 /// Writes the export to a temp file ready for sharing.
 Future<File> writeRegistrantExport({
   required PostModel post,
