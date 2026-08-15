@@ -13,7 +13,6 @@ class ManagedPostCard extends StatelessWidget {
   final bool isRegistered;
   final bool isCongratulated;
   final bool isLiked;
-  final String userYear;
   final String? currentUserId;
   final VoidCallback? onToggleSave;
   final VoidCallback? onToggleRegister;
@@ -31,7 +30,6 @@ class ManagedPostCard extends StatelessWidget {
     required this.isRegistered,
     this.isCongratulated = false,
     this.isLiked = false,
-    required this.userYear,
     this.currentUserId,
     this.onToggleSave,
     this.onToggleRegister,
@@ -53,7 +51,6 @@ class ManagedPostCard extends StatelessWidget {
           isRegistered: isRegistered,
           isCongratulated: isCongratulated,
           isLiked: isLiked,
-          userYear: userYear,
           currentUserId: currentUserId,
           onToggleSave: onToggleSave,
           onToggleRegister: onToggleRegister,

@@ -12,8 +12,6 @@
   "academicColorHex": "#0288D1",
   "contactEmail": "support@studenthub.edu",
   "supportPhone": "+91 98765 43210",
-  "enableUrgentBanner": true,
-  "announcementBannerText": "🔥 Autumn Semester 2026 Registration Open! Check Academic Pulse for details.",
   "departments": [
     "Computer Science & Engineering",
     "Information Technology",

@@ -5,7 +5,6 @@ import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../models/role_request_model.dart';
 import '../services/mock_data_service.dart';
-import '../widgets/role_badge.dart';
 import '../widgets/post_card.dart';
 import '../widgets/role_request_modal.dart';
 import '../widgets/profile_avatar_zoom_dialog.dart';
@@ -75,13 +74,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         .toList();
     final bool canSwitchRoles = allowedSwitcherRoles.length > 1;
 
-    // Requirement 5: For Faculty role, filter out "Student" from assigned roles display
-    final displayAssignedRoles = user.roles.where((r) {
-      if (r == UserRole.admin) return false;
-      if (user.hasRole(UserRole.faculty) && r == UserRole.student) return false;
-      return true;
-    }).toList();
-
     // Requirement 7: Apply for role button visibility & expiration logic.
     // Hidden whenever the user holds Event Host or Faculty (both are granted
     // via this flow): a temporary Host role hides it until it expires, after
@@ -97,22 +89,37 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('My Profile'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: const Text(
+          'My Profile',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF0F172A),
+          ),
+        ),
         actions: [
           PopupMenuButton<String>(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Settings & Account',
+            icon: const Icon(Icons.more_vert, color: Color(0xFF0F172A)),
+            tooltip: 'Profile Options',
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 4,
+            surfaceTintColor: Colors.transparent,
             onSelected: (val) {
               if (val == 'edit') {
                 showDialog(
                   context: context,
                   builder: (ctx) => const EditProfileModal(),
                 );
+              } else if (val == 'feed_scope') {
+                _showFeedScopeDialog(context, dataService, user.year);
               } else if (val == 'logout') {
                 showDialog(
                   context: context,
                   builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     title: const Text('Log Out'),
                     content: const Text('Are you sure you want to log out of StudentHub?'),
                     actions: [
@@ -121,7 +128,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                         child: const Text('Cancel'),
                       ),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
                         onPressed: () {
                           Navigator.pop(ctx);
                           dataService.logout();
@@ -133,28 +143,84 @@ class _ProfileScreenState extends State<ProfileScreen>
                 );
               }
             },
-            itemBuilder: (ctx) => [
-              const PopupMenuItem(
-                value: 'edit',
-                child: Row(
-                  children: [
-                    Icon(Icons.edit_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Edit Profile Details'),
-                  ],
+            itemBuilder: (ctx) {
+              final isHostOrFaculty =
+                  hasHostRole || hasFacultyRole || user.hasRole(UserRole.admin);
+              return [
+                PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.edit_outlined, size: 18, color: Color(0xFF312E81)),
+                      SizedBox(width: 10),
+                      Text(
+                        'Edit Profile Details',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout_rounded, size: 18, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Log Out', style: TextStyle(color: Colors.red)),
-                  ],
+                if (isHostOrFaculty) ...[
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'feed_scope',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.tune_rounded, size: 18, color: Color(0xFF312E81)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Feed Scope',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                              Text(
+                                dataService.showAllYearsFeed
+                                    ? 'All Academic Years'
+                                    : 'My Year (${user.year.isNotEmpty ? user.year : "Default"})',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'logout',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.logout_rounded, size: 18, color: Colors.red),
+                      SizedBox(width: 10),
+                      Text(
+                        'Log Out',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ];
+            },
           ),
         ],
       ),
@@ -165,469 +231,470 @@ class _ProfileScreenState extends State<ProfileScreen>
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-          // Profile Header Card
-          SliverToBoxAdapter(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              color: Theme.of(context).cardColor,
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      // Requirement 3: Tap profile picture to zoom like Instagram with edit option
-                      GestureDetector(
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => ProfileAvatarZoomDialog(
-                              avatarUrl: user.avatarUrl,
-                            ),
-                          );
-                        },
-                        child: Stack(
+            // Floating Profile Header Card
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Upper Active Perspective Switcher (Clean, Simple Dynamic Text)
+                    if (canSwitchRoles) ...[
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 18),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            CircleAvatar(
-                              radius: 36,
-                              backgroundImage: resolveImageProvider(
-                                user.avatarUrl,
-                              ),
-                              child: user.avatarUrl.isEmpty
-                                  ? const Icon(Icons.person, size: 36)
-                                  : null,
+                            Icon(
+                              Icons.swap_horiz_rounded,
+                              size: 16,
+                              color: Colors.grey.shade700,
                             ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Active Perspective: ',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                            DropdownButtonHideUnderline(
+                              child: DropdownButton<UserRole>(
+                                value:
+                                    allowedSwitcherRoles.contains(activeRole)
+                                    ? activeRole
+                                    : allowedSwitcherRoles.first,
+                                isDense: true,
+                                borderRadius: BorderRadius.circular(16),
+                                elevation: 4,
+                                dropdownColor: Colors.white,
+                                menuMaxHeight: 220,
+                                icon: Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 18,
+                                  color: Colors.grey.shade700,
+                                ),
+                                onChanged: (UserRole? newRole) {
+                                  if (newRole != null) {
+                                    dataService.switchActiveRole(newRole);
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Switched view perspective to ${newRole.displayName}',
+                                        ),
+                                        duration: const Duration(seconds: 1),
+                                      ),
+                                    );
+                                  }
+                                },
+                                items: allowedSwitcherRoles.map((role) {
+                                  final isCurrent = role == activeRole;
+                                  return DropdownMenuItem<UserRole>(
+                                    value: role,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          role.displayName,
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: isCurrent
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                            color: isCurrent
+                                                ? const Color(0xFF312E81)
+                                                : const Color(0xFF1E293B),
+                                          ),
+                                        ),
+                                        if (isCurrent) ...[
+                                          const SizedBox(width: 6),
+                                          const Icon(
+                                            Icons.check,
+                                            size: 14,
+                                            color: Color(0xFF312E81),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // Centered Profile Avatar
+                    GestureDetector(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => ProfileAvatarZoomDialog(
+                            avatarUrl: user.avatarUrl,
+                          ),
+                        );
+                      },
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 46,
+                            backgroundColor: cfg.primaryColor.withValues(alpha: 0.12),
+                            backgroundImage: resolveImageProvider(
+                              user.avatarUrl,
+                            ),
+                            child: user.avatarUrl.isEmpty
+                                ? Text(
+                                    user.name.isNotEmpty
+                                        ? user.name.substring(0, 1).toUpperCase()
+                                        : '?',
+                                    style: TextStyle(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.bold,
+                                      color: cfg.primaryColor,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          if (user.isVerified)
                             Positioned(
                               bottom: 0,
-                              right: 0,
+                              right: 2,
                               child: Container(
-                                padding: const EdgeInsets.all(4),
+                                padding: const EdgeInsets.all(2),
                                 decoration: const BoxDecoration(
-                                  color: Colors.blue,
+                                  color: Colors.white,
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
-                                  Icons.zoom_in,
-                                  size: 14,
-                                  color: Colors.white,
+                                  Icons.verified,
+                                  size: 22,
+                                  color: Colors.blue,
                                 ),
                               ),
                             ),
-                          ],
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    user.name,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (user.isVerified) ...[
-                                  const SizedBox(width: 4),
-                                  const Icon(
-                                    Icons.verified,
-                                    size: 18,
-                                    color: Colors.blue,
-                                  ),
-                                ],
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              user.studentOrEmployeeId,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${user.department} • ${user.year}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cfg.primaryColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (user.mobileNumber.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(Icons.phone_outlined, size: 13, color: Colors.grey),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    user.mobileNumber,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.edit_note, color: Colors.blue),
-                        tooltip: 'Edit Profile Details',
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => const EditProfileModal(),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
+                    ),
 
-                  // Requirement 2 & 1: Active Perspective dropdown menu change (compact & bounded layout)
-                  if (canSwitchRoles) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
+                    const SizedBox(height: 12),
+
+                    // Centered User Name
+                    Text(
+                      user.name,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
                       ),
-                      decoration: BoxDecoration(
-                        color: cfg.primaryColor.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: cfg.primaryColor.withValues(alpha: 0.25),
-                        ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    // MIT Unique ID
+                    Text(
+                      'MIT Unique ID: ${user.studentOrEmployeeId}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w600,
                       ),
-                      child: Row(
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    // Department & Year
+                    Text(
+                      '${user.department} • ${user.year}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: cfg.primaryColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+
+                    if (user.mobileNumber.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
-                            Icons.swap_horiz,
-                            size: 18,
-                            color: Colors.blueGrey,
-                          ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'Active Perspective: ',
+                          Icon(Icons.phone_outlined, size: 13, color: Colors.grey.shade500),
+                          const SizedBox(width: 4),
+                          Text(
+                            user.mobileNumber,
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blueGrey,
-                            ),
-                          ),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<UserRole>(
-                                  value:
-                                      allowedSwitcherRoles.contains(activeRole)
-                                      ? activeRole
-                                      : allowedSwitcherRoles.first,
-                                  isDense: true,
-                                  menuMaxHeight: 220,
-                                  icon: const Icon(
-                                    Icons.keyboard_arrow_down,
-                                    size: 18,
-                                  ),
-                                  onChanged: (UserRole? newRole) {
-                                    if (newRole != null) {
-                                      dataService.switchActiveRole(newRole);
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Switched view perspective to ${newRole.displayName}',
-                                          ),
-                                          duration: const Duration(seconds: 1),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  items: allowedSwitcherRoles.map((role) {
-                                    return DropdownMenuItem<UserRole>(
-                                      value: role,
-                                      child: RoleBadge(
-                                        role: role,
-                                        isCompact: true,
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                    ],
 
-                  // Requirement 5: Roles Badges Row (Student hidden when Faculty is active)
-                  Row(
-                    children: [
-                      const Text(
-                        'Assigned Roles: ',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                    // Role Expiration Warning Notice if applicable
+                    if (showRoleExpiredNotice) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red.shade200),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: displayAssignedRoles
-                              .map(
-                                (r) => Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    RoleBadge(role: r, isCompact: true),
-                                    if (user.isRoleExpiring(r))
-                                      Padding(
-                                        padding: const EdgeInsets.only(left: 4),
-                                        child: _buildExpiryTag(
-                                          user.getRoleExpiry(r)!,
-                                        ),
-                                      ),
-                                  ],
+                        child: Row(
+                          children: const [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.red,
+                              size: 20,
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '⚠️ Your temporary role has expired! You can re-apply below.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              )
-                              .toList(),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
 
-                  const SizedBox(height: 14),
-
-                  // Requirement 7: Role Expiration Warning Notice if applicable
-                  if (showRoleExpiredNotice) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      margin: const EdgeInsets.only(bottom: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.red.shade200),
-                      ),
-                      child: Row(
-                        children: const [
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            color: Colors.red,
-                            size: 20,
+                    // Apply for Role Button
+                    if (cfg.allowRoleSelfApplication && canApplyForRoles) ...[
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            if (pendingApplication != null) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (c) => RoleApplicationStatusScreen(
+                                    application: pendingApplication,
+                                  ),
+                                ),
+                              );
+                            } else {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => const RoleRequestModal(),
+                              );
+                            }
+                          },
+                          icon: Icon(
+                            pendingApplication != null
+                                ? Icons.hourglass_top
+                                : Icons.add_moderator,
+                            size: 16,
                           ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '⚠️ Your temporary role has expired! You can re-apply below.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.red,
-                                fontWeight: FontWeight.bold,
-                              ),
+                          label: Text(
+                            pendingApplication != null
+                                ? 'Application Under Review'
+                                : showRoleExpiredNotice
+                                    ? 'Re-Apply for Event Host / Faculty Role'
+                                    : 'Apply for Event Host / Faculty Role',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
+                        ),
+                      ),
+                    ],
+
+                    // Role Dashboards shortcut: only for the ACTIVE role view.
+                    if (activeRole != UserRole.student) ...[
+                      const SizedBox(height: 16),
+                      Column(
+                        children: [
+                          if (activeRole == UserRole.admin)
+                            Material(
+                              borderRadius: BorderRadius.circular(14),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) => const AdminDashboardScreen(),
+                                  ),
+                                ),
+                                child: Ink(
+                                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF581C87), Color(0xFF7E22CE)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF7E22CE).withValues(alpha: 0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: const [
+                                      Icon(Icons.admin_panel_settings, color: Colors.white, size: 20),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'Admin Control Panel',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (activeRole == UserRole.faculty)
+                            Material(
+                              borderRadius: BorderRadius.circular(14),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) => const FacultyDashboardScreen(),
+                                  ),
+                                ),
+                                child: Ink(
+                                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF312E81).withValues(alpha: 0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: const [
+                                      Icon(Icons.menu_book, color: Colors.white, size: 20),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'Faculty Dashboard',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      Icon(Icons.insights, color: Colors.white70, size: 18),
+                                      SizedBox(width: 6),
+                                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (activeRole == UserRole.eventHost)
+                            Material(
+                              borderRadius: BorderRadius.circular(14),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) => const EventHostDashboardScreen(),
+                                  ),
+                                ),
+                                child: Ink(
+                                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF312E81).withValues(alpha: 0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: const [
+                                      Icon(Icons.event_available, color: Colors.white, size: 20),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'Host Dashboard',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      Icon(Icons.insights, color: Colors.white70, size: 18),
+                                      SizedBox(width: 6),
+                                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
-                    ),
+                    ],
                   ],
-
-                  // Requirement 7: Apply for Role Button (Hidden while any elevated role is held; re-appears when it expires)
-                  if (cfg.allowRoleSelfApplication && canApplyForRoles)
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          if (pendingApplication != null) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (c) => RoleApplicationStatusScreen(
-                                  application: pendingApplication,
-                                ),
-                              ),
-                            );
-                          } else {
-                            showDialog(
-                              context: context,
-                              builder: (ctx) => const RoleRequestModal(),
-                            );
-                          }
-                        },
-                        icon: Icon(
-                          pendingApplication != null
-                              ? Icons.hourglass_top
-                              : Icons.add_moderator,
-                          size: 16,
-                        ),
-                        label: Text(
-                          pendingApplication != null
-                              ? 'Application Under Review'
-                              : showRoleExpiredNotice
-                                  ? 'Re-Apply for Event Host / Faculty Role'
-                                  : 'Apply for Event Host / Faculty Role',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                  // Role Dashboards shortcut: only for the ACTIVE role view.
-                  // A Student view never gets dashboard access, even when
-                  // elevated roles are held.
-                  if (activeRole != UserRole.student) ...[
-                    const SizedBox(height: 10),
-                    Column(
-                      children: [
-                        if (activeRole == UserRole.admin)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF7B1FA2),
-                                  side: const BorderSide(
-                                    color: Color(0xFF7B1FA2),
-                                    width: 1.5,
-                                  ),
-                                  backgroundColor: const Color(
-                                    0xFF7B1FA2,
-                                  ).withValues(alpha: 0.08),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                ),
-                                onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (c) =>
-                                        const AdminDashboardScreen(),
-                                  ),
-                                ),
-                                icon: const Icon(
-                                  Icons.admin_panel_settings,
-                                  size: 16,
-                                ),
-                                label: const Text(
-                                  'Admin Control Panel',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (activeRole == UserRole.faculty)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF0369A1),
-                                  side: const BorderSide(
-                                    color: Color(0xFF0369A1),
-                                    width: 1.5,
-                                  ),
-                                  backgroundColor: const Color(
-                                    0xFF0369A1,
-                                  ).withValues(alpha: 0.08),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                ),
-                                onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (c) =>
-                                        const FacultyDashboardScreen(),
-                                  ),
-                                ),
-                                icon: const Icon(
-                                  Icons.menu_book,
-                                  size: 16,
-                                ),
-                                label: const Text(
-                                  'Faculty Dashboard',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (activeRole == UserRole.eventHost)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFFC2410C),
-                                  side: const BorderSide(
-                                    color: Color(0xFFC2410C),
-                                    width: 1.5,
-                                  ),
-                                  backgroundColor: const Color(
-                                    0xFFC2410C,
-                                  ).withValues(alpha: 0.08),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                ),
-                                onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (c) =>
-                                        const EventHostDashboardScreen(),
-                                  ),
-                                ),
-                                icon: const Icon(Icons.event, size: 16),
-                                label: const Text(
-                                  'Host Dashboard',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-
-                ],
+                ),
               ),
             ),
-          ),
 
           // Tabs: Saved Posts & Registered Events
           SliverPersistentHeader(
@@ -669,7 +736,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                   savedPosts,
                   'Tap the bookmark icon on any feed post to save it for quick access later.',
                   cfg: cfg,
-                  userYear: user.year,
                   isSavedForAll: true,
                   dataService: dataService,
                 ),
@@ -677,7 +743,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                   registeredEvents,
                   'You haven\'t registered for any upcoming campus events yet.',
                   cfg: cfg,
-                  userYear: user.year,
                   isRegisteredForAll: true,
                   dataService: dataService,
                 ),
@@ -688,39 +753,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
     ),
   );
-  }
-
-  Widget _buildExpiryTag(DateTime expiry) {
-    final daysLeft = expiry.difference(DateTime.now()).inDays;
-    final isExpiringSoon = daysLeft <= 7;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(
-        color: (isExpiringSoon ? Colors.orange : Colors.green).withValues(
-          alpha: 0.15,
-        ),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        daysLeft < 1
-            ? 'Expires today'
-            : 'Expires in $daysLeft day${daysLeft > 1 ? 's' : ''}',
-        style: TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          color: isExpiringSoon
-              ? Colors.orange.shade900
-              : Colors.green.shade800,
-        ),
-      ),
-    );
-  }
+}
 
   Widget _buildList(
     List posts,
     String emptyMsg, {
     required AppConfig cfg,
-    required String userYear,
     required MockDataService dataService,
     bool isSavedForAll = false,
     bool isRegisteredForAll = false,
@@ -784,7 +822,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             post.id,
           ),
           isLiked: dataService.currentUser.likedPostIds.contains(post.id),
-          userYear: userYear,
           currentUserId: dataService.currentUser.id,
           onToggleSave: () {
             dataService.toggleSavePost(post.id);
@@ -807,6 +844,206 @@ class _ProfileScreenState extends State<ProfileScreen>
                     : Colors.orange,
                 duration: const Duration(seconds: 1),
               ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showFeedScopeDialog(
+    BuildContext context,
+    MockDataService dataService,
+    String userYear,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            final showAll = dataService.showAllYearsFeed;
+            final effectiveYear =
+                userYear.trim().isNotEmpty ? userYear : 'My Year';
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Row(
+                children: const [
+                  Icon(Icons.tune_rounded, color: Color(0xFF312E81), size: 22),
+                  SizedBox(width: 10),
+                  Text(
+                    'Feed Scope',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'As a creator/faculty, choose which posts appear in your campus feed:',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      dataService.setShowAllYearsFeed(false);
+                      setDialogState(() {});
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Feed filtered to $effectiveYear only.'),
+                          backgroundColor: const Color(0xFF312E81),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: !showAll
+                            ? const Color(0xFF312E81).withValues(alpha: 0.08)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: !showAll
+                              ? const Color(0xFF312E81)
+                              : Colors.grey.shade300,
+                          width: !showAll ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            !showAll
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_off,
+                            color: !showAll
+                                ? const Color(0xFF312E81)
+                                : Colors.grey.shade500,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$effectiveYear (Default)',
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: !showAll
+                                        ? const Color(0xFF312E81)
+                                        : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Only view posts targeted to your year and all years',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      dataService.setShowAllYearsFeed(true);
+                      setDialogState(() {});
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Feed set to All Academic Years.'),
+                          backgroundColor: Color(0xFF312E81),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: showAll
+                            ? const Color(0xFF312E81).withValues(alpha: 0.08)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: showAll
+                              ? const Color(0xFF312E81)
+                              : Colors.grey.shade300,
+                          width: showAll ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            showAll
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_off,
+                            color: showAll
+                                ? const Color(0xFF312E81)
+                                : Colors.grey.shade500,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'All Academic Years',
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: showAll
+                                        ? const Color(0xFF312E81)
+                                        : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'View posts across 1st, 2nd, 3rd, and Final years',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close'),
+                ),
+              ],
             );
           },
         );

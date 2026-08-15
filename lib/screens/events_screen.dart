@@ -50,16 +50,26 @@ class _EventsScreenState extends State<EventsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final dataService = context.read<MockDataService>();
-    final cfg = context.select((MockDataService s) => s.config);
-    final user = context.select((MockDataService s) => s.currentUser);
-    // Same underlying feed, filtered down to Events + Workshops.
-    final allEvents = dataService.posts.where((p) => p.isEvent).toList();
+    final dataService = context.watch<MockDataService>();
+    final cfg = dataService.config;
+    final user = dataService.currentUser;
+
+    // Same underlying feed, filtered down to Events + Workshops with year match.
+    final allEvents = dataService.posts
+        .where((p) => p.isEvent && dataService.matchesYear(p))
+        .toList();
     final registeredEvents = allEvents
         .where((e) => user.registeredEventIds.contains(e.id))
         .toList();
-    final myHostedEvents = allEvents
-        .where((e) => e.authorId == user.id)
+    final myHostedEvents = dataService.posts
+        .where(
+          (e) =>
+              e.isEvent &&
+              (e.authorId == user.id ||
+                  (user.name.isNotEmpty &&
+                      e.authorName.trim().toLowerCase() ==
+                          user.name.trim().toLowerCase())),
+        )
         .toList();
 
     final savedIds = user.savedPostIds.toSet();
@@ -68,108 +78,90 @@ class _EventsScreenState extends State<EventsScreen>
     final likedIds = user.likedPostIds.toSet();
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('🎉 Events'),
-        bottom: TabBar(
-          controller: tabController,
-          indicatorColor: cfg.eventColor,
-          labelColor: cfg.eventColor,
-          unselectedLabelColor: Colors.grey,
-          tabs: [
-            Tab(text: 'All (${allEvents.length})'),
-            Tab(text: 'My Registered (${registeredEvents.length})'),
-            Tab(text: 'My Hosted (${myHostedEvents.length})'),
-          ],
+        title: const Text(
+          'Events & Workshops',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
-      ),
-      body: Column(
-        children: [
-          // A gentle reminder that this is just the event view of one feed.
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: cfg.eventColor.withValues(alpha: 0.06),
-            child: Row(
-              children: [
-                Icon(Icons.filter_alt, size: 16, color: cfg.eventColor),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Filtered from campus feed · Events & Workshops',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: cfg.eventColor,
-                    ),
+        centerTitle: false,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: TabBar(
+              controller: tabController,
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              indicator: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
                   ),
-                ),
-                if (isRefreshing)
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cfg.eventColor,
-                      ),
-                    ),
-                  )
-                else
-                  IconButton(
-                    icon: const Icon(Icons.refresh_rounded),
-                    color: cfg.eventColor,
-                    iconSize: 20,
-                    tooltip: 'Refresh Events',
-                    padding: const EdgeInsets.all(4),
-                    constraints: const BoxConstraints(),
-                    onPressed: () => _handleRefresh(dataService),
-                  ),
+                ],
+              ),
+              labelColor: const Color(0xFF0F172A),
+              unselectedLabelColor: Colors.grey.shade600,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+              tabs: [
+                Tab(text: 'All (${allEvents.length})'),
+                Tab(text: 'Registered (${registeredEvents.length})'),
+                Tab(text: 'Hosted (${myHostedEvents.length})'),
               ],
             ),
           ),
-          Expanded(
-            child: TabBarView(
-              controller: tabController,
-              children: [
-                _buildEventList(
-                  context,
-                  allEvents,
-                  cfg: cfg,
-                  savedIds: savedIds,
-                  registeredIds: registeredIds,
-                  congratulatedIds: congratulatedIds,
-                  likedIds: likedIds,
-                  userYear: user.year,
-                  dataService: dataService,
-                  onRefresh: () => _handleRefresh(dataService),
-                ),
-                _buildEventList(
-                  context,
-                  registeredEvents,
-                  cfg: cfg,
-                  savedIds: savedIds,
-                  registeredIds: registeredIds,
-                  congratulatedIds: congratulatedIds,
-                  likedIds: likedIds,
-                  userYear: user.year,
-                  dataService: dataService,
-                  emptyMessage: 'You have not registered for any events yet.',
-                ),
-                _buildEventList(
-                  context,
-                  myHostedEvents,
-                  cfg: cfg,
-                  savedIds: savedIds,
-                  registeredIds: registeredIds,
-                  congratulatedIds: congratulatedIds,
-                  likedIds: likedIds,
-                  userYear: user.year,
-                  dataService: dataService,
-                  emptyMessage: 'You have not hosted any events yet.',
-                ),
-              ],
-            ),
+        ),
+      ),
+      body: TabBarView(
+        controller: tabController,
+        children: [
+          _buildEventList(
+            context,
+            allEvents,
+            cfg: cfg,
+            savedIds: savedIds,
+            registeredIds: registeredIds,
+            congratulatedIds: congratulatedIds,
+            likedIds: likedIds,
+            dataService: dataService,
+            onRefresh: () => _handleRefresh(dataService),
+          ),
+          _buildEventList(
+            context,
+            registeredEvents,
+            cfg: cfg,
+            savedIds: savedIds,
+            registeredIds: registeredIds,
+            congratulatedIds: congratulatedIds,
+            likedIds: likedIds,
+            dataService: dataService,
+            emptyMessage: 'You have not registered for any events yet.',
+            onRefresh: () => _handleRefresh(dataService),
+          ),
+          _buildEventList(
+            context,
+            myHostedEvents,
+            cfg: cfg,
+            savedIds: savedIds,
+            registeredIds: registeredIds,
+            congratulatedIds: congratulatedIds,
+            likedIds: likedIds,
+            dataService: dataService,
+            emptyMessage: 'You have not hosted any events yet.',
+            onRefresh: () => _handleRefresh(dataService),
           ),
         ],
       ),
@@ -178,13 +170,12 @@ class _EventsScreenState extends State<EventsScreen>
 
   Widget _buildEventList(
     BuildContext context,
-    List events, {
+    List<PostModel> events, {
     required AppConfig cfg,
     required Set<String> savedIds,
     required Set<String> registeredIds,
     required Set<String> congratulatedIds,
     required Set<String> likedIds,
-    required String userYear,
     required MockDataService dataService,
     String emptyMessage = 'No upcoming events found.',
     Future<void> Function()? onRefresh,
@@ -194,19 +185,23 @@ class _EventsScreenState extends State<EventsScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.event_seat_outlined, size: 64, color: Colors.grey),
+            Icon(Icons.event_seat_outlined, size: 56, color: Colors.grey.shade400),
             const SizedBox(height: 12),
-            Text(emptyMessage, style: const TextStyle(color: Colors.grey)),
+            Text(
+              emptyMessage,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            ),
           ],
         ),
       );
     }
 
     Widget list = ListView.builder(
-      padding: const EdgeInsets.only(top: 8, bottom: 96),
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      padding: const EdgeInsets.only(top: 10, bottom: 96),
       itemCount: events.length,
       itemBuilder: (context, index) {
-        final post = events[index] as PostModel;
+        final post = events[index];
         return PostCard(
           post: post,
           config: cfg,
@@ -214,7 +209,6 @@ class _EventsScreenState extends State<EventsScreen>
           isRegistered: registeredIds.contains(post.id),
           isCongratulated: congratulatedIds.contains(post.id),
           isLiked: likedIds.contains(post.id),
-          userYear: userYear,
           currentUserId: dataService.currentUser.id,
           onToggleSave: () {
             dataService.toggleSavePost(post.id);
@@ -229,7 +223,7 @@ class _EventsScreenState extends State<EventsScreen>
 
     if (onRefresh != null) {
       list = RefreshIndicator(
-        color: cfg.eventColor,
+        color: const Color(0xFF1E1B4B),
         onRefresh: onRefresh,
         child: list,
       );

@@ -62,26 +62,17 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dataService = context.read<MockDataService>();
-    final cfg = context.select((MockDataService s) => s.config);
-    final userYear = context.select((MockDataService s) => s.currentUser.year);
-    final savedIds = context.select(
-      (MockDataService s) => s.currentUser.savedPostIds,
-    );
-    final registeredIds = context.select(
-      (MockDataService s) => s.currentUser.registeredEventIds,
-    );
-    final congratulatedIds = context.select(
-      (MockDataService s) => s.currentUser.congratulatedPostIds,
-    );
-    final likedIds = context.select(
-      (MockDataService s) => s.currentUser.likedPostIds,
-    );
+    final dataService = context.watch<MockDataService>();
+    final cfg = dataService.config;
+    final savedIds = dataService.currentUser.savedPostIds;
+    final registeredIds = dataService.currentUser.registeredEventIds;
+    final congratulatedIds = dataService.currentUser.congratulatedPostIds;
+    final likedIds = dataService.currentUser.likedPostIds;
     final filteredPosts = dataService.getPersonalizedFeed(
       searchQuery: searchQuery,
     );
     final nonEventPosts = dataService.posts
-        .where((p) => !p.isEvent)
+        .where((p) => !p.isEvent && dataService.matchesYear(p))
         .toList(growable: false);
 
     Widget searchField = TextField(
@@ -111,7 +102,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       isRegistered: registeredIds.contains(post.id),
       isCongratulated: congratulatedIds.contains(post.id),
       isLiked: likedIds.contains(post.id),
-      userYear: userYear,
       currentUserId: dataService.currentUser.id,
       onToggleSave: () => _handleToggleSave(dataService, post),
       onToggleRegister: () => _handleToggleRegister(dataService, post),

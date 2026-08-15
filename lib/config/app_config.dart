@@ -17,8 +17,6 @@ class AppConfig {
   String academicColorHex;
   String contactEmail;
   String supportPhone;
-  bool enableUrgentBanner;
-  String announcementBannerText;
   List<String> departments;
   List<String> academicYears;
   List<String> postCategories;
@@ -39,8 +37,6 @@ class AppConfig {
     required this.academicColorHex,
     required this.contactEmail,
     required this.supportPhone,
-    required this.enableUrgentBanner,
-    required this.announcementBannerText,
     required this.departments,
     required this.academicYears,
     required this.postCategories,
@@ -63,8 +59,6 @@ class AppConfig {
       academicColorHex: json['academicColorHex'] ?? '#0288D1',
       contactEmail: json['contactEmail'] ?? 'support@studenthub.edu',
       supportPhone: json['supportPhone'] ?? '+91 98765 43210',
-      enableUrgentBanner: json['enableUrgentBanner'] ?? true,
-      announcementBannerText: json['announcementBannerText'] ?? '',
       departments: List<String>.from(json['departments'] ?? [
         'Computer Science & Engineering',
         'Information Technology',
@@ -110,8 +104,6 @@ class AppConfig {
       'academicColorHex': academicColorHex,
       'contactEmail': contactEmail,
       'supportPhone': supportPhone,
-      'enableUrgentBanner': enableUrgentBanner,
-      'announcementBannerText': announcementBannerText,
       'departments': departments,
       'academicYears': academicYears,
       'postCategories': postCategories,
@@ -140,7 +132,6 @@ class AppConfig {
   Color colorForCategory(PostCategory category) {
     switch (category) {
       case PostCategory.urgent:
-      case PostCategory.urgentAnnouncement:
         return urgentColor;
       case PostCategory.event:
       case PostCategory.workshop:
@@ -182,8 +173,6 @@ class AppConfig {
       academicColorHex: '#0288D1',
       contactEmail: 'support@studenthub.edu',
       supportPhone: '+91 98765 43210',
-      enableUrgentBanner: true,
-      announcementBannerText: '🔥 Autumn Semester 2026 Registration Open! Check Academic Pulse for details.',
       departments: [
         'Computer Science & Engineering',
         'Information Technology',

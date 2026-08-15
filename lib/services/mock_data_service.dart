@@ -10,7 +10,6 @@ import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../models/role_request_model.dart';
 import '../models/notification_model.dart';
-import '../models/active_announcement_model.dart';
 import '../models/form_models.dart';
 import 'local_store_service.dart';
 
@@ -22,7 +21,6 @@ class MockDataService extends ChangeNotifier {
   List<PostModel> _posts = [];
   List<RoleRequestModel> _roleRequests = [];
   List<NotificationModel> _notifications = [];
-  List<ActiveAnnouncement> _announcements = [];
   List<FormSubmission> _formSubmissions = [];
   bool _notificationsCleared = false;
   DateTime? _notificationsClearedAt;
@@ -56,7 +54,6 @@ class MockDataService extends ChangeNotifier {
   List<PostModel> _cachePosts = const [];
   List<RoleRequestModel> _cacheRoleRequests = const [];
   List<NotificationModel> _cacheNotifications = const [];
-  List<ActiveAnnouncement> _cacheAnnouncements = const [];
   List<FormSubmission> _cacheSubmissions = const [];
   String? _feedCacheKey;
   List<PostModel>? _feedCacheValue;
@@ -68,16 +65,12 @@ class MockDataService extends ChangeNotifier {
     _cachePosts = List.unmodifiable(_posts);
     _cacheRoleRequests = List.unmodifiable(_roleRequests);
     _cacheNotifications = List.unmodifiable(_notifications);
-    _cacheAnnouncements = List.unmodifiable(
-      _announcements.where((a) => !a.isExpired),
-    );
     _cacheSubmissions = List.unmodifiable(_formSubmissions);
   }
 
   List<PostModel> get posts => _cachePosts;
   List<RoleRequestModel> get roleRequests => _cacheRoleRequests;
   List<NotificationModel> get notifications => _cacheNotifications;
-  List<ActiveAnnouncement> get activeAnnouncements => _cacheAnnouncements;
   List<FormSubmission> get formSubmissions => _cacheSubmissions;
 
   MockDataService({AppConfig? initialConfig}) {
@@ -105,34 +98,17 @@ class MockDataService extends ChangeNotifier {
     final restored = await _loadLocalState();
 
     if (restored != null) {
-      final isDemoAccount = restored.currentUser.id == 'usr_101' ||
-          restored.currentUser.name.toLowerCase().contains('aarav') ||
-          restored.currentUser.email.contains('aarav.sharma');
+      currentUser = restored.currentUser;
+      activeRole = restored.activeRole ??
+          (currentUser.roles.isNotEmpty
+              ? currentUser.roles.first
+              : UserRole.student);
 
-      if (isDemoAccount) {
-        _isLoggedOut = true;
-        logoutReason = 'Demo account deleted.';
-        lastKnownUser = null;
-        await _localStore.clearSnapshot();
-      } else {
-        currentUser = restored.currentUser;
-        activeRole = restored.activeRole ??
-            (currentUser.roles.isNotEmpty
-                ? currentUser.roles.first
-                : UserRole.student);
-      }
-
-      _posts = restored.posts
-          .where(
-            (p) =>
-                p.authorId != 'usr_101' &&
-                !p.authorName.toLowerCase().contains('aarav'),
-          )
-          .toList();
+      _posts = restored.posts;
       _notifications = restored.notifications;
       _roleRequests = restored.roleRequests;
-      _announcements = restored.announcements;
       _formSubmissions = restored.formSubmissions;
+      _showAllYearsFeed = restored.showAllYearsFeed;
       _serverKnownIds
         ..clear()
         ..addAll(restored.serverKnownIds);
@@ -146,7 +122,6 @@ class MockDataService extends ChangeNotifier {
 
     _expiryTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       checkForExpiredRoles();
-      _clearExpiredAnnouncements();
     });
 
     // Lightweight polling: keeps the in-app notification bell fresh with posts
@@ -180,20 +155,20 @@ class MockDataService extends ChangeNotifier {
   }
 
   Future<void> _seedDefaults() async {
-    // Unauthenticated initial user state (requires login or signup)
     currentUser = UserModel(
-      id: '',
-      name: '',
-      email: '',
-      studentOrEmployeeId: '',
-      department: config.departments.first,
-      year: config.academicYears.first,
-      mobileNumber: '',
-      avatarUrl: '',
-      roles: const [UserRole.student],
-      savedPostIds: const [],
-      registeredEventIds: const [],
-      congratulatedPostIds: const [],
+      id: 'usr_101',
+      name: 'Aarav Sharma',
+      email: 'aarav.sharma@studenthub.edu',
+      studentOrEmployeeId: 'MIT/CS/2023/042',
+      department: 'Computer Science & Engineering',
+      year: 'Third Year',
+      mobileNumber: '+91 98765 43210',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400',
+      roles: const [UserRole.student, UserRole.eventHost],
+      savedPostIds: const ['pst_001'],
+      registeredEventIds: const ['pst_002'],
+      congratulatedPostIds: const ['pst_005'],
+      likedPostIds: const ['pst_001'],
       isVerified: true,
     );
 
@@ -203,7 +178,6 @@ class MockDataService extends ChangeNotifier {
     _generateMockRoleRequests();
     _generateMockNotifications();
     _generateMockSubmissions();
-    _seedDefaultAnnouncement();
   }
 
   // --- On-device persistence ---
@@ -305,10 +279,10 @@ class MockDataService extends ChangeNotifier {
         'posts': postsJson,
         'notifications': _notifications.map(_notificationToJson).toList(),
         'roleRequests': _roleRequests.map(_roleRequestToJson).toList(),
-        'announcements': _announcements.map(_announcementToJson).toList(),
         'formSubmissions': _formSubmissions.map(_submissionToJson).toList(),
         'serverKnownIds': _serverKnownIds.toList(),
         'deviceOnlyPostIds': _deviceOnlyPostIds.toList(),
+        'showAllYearsFeed': _showAllYearsFeed,
       };
 
       await _localStore.saveSnapshot(jsonEncode(payload));
@@ -343,10 +317,6 @@ class MockDataService extends ChangeNotifier {
           .whereType<Map>()
           .map((m) => _roleRequestFromJson(m.cast<String, dynamic>()))
           .toList();
-      final announcements = ((payload['announcements'] as List?) ?? const [])
-          .whereType<Map>()
-          .map((m) => _announcementFromJson(m.cast<String, dynamic>()))
-          .toList();
       final formSubmissions =
           ((payload['formSubmissions'] as List?) ?? const [])
               .whereType<Map>()
@@ -361,6 +331,7 @@ class MockDataService extends ChangeNotifier {
           ((payload['deviceOnlyPostIds'] as List?) ?? const [])
               .whereType<String>()
               .toSet();
+      final showAllYearsFeed = payload['showAllYearsFeed'] as bool? ?? false;
 
       return _LocalState(
         currentUser: user,
@@ -368,10 +339,10 @@ class MockDataService extends ChangeNotifier {
         posts: posts,
         notifications: notifications,
         roleRequests: roleRequests,
-        announcements: announcements,
         formSubmissions: formSubmissions,
         serverKnownIds: serverKnownIds,
         deviceOnlyPostIds: deviceOnlyPostIds,
+        showAllYearsFeed: showAllYearsFeed,
       );
     } catch (_) {
       return null;
@@ -581,32 +552,6 @@ class MockDataService extends ChangeNotifier {
         isLimitedAccess: m['isLimitedAccess'] as bool? ?? false,
         durationDays: m['durationDays'] as int?,
       );
-
-  Map<String, dynamic> _announcementToJson(ActiveAnnouncement a) => {
-    'id': a.id,
-    'title': a.title,
-    'description': a.description,
-    'authorName': a.authorName,
-    'authorRole': a.authorRole.name,
-    'department': a.department,
-    'postedAt': a.postedAt.toIso8601String(),
-    'expiresAt': a.expiresAt.toIso8601String(),
-  };
-
-  ActiveAnnouncement _announcementFromJson(
-    Map<String, dynamic> m,
-  ) => ActiveAnnouncement(
-    id: m['id']?.toString() ?? 'ann_local',
-    title: m['title']?.toString() ?? '',
-    description: m['description']?.toString() ?? '',
-    authorName: m['authorName']?.toString() ?? '',
-    authorRole: _roleFromName(m['authorRole']?.toString() ?? ''),
-    department: m['department']?.toString() ?? '',
-    postedAt:
-        DateTime.tryParse(m['postedAt']?.toString() ?? '') ?? DateTime.now(),
-    expiresAt:
-        DateTime.tryParse(m['expiresAt']?.toString() ?? '') ?? DateTime.now(),
-  );
 
   Map<String, dynamic> _submissionToJson(FormSubmission s) => s.toJson();
 
@@ -1110,20 +1055,6 @@ class MockDataService extends ChangeNotifier {
     }
     _subscribeRealtimePosts();
 
-    // Clean up demo account & demo posts from server database
-    try {
-      await client
-          .from('posts')
-          .delete()
-          .or('author_id.eq.usr_101,author_name.eq.Aarav Sharma,author_name.ilike.%aarav%');
-      await client
-          .from('profiles')
-          .delete()
-          .or('user_id.eq.usr_101,email.eq.aarav.sharma@studenthub.edu');
-    } catch (e) {
-      debugPrint('StudentHub: demo server cleanup error: $e');
-    }
-
     var changed = false;
     try {
       final rows = await client
@@ -1135,14 +1066,9 @@ class MockDataService extends ChangeNotifier {
       final fetched = rows
           .map(_postFromRow)
           .whereType<PostModel>()
-          .where(
-            (p) =>
-                p.authorId != 'usr_101' &&
-                !p.authorName.toLowerCase().contains('aarav'),
-          )
           .toList();
       if (fetched.isEmpty) {
-        // No seed push for demo posts
+        // No remote posts
       } else {
         final remoteIds = fetched.map((p) => p.id).toSet();
         _serverKnownIds.addAll(remoteIds);
@@ -1838,7 +1764,7 @@ class MockDataService extends ChangeNotifier {
         orElse: () => PostCategory.announcement,
       ),
       department: row['department']?.toString() ?? '',
-      targetYear: row['target_year'] as String?,
+      targetYear: (row['target_year'] == 'ALL') ? 'All' : row['target_year'] as String?,
       authorName: row['author_name']?.toString() ?? '',
       authorRole: UserRole.values.firstWhere(
         (r) => r.name == row['author_role'],
@@ -1893,7 +1819,7 @@ class MockDataService extends ChangeNotifier {
       'description': p.description,
       'category': p.category.name,
       'department': p.department,
-      'target_year': p.targetYear ?? 'ALL',
+      'target_year': p.targetYear ?? 'All',
       'author_name': p.authorName,
       'author_role': p.authorRole.name,
       'author_id': p.authorId,
@@ -2099,6 +2025,59 @@ class MockDataService extends ChangeNotifier {
   }
 
   // --- Feed & Priority Logic ---
+
+  bool _showAllYearsFeed = false;
+
+  /// When true, creators/managers (Event Host, Faculty, Admin) see posts from
+  /// all academic years. When false (default), feed filters to their selected year.
+  bool get showAllYearsFeed => _showAllYearsFeed;
+
+  void setShowAllYearsFeed(bool value) {
+    if (_showAllYearsFeed == value) return;
+    _showAllYearsFeed = value;
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
+  }
+
+  /// Determines whether a post is targeted to the given user year (or the current
+  /// user's year by default). Returns true for null, empty, 'All', 'ALL', exact year matches,
+  /// or when the current user is the author or has enabled showAllYearsFeed.
+  bool matchesYear(PostModel p, [String? userYear]) {
+    // 1. Authors can always see their own posts on their own devices
+    final cName = currentUser.name.trim().toLowerCase();
+    final aName = p.authorName.trim().toLowerCase();
+    if ((p.authorId.isNotEmpty && p.authorId == currentUser.id) ||
+        (cName.isNotEmpty && aName.isNotEmpty && (aName == cName || aName.contains(cName) || cName.contains(aName)))) {
+      return true;
+    }
+
+    // 2. Creator perspectives (Event Host, Faculty, Admin) see all years if chosen
+    final bool isCreator = activeRole == UserRole.eventHost ||
+        activeRole == UserRole.faculty ||
+        activeRole == UserRole.admin;
+    if (isCreator && _showAllYearsFeed) {
+      return true;
+    }
+
+    final target = p.targetYear;
+    if (target == null ||
+        target.isEmpty ||
+        target == 'All' ||
+        target == 'ALL' ||
+        target == 'All Academic Years') {
+      return true;
+    }
+    final uYear = userYear ?? currentUser.year;
+    if (uYear.isEmpty ||
+        uYear.toLowerCase() == 'all' ||
+        uYear.toLowerCase() == 'faculty' ||
+        uYear.toLowerCase() == 'n/a') {
+      return true;
+    }
+    return target.trim().toLowerCase() == uYear.trim().toLowerCase();
+  }
+
   List<PostModel> getPersonalizedFeed({
     String? categoryFilter,
     String? searchQuery,
@@ -2109,7 +2088,7 @@ class MockDataService extends ChangeNotifier {
     // cached result, so rebuilds triggered by unrelated changes (or typing in
     // search bars) don't re-copy/re-sort the feed.
     final key =
-        '$savedOnly|$categoryFilter|$searchQuery|$excludeEvents|$_dataVersion';
+        '$savedOnly|$categoryFilter|$searchQuery|$excludeEvents|${currentUser.year}|$_showAllYearsFeed|$_dataVersion';
     final cached = _feedCacheValue;
     if (key == _feedCacheKey && cached != null) return cached;
 
@@ -2124,6 +2103,9 @@ class MockDataService extends ChangeNotifier {
           .where((p) => currentUser.savedPostIds.contains(p.id))
           .toList();
     }
+
+    // Hard year filter step: exclude non-matching posts
+    list = list.where((p) => matchesYear(p)).toList();
 
     if (categoryFilter != null && categoryFilter != 'All') {
       list = list
@@ -2150,10 +2132,9 @@ class MockDataService extends ChangeNotifier {
 
     // Sort by priority logic (PRD Section 10):
     // 1. Urgent posts
-    // 2. Target department match
-    // 3. Target year match
-    // 4. Pinned
-    // 5. Timestamp
+    // 2. Pinned
+    // 3. Department match
+    // 4. Timestamp
     list.sort((a, b) {
       if (a.isUrgent != b.isUrgent) return a.isUrgent ? -1 : 1;
       if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
@@ -2169,14 +2150,6 @@ class MockDataService extends ChangeNotifier {
           b.department == 'Campus' ||
           b.department == currentUser.department;
       if (aDeptMatch != bDeptMatch) return aDeptMatch ? -1 : 1;
-
-      final aYearMatch = a.targetYear == null ||
-          a.targetYear == 'All' ||
-          a.targetYear == currentUser.year;
-      final bYearMatch = b.targetYear == null ||
-          b.targetYear == 'All' ||
-          b.targetYear == currentUser.year;
-      if (aYearMatch != bYearMatch) return aYearMatch ? -1 : 1;
 
       return b.timestamp.compareTo(a.timestamp);
     });
@@ -2799,8 +2772,7 @@ class MockDataService extends ChangeNotifier {
     final isEvent = post.isEvent;
     final category = isEvent
         ? NotificationCategory.events
-        : post.category == PostCategory.urgent ||
-              post.category == PostCategory.urgentAnnouncement
+        : post.category == PostCategory.urgent
             ? NotificationCategory.academic
             : NotificationCategory.general;
     return NotificationModel(
@@ -3109,96 +3081,6 @@ class MockDataService extends ChangeNotifier {
       debugPrint('StudentHub: refresh profile error: $e');
     }
     return false;
-  }
-
-  // --- Header Announcement (Time-limited, one per department) ---
-  ActiveAnnouncement? activeAnnouncementFor(String userDepartment) {
-    final active = activeAnnouncements;
-    if (active.isEmpty) return null;
-
-    // Prefer an announcement targeting the user's own department.
-    final deptMatches = active
-        .where((a) => a.department == userDepartment)
-        .toList();
-    if (deptMatches.isNotEmpty) {
-      deptMatches.sort((a, b) => b.expiresAt.compareTo(a.expiresAt));
-      return deptMatches.first;
-    }
-
-    // Fall back to a campus-wide (global) announcement.
-    final global = active.where((a) => a.department.isEmpty).toList();
-    if (global.isNotEmpty) {
-      global.sort((a, b) => b.expiresAt.compareTo(a.expiresAt));
-      return global.first;
-    }
-
-    return null;
-  }
-
-  Duration? canPostAnnouncement(String department) {
-    // Blocking is per-department only; the campus-wide seed does not lock slots.
-    final matches = activeAnnouncements
-        .where((a) => a.department == department)
-        .toList();
-    if (matches.isEmpty) return null;
-    return matches.first.remaining;
-  }
-
-  bool postAnnouncement({
-    required String title,
-    required String description,
-    required String department,
-    required Duration duration,
-    required String authorName,
-    required UserRole authorRole,
-  }) {
-    if (canPostAnnouncement(department) != null) return false;
-
-    _announcements.removeWhere((a) => a.department == department);
-    _announcements.insert(
-      0,
-      ActiveAnnouncement(
-        id: 'ann_${DateTime.now().millisecondsSinceEpoch}',
-        title: title.trim(),
-        description: description.trim(),
-        authorName: authorName,
-        authorRole: authorRole,
-        department: department,
-        postedAt: DateTime.now(),
-        expiresAt: DateTime.now().add(duration),
-      ),
-    );
-
-    _invalidateDataCaches();
-    notifyListeners();
-    _scheduleLocalSave();
-    return true;
-  }
-
-  void _clearExpiredAnnouncements() {
-    final before = _announcements.length;
-    _announcements.removeWhere((a) => a.isExpired);
-    if (_announcements.length != before) {
-      _invalidateDataCaches();
-      notifyListeners();
-    }
-  }
-
-  void _seedDefaultAnnouncement() {
-    final text = config.announcementBannerText.trim();
-    if (text.isEmpty) return;
-    _announcements = [
-      ActiveAnnouncement(
-        id: 'ann_default',
-        title: text,
-        description: '',
-        authorName: 'StudentHub Admin',
-        authorRole: UserRole.admin,
-        department: '',
-        postedAt: DateTime.now().subtract(const Duration(hours: 1)),
-        expiresAt: DateTime.now().add(const Duration(days: 7)),
-      ),
-    ];
   }
 
   // --- Role Request Actions ---
@@ -3627,10 +3509,10 @@ class _LocalState {
     required this.posts,
     required this.notifications,
     required this.roleRequests,
-    required this.announcements,
     required this.formSubmissions,
     required this.serverKnownIds,
     required this.deviceOnlyPostIds,
+    this.showAllYearsFeed = false,
   });
 
   final UserModel currentUser;
@@ -3638,10 +3520,10 @@ class _LocalState {
   final List<PostModel> posts;
   final List<NotificationModel> notifications;
   final List<RoleRequestModel> roleRequests;
-  final List<ActiveAnnouncement> announcements;
   final List<FormSubmission> formSubmissions;
   final Set<String> serverKnownIds;
   final Set<String> deviceOnlyPostIds;
+  final bool showAllYearsFeed;
 }
 
 Uint8List _decodeBase64Helper(String base64) => base64Decode(base64);

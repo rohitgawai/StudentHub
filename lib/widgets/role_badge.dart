@@ -13,79 +13,32 @@ class RoleBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color bg;
-    Color text;
-    IconData icon;
+    if (role == UserRole.student) {
+      return const SizedBox.shrink();
+    }
 
+    Color color;
     switch (role) {
-      case UserRole.student:
-        bg = const Color(0xFFE2E8F0);
-        text = const Color(0xFF334155);
-        icon = Icons.school;
-        break;
       case UserRole.eventHost:
-        bg = const Color(0xFFFFEDD5);
-        text = const Color(0xFFC2410C);
-        icon = Icons.event;
+        color = const Color(0xFFC2410C);
         break;
       case UserRole.faculty:
-        bg = const Color(0xFFE0F2FE);
-        text = const Color(0xFF0369A1);
-        icon = Icons.menu_book;
+        color = const Color(0xFF0369A1);
         break;
       case UserRole.admin:
-        bg = const Color(0xFFAF52DE).withValues(alpha: 0.15);
-        text = const Color(0xFFAF52DE);
-        icon = Icons.verified_user;
+        color = const Color(0xFFAF52DE);
+        break;
+      case UserRole.student:
+        color = const Color(0xFF64748B);
         break;
     }
 
-    if (isCompact) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: text),
-            const SizedBox(width: 4),
-            Text(
-              role.displayName,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: text,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: text.withValues(alpha: 0.3), width: 0.8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: text),
-          const SizedBox(width: 6),
-          Text(
-            role.displayName,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: text,
-            ),
-          ),
-        ],
+    return Text(
+      '• ${role.displayName}',
+      style: TextStyle(
+        fontSize: isCompact ? 12 : 13,
+        fontWeight: FontWeight.w600,
+        color: color,
       ),
     );
   }

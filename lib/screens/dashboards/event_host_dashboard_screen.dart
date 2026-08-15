@@ -15,21 +15,20 @@ class EventHostDashboardScreen extends StatefulWidget {
       _EventHostDashboardScreenState();
 }
 
-/// A clean, feed-style dashboard for the Event Host. It shows only the host's
-/// own uploads (Events & Workshops · Notices · Galleries), each rendered as a
-/// full social card with like/save counts and images, plus Edit (title &
-/// description only) and Delete actions. Publishing lives in the global
-/// Create button, so no create controls clutter this screen.
 class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
     with SingleTickerProviderStateMixin {
-  static const Color _accent = Color(0xFFC2410C);
-
   late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    // Direct silent auto-refresh without pull-to-refresh or buttons
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<MockDataService>().refreshFeed();
+      }
+    });
   }
 
   @override
@@ -46,7 +45,7 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
     final updated = await showEditPostDialog(
       context,
       post: post,
-      accent: _accent,
+      accent: const Color(0xFF312E81),
     );
     if (updated != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -107,8 +106,15 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
     final dataService = Provider.of<MockDataService>(context);
     final user = dataService.currentUser;
 
+    final uName = user.name.trim().toLowerCase();
     final myPosts = dataService.posts
-        .where((p) => p.authorId == user.id || p.authorName.contains(user.name))
+        .where(
+          (p) =>
+              p.authorId == user.id ||
+              (uName.isNotEmpty &&
+                  (p.authorName.trim().toLowerCase() == uName ||
+                      p.authorName.toLowerCase().contains(uName))),
+        )
         .toList();
     final myEvents = myPosts.where((p) => p.isEvent).toList();
     final myNotices = myPosts
@@ -127,117 +133,174 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
     );
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('🎯 Host Dashboard'),
+        title: const Text(
+          'Host Dashboard',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         centerTitle: false,
-        backgroundColor: _accent,
-        foregroundColor: Colors.white,
-        actions: [
-          TextButton.icon(
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const RegistrationStatsScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.query_stats),
-            label: const Text(
-              'Stats',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+        scrolledUnderElevation: 1,
       ),
       body: Column(
         children: [
-          _StatsHeader(
-            name: user.name,
-            accent: _accent,
-            eventCount: myEvents.length,
-            totalRegistrations: totalRegistrations,
-            noticeCount: myNotices.length,
-            galleryCount: myGalleries.length,
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Material(
-              color: _accent.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const RegistrationStatsScreen(),
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.query_stats, color: _accent),
-                      const SizedBox(width: 12),
-                      Expanded(
+          // Sleek Creator Card (No redundant avatar)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF312E81)],
+              ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF1E1B4B).withValues(alpha: 0.35),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '📊 Registration Stats',
-                              style: TextStyle(
-                                color: _accent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                              '${myEvents.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Registrations, attendance tracking & CSV/PDF export for your events — tap to open.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade700,
-                              ),
+                            const Text(
+                              'Hosted Events',
+                              style: TextStyle(color: Colors.white70, fontSize: 11),
                             ),
                           ],
                         ),
                       ),
-                      Icon(Icons.chevron_right, color: Colors.grey.shade500),
-                    ],
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$totalRegistrations',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const Text(
+                              'Total Registrations',
+                              style: TextStyle(color: Colors.white70, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const RegistrationStatsScreen(),
+                        ),
+                      );
+                    },
+                    child: Ink(
+                      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.analytics_outlined, color: Colors.white, size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            'View Analytics & Export (PDF/CSV)',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(Icons.arrow_forward_rounded, color: Colors.white70, size: 14),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
+
+          // Clean Segmented Tabs
           Container(
-            color: Theme.of(context).cardColor,
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
             child: TabBar(
               controller: _tabController,
-              labelColor: _accent,
-              unselectedLabelColor: Colors.grey,
-              indicatorColor: _accent,
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
+              labelColor: const Color(0xFF1E1B4B),
+              unselectedLabelColor: Colors.grey.shade600,
+              indicatorColor: const Color(0xFF312E81),
+              indicatorSize: TabBarIndicatorSize.label,
+              indicatorWeight: 3,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12.5),
               tabs: [
-                Tab(text: 'Hosted Events (${myEvents.length})'),
+                Tab(text: 'Events (${myEvents.length})'),
                 Tab(text: 'Notices (${myNotices.length})'),
                 Tab(text: 'Galleries (${myGalleries.length})'),
               ],
             ),
           ),
+
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildList(context, dataService, myEvents,
-                    'No events or workshops hosted yet.'),
-                _buildList(context, dataService, myNotices,
-                    'No notices published yet.'),
-                _buildList(context, dataService, myGalleries,
-                    'No galleries uploaded yet.'),
+                _buildList(context, dataService, myEvents, 'No events or workshops hosted yet.'),
+                _buildList(context, dataService, myNotices, 'No notices published yet.'),
+                _buildList(context, dataService, myGalleries, 'No galleries uploaded yet.'),
               ],
             ),
           ),
@@ -253,23 +316,15 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
     String emptyMsg,
   ) {
     if (postsList.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: () => dataService.refreshFeed(),
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.4,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.inbox_outlined, size: 56, color: Colors.grey),
-                    const SizedBox(height: 10),
-                    Text(emptyMsg, style: const TextStyle(color: Colors.grey)),
-                  ],
-                ),
-              ),
+            Icon(Icons.inbox_outlined, size: 52, color: Colors.grey.shade400),
+            const SizedBox(height: 10),
+            Text(
+              emptyMsg,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
             ),
           ],
         ),
@@ -279,205 +334,37 @@ class _EventHostDashboardScreenState extends State<EventHostDashboardScreen>
     final user = dataService.currentUser;
     final config = dataService.config;
 
-    return RefreshIndicator(
-      onRefresh: () => dataService.refreshFeed(),
-      child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(top: 8, bottom: 24),
-        itemCount: postsList.length,
-        itemBuilder: (ctx, idx) {
-          final post = postsList[idx];
-          final isMine = post.authorId == user.id;
-          return ManagedPostCard(
-            post: post,
-            config: config,
-            isSaved: user.savedPostIds.contains(post.id),
-            isRegistered: user.registeredEventIds.contains(post.id),
-            isCongratulated: user.congratulatedPostIds.contains(post.id),
-            isLiked: user.likedPostIds.contains(post.id),
-            userYear: user.year,
-            currentUserId: user.id,
-            onToggleSave: () => dataService.toggleSavePost(post.id),
-            onToggleRegister: () => dataService.toggleEventRegistration(post.id),
-            onToggleCongratulate: () => dataService.toggleCongratulate(post.id),
-            onToggleLike: () => dataService.toggleLikePost(post.id),
-            onEdit: () => _showEditDialog(context, dataService, post),
-            onDelete: () => _confirmDelete(context, dataService, post),
-            onViewRegistrants: isMine && post.isEvent
-                ? () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => RegistrantsScreen(post: post),
-                      ),
-                    );
-                  }
-                : null,
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// Compact welcome row with three tappable-looking stat tiles, so upload
-/// totals are visible without taking too much space.
-class _StatsHeader extends StatelessWidget {
-  final String name;
-  final Color accent;
-  final int eventCount;
-  final int totalRegistrations;
-  final int noticeCount;
-  final int galleryCount;
-
-  const _StatsHeader({
-    required this.name,
-    required this.accent,
-    required this.eventCount,
-    required this.totalRegistrations,
-    required this.noticeCount,
-    required this.galleryCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFC2410C), Color(0xFFEA580C), Color(0xFFF97316)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFC2410C).withValues(alpha: 0.25),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.stars_rounded, color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Welcome, $name',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.event_available,
-                  count: eventCount,
-                  label: 'Events',
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.how_to_reg,
-                  count: totalRegistrations,
-                  label: 'Registrations',
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.campaign,
-                  count: noticeCount,
-                  label: 'Notices',
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _StatTile(
-                  icon: Icons.photo_library_outlined,
-                  count: galleryCount,
-                  label: 'Galleries',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatTile extends StatelessWidget {
-  final IconData icon;
-  final int count;
-  final String label;
-
-  const _StatTile({
-    required this.icon,
-    required this.count,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20, color: const Color(0xFFC2410C)),
-          const SizedBox(height: 5),
-          Text(
-            '$count',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFFC2410C),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: Colors.black54,
-            ),
-          ),
-        ],
-      ),
+    return ListView.builder(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
+      itemCount: postsList.length,
+      itemBuilder: (ctx, idx) {
+        final post = postsList[idx];
+        return ManagedPostCard(
+          post: post,
+          config: config,
+          isSaved: user.savedPostIds.contains(post.id),
+          isRegistered: user.registeredEventIds.contains(post.id),
+          isCongratulated: user.congratulatedPostIds.contains(post.id),
+          isLiked: user.likedPostIds.contains(post.id),
+          currentUserId: user.id,
+          onToggleSave: () => dataService.toggleSavePost(post.id),
+          onToggleRegister: () => dataService.toggleEventRegistration(post.id),
+          onToggleCongratulate: () => dataService.toggleCongratulate(post.id),
+          onToggleLike: () => dataService.toggleLikePost(post.id),
+          onEdit: () => _showEditDialog(context, dataService, post),
+          onDelete: () => _confirmDelete(context, dataService, post),
+          onViewRegistrants: post.isEvent
+              ? () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => RegistrantsScreen(post: post),
+                    ),
+                  );
+                }
+              : null,
+        );
+      },
     );
   }
 }

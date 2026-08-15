@@ -78,7 +78,6 @@ class PostDetailModal extends StatelessWidget {
                   isRegistered: isRegistered,
                   isCongratulated: isCongratulated,
                   isLiked: isLiked,
-                  userYear: dataService.currentUser.year,
                   currentUserId: dataService.currentUser.id,
                   onToggleSave: () => dataService.toggleSavePost(post.id),
                   onToggleRegister: () => dataService.toggleEventRegistration(post.id),

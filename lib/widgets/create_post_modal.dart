@@ -26,7 +26,6 @@ class _CreatePostModalState extends State<CreatePostModal> {
   String? selectedImageUrl;
   bool isUrgent = false;
   bool attachPdfMock = false;
-  int announcementWeeks = 1;
 
   List<PostAttachment> attachedPdfs = [];
   List<PostLink> links = [];
@@ -46,80 +45,10 @@ class _CreatePostModalState extends State<CreatePostModal> {
     super.dispose();
   }
 
-  void _publishUrgentAnnouncement() {
-    final dataService = Provider.of<MockDataService>(context, listen: false);
-
-    final wait = dataService.canPostAnnouncement(department);
-    if (wait != null) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Announcement Already Active 📢'),
-          content: Text(
-            'An announcement for $department is already posted on the header. '
-            'It expires in ${_formatWait(wait)}. '
-            'Please wait and post a new one after that.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    final published = dataService.postAnnouncement(
-      title: titleController.text.trim(),
-      description: descController.text.trim(),
-      department: department,
-      duration: Duration(days: announcementWeeks * 7),
-      authorName: dataService.currentUser.name,
-      authorRole: dataService.activeRole,
-    );
-
-    if (!published) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Announcement already active for this department. Please wait for it to expire.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('📢 Urgent announcement live on header for ${announcementWeeks == 1 ? '1 week' : '2 weeks'}!'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-
-  String _formatWait(Duration d) {
-    if (d.inDays >= 1) {
-      return d.inDays == 1 ? '1 day' : '${d.inDays} days';
-    }
-    if (d.inHours >= 1) {
-      return d.inHours == 1 ? '1 hour' : '${d.inHours} hours';
-    }
-    return d.inMinutes <= 1 ? 'a minute' : '${d.inMinutes} minutes';
-  }
-
   Future<void> _publishPost() async {
     final dataService = Provider.of<MockDataService>(context, listen: false);
 
     if (!_formKey.currentState!.validate()) return;
-
-    // Header announcements are a local, time-limited feature: no backend.
-    if (category == PostCategory.urgentAnnouncement) {
-      _publishUrgentAnnouncement();
-      return;
-    }
 
     final online = await dataService.checkBackendReachable();
     if (!mounted) return;
@@ -205,43 +134,18 @@ class _CreatePostModalState extends State<CreatePostModal> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Requirement 1: Compact Custom Dropdown for Category
+            // Category Dropdown
             CustomDropdownField<PostCategory>(
               value: category,
               labelText: 'Post Category',
               prefixIcon: Icons.category_outlined,
               items: allowedCategories,
-              itemLabel: (c) => c == PostCategory.urgentAnnouncement
-                  ? 'Campus Alert (Header Banner)'
-                  : c.displayName,
+              itemLabel: (c) => c.displayName,
               onChanged: (val) {
                 if (val != null) setState(() => category = val);
               },
             ),
-            if (category == PostCategory.urgentAnnouncement) ...[
-              const SizedBox(height: 6),
-              Text(
-                'Shows as a banner on top of every page for 1-2 weeks; '
-                'only one active banner per department.',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-              ),
-            ],
             const SizedBox(height: 12),
-
-            // Announcement Validity (only for header announcements)
-            if (category == PostCategory.urgentAnnouncement) ...[
-              CustomDropdownField<int>(
-                value: announcementWeeks,
-                labelText: 'Announcement Validity',
-                prefixIcon: Icons.timer_outlined,
-                items: const [1, 2],
-                itemLabel: (w) => '$w Week${w > 1 ? 's' : ''}',
-                onChanged: (val) {
-                  if (val != null) setState(() => announcementWeeks = val);
-                },
-              ),
-              const SizedBox(height: 12),
-            ],
 
             // Title
             TextFormField(
@@ -297,53 +201,47 @@ class _CreatePostModalState extends State<CreatePostModal> {
             ),
             const SizedBox(height: 14),
 
-            // Requirement 10: Image Upload Picker (Replaces raw URL field)
-            // Header banner alerts are plain text banners: no cover image.
-            if (category != PostCategory.urgentAnnouncement)
-              ImagePickerField(
-                initialUrl: selectedImageUrl,
-                onImageSelected: (url) {
-                  setState(() => selectedImageUrl = url);
-                },
-              ),
+            // Image Upload Picker
+            ImagePickerField(
+              initialUrl: selectedImageUrl,
+              onImageSelected: (url) {
+                setState(() => selectedImageUrl = url);
+              },
+            ),
             const SizedBox(height: 14),
 
-            // Toggles & PDF Attachment (Requirement 11)
-            if (category != PostCategory.urgentAnnouncement) ...[
-              SwitchListTile(
-                title: const Text('Mark as Urgent Post 🔥', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: const Text('Will be prioritized at top of student feeds', style: TextStyle(fontSize: 11)),
-                value: isUrgent,
-                onChanged: (val) => setState(() => isUrgent = val),
+            // Toggles & PDF Attachment
+            SwitchListTile(
+              title: const Text('Mark as Urgent Post 🔥', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: const Text('Will be prioritized at top of student feeds', style: TextStyle(fontSize: 11)),
+              value: isUrgent,
+              onChanged: (val) => setState(() => isUrgent = val),
+            ),
+            SwitchListTile(
+              title: const Text('Attach Official PDF Document 📄', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: const Text('Upload/attach official PDF notice, syllabus, or timetable', style: TextStyle(fontSize: 11)),
+              value: attachPdfMock,
+              onChanged: (val) => setState(() => attachPdfMock = val),
+            ),
+            if (attachPdfMock) ...[
+              PdfUploadField(
+                onAttachmentChanged: (attachments) {
+                  attachedPdfs = attachments;
+                },
               ),
-              // Requirement 11: Switch yes button triggers PDF Upload options
-              SwitchListTile(
-                title: const Text('Attach Official PDF Document 📄', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: const Text('Upload/attach official PDF notice, syllabus, or timetable', style: TextStyle(fontSize: 11)),
-                value: attachPdfMock,
-                onChanged: (val) => setState(() => attachPdfMock = val),
-              ),
-              if (attachPdfMock) ...[
-                PdfUploadField(
-                  onAttachmentChanged: (attachments) {
-                    attachedPdfs = attachments;
-                  },
-                ),
-              ],
             ],
 
             const SizedBox(height: 16),
 
-            // Links & Form section (any category except header banners).
-            if (category != PostCategory.urgentAnnouncement)
-              LinkFormEditor(
-                accent: dataService.config.primaryColor,
-                initialFormLabel: titleController.text.trim().isEmpty
-                    ? 'Response Form'
-                    : titleController.text.trim(),
-                onLinksChanged: (links) => setState(() => this.links = links),
-                onFormChanged: (form) => setState(() => this.form = form),
-              ),
+            // Links & Form section
+            LinkFormEditor(
+              accent: dataService.config.primaryColor,
+              initialFormLabel: titleController.text.trim().isEmpty
+                  ? 'Response Form'
+                  : titleController.text.trim(),
+              onLinksChanged: (links) => setState(() => this.links = links),
+              onFormChanged: (form) => setState(() => this.form = form),
+            ),
 
             const SizedBox(height: 24),
             ElevatedButton(

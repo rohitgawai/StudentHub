@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/app_config.dart';
 import '../models/post_model.dart';
+import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
 import '../screens/form_fill_screen.dart';
 import '../utils/date_formatter.dart';
@@ -25,7 +26,6 @@ class PostCard extends StatefulWidget {
   final bool isRegistered;
   final bool isCongratulated;
   final bool isLiked;
-  final String userYear;
   final String? currentUserId;
   final VoidCallback? onToggleSave;
   final VoidCallback? onToggleRegister;
@@ -44,7 +44,6 @@ class PostCard extends StatefulWidget {
     required this.isRegistered,
     this.isCongratulated = false,
     this.isLiked = false,
-    required this.userYear,
     this.currentUserId,
     this.onToggleSave,
     this.onToggleRegister,
@@ -88,8 +87,6 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
   Widget build(BuildContext context) {
     final post = widget.post;
     final categoryColor = _categoryColor;
-    final hasYearMismatch =
-        post.targetYear != null && post.targetYear != widget.userYear;
 
     return RepaintBoundary(
       child: Listener(
@@ -102,79 +99,53 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
           curve: Curves.easeOut,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 130),
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: _pressed ? 0.10 : 0.04),
-                  blurRadius: _pressed ? 18 : 10,
-                  offset: const Offset(0, 4),
+                  color: post.isUrgent
+                      ? widget.config.urgentColor.withValues(
+                          alpha: _pressed ? 0.35 : 0.22,
+                        )
+                      : Colors.black.withValues(
+                          alpha: _pressed ? 0.08 : 0.035,
+                        ),
+                  blurRadius: post.isUrgent ? 16 : (_pressed ? 16 : 10),
+                  offset: const Offset(0, 3),
                 ),
               ],
               border: Border.all(
-                color: post.isUrgent
-                    ? Colors.red.shade300
-                    : Colors.grey.shade200,
-                width: post.isUrgent ? 1.5 : 1,
+                color: Colors.grey.shade200,
+                width: 1,
               ),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Target Year Header Alert Banner
-                  if (hasYearMismatch)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                      color: Colors.amber.shade50,
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.info_outline,
-                            size: 14,
-                            color: Colors.amber,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Target Audience: ${post.targetYear} students',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.amber.shade900,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Author Info & Post Category Chip
+                        // Author Info Header
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             CircleAvatar(
                               radius: 18,
-                              backgroundColor: categoryColor.withValues(
-                                alpha: 0.15,
-                              ),
+                              backgroundColor: const Color(0xFFF1F5F9),
                               child: Text(
-                                post.authorName.substring(0, 1).toUpperCase(),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: categoryColor,
+                                post.authorName.isNotEmpty
+                                    ? post.authorName.substring(0, 1).toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF334155),
+                                  fontSize: 13,
                                 ),
                               ),
                             ),
@@ -189,56 +160,32 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                         child: Text(
                                           post.authorName,
                                           style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                            color: Color(0xFF0F172A),
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      const SizedBox(width: 6),
-                                      RoleBadge(
-                                        role: post.authorRole,
-                                        isCompact: true,
-                                      ),
+                                      if (post.authorRole != UserRole.student) ...[
+                                        const SizedBox(width: 6),
+                                        RoleBadge(
+                                          role: post.authorRole,
+                                          isCompact: true,
+                                        ),
+                                      ],
                                     ],
                                   ),
+                                  const SizedBox(height: 2),
                                   Text(
                                     '${post.department} • ${_formatTimestamp(post.timestamp)}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.outline,
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      color: Color(0xFF64748B),
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
-                              ),
-                            ),
-                            Flexible(
-                              flex: 0,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: categoryColor.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: categoryColor.withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: Text(
-                                  post.category.displayName.toUpperCase(),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: categoryColor,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
                               ),
                             ),
                           ],
@@ -246,17 +193,18 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
 
                         const SizedBox(height: 12),
 
-                        // Post Title — the first thing the eye lands on.
+                        // Post Title
                         Text(
                           post.title,
                           style: const TextStyle(
-                            fontSize: 21,
+                            fontSize: 16.5,
                             fontWeight: FontWeight.w800,
-                            height: 1.25,
+                            color: Color(0xFF0F172A),
+                            height: 1.3,
                           ),
                         ),
 
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
 
                         // Post Description
                         _ExpandableDescription(text: post.description),
@@ -268,10 +216,10 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                         ] else if (post.imageUrl != null) ...[
                           const SizedBox(height: 12),
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             child: AppImage(
                               source: post.imageUrl,
-                              height: 180,
+                              height: 190,
                               width: double.infinity,
                               fit: BoxFit.cover,
                             ),
@@ -284,10 +232,10 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: categoryColor.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(12),
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: categoryColor.withValues(alpha: 0.25),
+                                color: Colors.grey.shade200,
                               ),
                             ),
                             child: Column(
@@ -295,9 +243,9 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                 Row(
                                   children: [
                                     Icon(
-                                      Icons.location_on,
+                                      Icons.location_on_outlined,
                                       size: 16,
-                                      color: categoryColor,
+                                      color: const Color(0xFF312E81),
                                     ),
                                     const SizedBox(width: 6),
                                     Expanded(
@@ -308,6 +256,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                         style: const TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
+                                          color: Color(0xFF0F172A),
                                         ),
                                       ),
                                     ),
@@ -316,22 +265,19 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                       Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 8,
-                                          vertical: 2,
+                                          vertical: 3,
                                         ),
                                         decoration: BoxDecoration(
-                                          color:
-                                              (post.isRegistrationFull
-                                                      ? Colors.red
-                                                      : Colors.green)
-                                                  .withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
+                                          color: (post.isRegistrationFull
+                                                  ? Colors.red
+                                                  : Colors.green)
+                                              .withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(10),
                                         ),
                                         child: Text(
                                           '${post.currentRegistrations}/${post.maxParticipants} Seats',
                                           style: TextStyle(
-                                            fontSize: 10,
+                                            fontSize: 10.5,
                                             fontWeight: FontWeight.bold,
                                             color: post.isRegistrationFull
                                                 ? Colors.red
@@ -349,12 +295,16 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                       Icon(
                                         Icons.access_time,
                                         size: 16,
-                                        color: categoryColor,
+                                        color: const Color(0xFF312E81),
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
                                         _formatEventDate(post.eventDate!),
-                                        style: const TextStyle(fontSize: 12),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade700,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -364,9 +314,9 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                           ),
                         ],
 
-                        // Attachments List (PDF attachments)
+                        // Modern PDF Attachment Tile
                         if (post.attachments.isNotEmpty) ...[
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
                           ...post.attachments.map(
                             (att) => InkWell(
                               onTap: () {
@@ -376,28 +326,35 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                       PdfViewerModal(attachment: att),
                                 );
                               },
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(14),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
+                                  horizontal: 14,
+                                  vertical: 10,
                                 ),
                                 margin: const EdgeInsets.only(bottom: 6),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(10),
+                                  color: const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
-                                    color: Colors.blue.shade200,
+                                    color: const Color(0xFFE2E8F0),
                                   ),
                                 ),
                                 child: Row(
                                   children: [
-                                    const Icon(
-                                      Icons.picture_as_pdf,
-                                      color: Colors.red,
-                                      size: 22,
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade50,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Icon(
+                                        Icons.picture_as_pdf,
+                                        color: Colors.red,
+                                        size: 20,
+                                      ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -406,26 +363,37 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                           Text(
                                             att.title,
                                             style: const TextStyle(
-                                              fontSize: 12,
+                                              fontSize: 12.5,
                                               fontWeight: FontWeight.bold,
-                                              color: Colors.blue,
+                                              color: Color(0xFF0F172A),
                                             ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
+                                          const SizedBox(height: 2),
                                           Text(
-                                            'Tap to view document • ${att.fileSize}',
-                                            style: const TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.grey,
+                                            'Tap to view • ${att.fileSize}',
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              color: Colors.grey.shade600,
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    const Icon(
-                                      Icons.remove_red_eye_outlined,
-                                      size: 18,
-                                      color: Colors.blue,
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1E1B4B),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Text(
+                                        'View',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),

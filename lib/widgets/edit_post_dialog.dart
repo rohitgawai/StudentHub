@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/form_models.dart';
 import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
+import 'custom_dropdown.dart';
 import 'link_form_editor.dart';
 
 /// Shared edit dialog for the Host & Faculty dashboards: title + description,
@@ -34,6 +35,7 @@ class _EditPostDialogState extends State<EditPostDialog> {
   late final TextEditingController _descCtrl;
   late List<PostLink> _links;
   FormDefinition? _form;
+  String? _targetYear;
 
   @override
   void initState() {
@@ -42,6 +44,7 @@ class _EditPostDialogState extends State<EditPostDialog> {
     _descCtrl = TextEditingController(text: widget.post.description);
     _links = List.of(widget.post.links);
     _form = widget.post.form;
+    _targetYear = widget.post.targetYear;
   }
 
   @override
@@ -59,6 +62,7 @@ class _EditPostDialogState extends State<EditPostDialog> {
     final updated = widget.post.copyWith(
       title: _titleCtrl.text.trim(),
       description: _descCtrl.text.trim(),
+      targetYear: _targetYear,
       links: _links,
       form: _form,
     );
@@ -74,6 +78,9 @@ class _EditPostDialogState extends State<EditPostDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final dataService = Provider.of<MockDataService>(context, listen: false);
+    final yearOptions = ['All Academic Years', ...dataService.config.academicYears];
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       title: Text(
@@ -100,6 +107,19 @@ class _EditPostDialogState extends State<EditPostDialog> {
                 labelText: 'Description',
                 border: OutlineInputBorder(),
               ),
+            ),
+            const SizedBox(height: 12),
+            CustomDropdownField<String>(
+              value: _targetYear ?? 'All Academic Years',
+              labelText: 'Target Academic Year',
+              prefixIcon: Icons.calendar_month_outlined,
+              items: yearOptions,
+              itemLabel: (y) => y,
+              onChanged: (val) {
+                setState(() {
+                  _targetYear = (val == 'All Academic Years') ? null : val;
+                });
+              },
             ),
             const SizedBox(height: 16),
             LinkFormEditor(

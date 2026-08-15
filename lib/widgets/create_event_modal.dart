@@ -21,6 +21,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
   final descController = TextEditingController();
   final venueController = TextEditingController();
   final maxSeatsController = TextEditingController(text: '100');
+  String? targetYear;
   String? selectedImageUrl;
   PostCategory eventKind = PostCategory.event;
 
@@ -110,6 +111,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
       description: descController.text.trim(),
       category: eventKind,
       department: department,
+      targetYear: targetYear,
       authorName: dataService.currentUser.name,
       authorRole: dataService.activeRole,
       authorId: dataService.currentUser.id,
@@ -161,6 +163,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<MockDataService>(context);
+    final yearOptions = ['All Academic Years', ...dataService.config.academicYears];
 
     return Scaffold(
       appBar: AppBar(
@@ -259,6 +262,21 @@ class _CreateEventModalState extends State<CreateEventModal> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+
+            // Target Academic Year
+            CustomDropdownField<String>(
+              value: targetYear ?? 'All Academic Years',
+              labelText: 'Target Academic Year (Optional)',
+              prefixIcon: Icons.calendar_month_outlined,
+              items: yearOptions,
+              itemLabel: (y) => y,
+              onChanged: (val) {
+                setState(() {
+                  targetYear = (val == 'All Academic Years') ? null : val;
+                });
+              },
             ),
             const SizedBox(height: 14),
 
