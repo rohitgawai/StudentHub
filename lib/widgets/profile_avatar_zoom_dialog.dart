@@ -17,7 +17,6 @@ class ProfileAvatarZoomDialog extends StatefulWidget {
 }
 
 class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
-  bool isEditing = false;
   late String currentAvatar;
 
   @override
@@ -55,7 +54,6 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
     );
     setState(() {
       currentAvatar = newUrl;
-      isEditing = false;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -65,113 +63,150 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
     );
   }
 
+  void _removeAvatar() {
+    final dataService = Provider.of<MockDataService>(context, listen: false);
+    final u = dataService.currentUser;
+    dataService.updateUserProfile(
+      name: u.name,
+      department: u.department,
+      year: u.year,
+      avatarUrl: '',
+    );
+    setState(() {
+      currentAvatar = '';
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Profile picture removed.'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.black.withValues(alpha: 0.92),
-      insetPadding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header Actions
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Profile Picture',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(isEditing ? Icons.arrow_back : Icons.edit, color: Colors.white),
-                      tooltip: isEditing ? 'Back to Photo' : 'Edit / Update Photo',
-                      onPressed: () => setState(() => isEditing = !isEditing),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      tooltip: 'Close',
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+    final screenSize = MediaQuery.of(context).size;
+    final squareBoxSize = screenSize.width.clamp(280.0, 380.0);
 
-          // Zoomable Instagram Style Image
-          if (!isEditing) ...[
-            Container(
-              constraints: const BoxConstraints(maxHeight: 380),
-              child: InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 4.0,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: currentAvatar.isNotEmpty
-                      ? AppImage(
-                          source: currentAvatar,
-                          fit: BoxFit.contain,
-                          errorChild: const Icon(
-                            Icons.person,
-                            size: 160,
-                            color: Colors.white54,
-                          ),
-                        )
-                      : const Icon(Icons.person, size: 160, color: Colors.white54),
-                ),
-              ),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.6),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
-            const SizedBox(height: 12),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: Text(
-                '🔍 Pinch or double-tap to zoom like Instagram',
-                style: TextStyle(color: Colors.white54, fontSize: 11),
-              ),
-            ),
-          ] else ...[
-            // Edit Avatar via Direct Device Picker (No URL link option)
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // WhatsApp / Instagram Top Bar (Clean with Back and Title only)
             Container(
-              padding: const EdgeInsets.all(20),
-              color: Colors.white,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              color: const Color(0xFF0F172A),
+              child: Row(
                 children: [
-                  const Text(
-                    'Upload New Profile Photo:',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                    tooltip: 'Back',
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Select a photo directly from your device gallery or camera storage.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade700,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Profile photo',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
                       ),
-                      icon: const Icon(Icons.upload_file_rounded),
-                      label: const Text(
-                        'Upload Photo',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                      onPressed: _pickAvatarFromDevice,
                     ),
                   ),
                 ],
               ),
             ),
+
+            // Specific 1:1 Aspect Ratio Selective Frame
+            SizedBox(
+              width: squareBoxSize,
+              height: squareBoxSize,
+              child: Container(
+                color: const Color(0xFF020617),
+                child: ClipRect(
+                  child: InteractiveViewer(
+                    minScale: 1.0,
+                    maxScale: 4.0,
+                    clipBehavior: Clip.hardEdge,
+                    child: currentAvatar.isNotEmpty
+                        ? AppImage(
+                            source: currentAvatar,
+                            fit: BoxFit.cover,
+                            width: squareBoxSize,
+                            height: squareBoxSize,
+                            errorChild: const Center(
+                              child: Icon(
+                                Icons.person,
+                                size: 120,
+                                color: Colors.white30,
+                              ),
+                            ),
+                          )
+                        : const Center(
+                            child: Icon(
+                              Icons.person,
+                              size: 120,
+                              color: Colors.white30,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Bottom Quick Action Bar (Edit Photo & Remove Photo)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: const Color(0xFF0F172A),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  TextButton.icon(
+                    onPressed: _pickAvatarFromDevice,
+                    icon: const Icon(Icons.camera_alt_outlined, color: Colors.white70, size: 20),
+                    label: const Text(
+                      'Edit Photo',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ),
+                  if (currentAvatar.isNotEmpty)
+                    TextButton.icon(
+                      onPressed: _removeAvatar,
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                      label: const Text(
+                        'Remove Photo',
+                        style: TextStyle(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ],
-        ],
+        ),
       ),
     );
   }
