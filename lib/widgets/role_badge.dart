@@ -20,10 +20,10 @@ class RoleBadge extends StatelessWidget {
     Color color;
     switch (role) {
       case UserRole.eventHost:
-        color = const Color(0xFFC2410C);
+        color = const Color(0xFF312E81);
         break;
       case UserRole.faculty:
-        color = const Color(0xFF0369A1);
+        color = const Color(0xFFAF52DE);
         break;
       case UserRole.admin:
         color = const Color(0xFFAF52DE);

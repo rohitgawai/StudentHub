@@ -606,15 +606,15 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 ),
                 leading: CircleAvatar(
                   backgroundColor: person.role == UserRole.faculty
-                      ? const Color(0xFFE0F2FE)
-                      : const Color(0xFFFFEDD5),
+                      ? const Color(0xFFF3E8FF)
+                      : const Color(0xFFEDE9FE),
                   child: Icon(
                     person.role == UserRole.faculty
                         ? Icons.school_rounded
                         : Icons.event_available_rounded,
                     color: person.role == UserRole.faculty
-                        ? const Color(0xFF0369A1)
-                        : const Color(0xFFC2410C),
+                        ? const Color(0xFFAF52DE)
+                        : const Color(0xFF312E81),
                   ),
                 ),
                 title: Text(
