@@ -68,9 +68,23 @@ String buildRegistrantCsv({
   required List<FormSubmission> submissions,
 }) {
   final headers = _answerHeaders(post, submissions);
-  final buf = StringBuffer();
-  List<String> esc(Iterable<String> cells) =>
-      cells.map((c) => '"${c.replaceAll('"', '""')}"').toList();
+  // UTF-8 BOM so Excel/LibreOffice detect the encoding instead of garbling
+  // non-ASCII characters.
+  final buf = StringBuffer('\uFEFF');
+  // Cells are clipped to a single line of sane length: multi-line or very
+  // long content overflows into neighbouring columns and visually "merges"
+  // with them in Excel. The PDF export keeps the full text.
+  const int maxCellLength = 120;
+  List<String> esc(Iterable<String> cells) => cells.map((c) {
+        final safe = c
+            .replaceAll('"', '""')
+            .replaceAll(RegExp(r'\r?\n'), ' | ')
+            .replaceAll('\t', ' ');
+        final clipped = safe.length > maxCellLength
+            ? '${safe.substring(0, maxCellLength)}…'
+            : safe;
+        return '"$clipped"';
+      }).toList();
 
   buf.writeln(
     esc([

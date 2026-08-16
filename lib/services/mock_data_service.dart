@@ -725,6 +725,27 @@ class MockDataService extends ChangeNotifier {
     final deviceId = await LocalStoreService.instance.getDeviceId();
     final client = _client;
 
+    // Continue-as is a quick re-entry on THIS device for the account that was
+    // just signed out of it. Restore it instantly from the local snapshot —
+    // the server lookup happens in the background (syncNow), so a slow or
+    // flaky network can never block the redirect or make the app look stuck.
+    final snap = lastKnownUser;
+    if (continueAs &&
+        snap != null &&
+        snap.email == email.trim().toLowerCase()) {
+      currentUser = snap.copyWith(activeDeviceId: deviceId);
+      activeRole = currentUser.roles.first;
+      _syncedDeviceId = deviceId;
+      _hadServerProfile = true;
+      _invalidateDataCaches();
+      notifyListeners();
+      _scheduleLocalSave();
+      _subscribeRealtimeOwnProfile();
+      _subscribePresence();
+      unawaited(syncNow());
+      return;
+    }
+
     if (client != null) {
       try {
         final r = await _bestProfileByEmail(email, client);
@@ -898,7 +919,7 @@ class MockDataService extends ChangeNotifier {
       deviceId: deviceId,
     );
     _scheduleLocalSave();
-    await syncNow();
+    unawaited(syncNow());
   }
 
   /// Verifies the account password (used when logging in from a device that is
@@ -1047,7 +1068,7 @@ class MockDataService extends ChangeNotifier {
     _subscribeRealtimeOwnProfile();
     _subscribePresence();
     // Pull latest posts and registrations right after login so counts are fresh
-    await syncNow();
+    unawaited(syncNow());
   }
 
   /// Calls the `account-credentials` edge function and maps server errors to
@@ -1255,7 +1276,7 @@ class MockDataService extends ChangeNotifier {
         .select()
         .order('submitted_at', ascending: false)
         .limit(500)
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 15));
     var changed = false;
     final localById = <String, FormSubmission>{
       for (final s in _formSubmissions) s.id: s,
@@ -1737,7 +1758,7 @@ class MockDataService extends ChangeNotifier {
         .select()
         .order('created_at', ascending: false)
         .limit(50)
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 15));
     var changed = false;
     for (final row in rows) {
       final id = row['id']?.toString();
