@@ -66,8 +66,22 @@ class MockDataService extends ChangeNotifier {
   List<FormSubmission> _formSubmissions = [];
   final Map<String, int> _profileLikes = {};
   final Set<String> _likedProfileAuthorIds = {};
+  final Map<String, String> _authorAvatarCache = {};
   bool _notificationsCleared = false;
   DateTime? _notificationsClearedAt;
+
+  static String? _sanitizeAvatarUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return null;
+    final trimmed = url.trim();
+    if (trimmed.contains('unsplash.com') || trimmed == _fallbackImageUrl) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String? getAuthorAvatar(String? authorId, String? authorName) {
+    return _resolveAuthorAvatar(authorId, authorName);
+  }
 
   /// Post ids this device has confirmed exist on the server. The server is
   /// authoritative for them: they are never re-uploaded from a stale local
@@ -160,7 +174,8 @@ class MockDataService extends ChangeNotifier {
     if (_isDisposed) return;
 
     if (restored != null) {
-      currentUser = restored.currentUser;
+      final cleanUserAvatar = _sanitizeAvatarUrl(restored.currentUser.avatarUrl) ?? '';
+      currentUser = restored.currentUser.copyWith(avatarUrl: cleanUserAvatar);
       activeRole = restored.activeRole ??
           (currentUser.roles.isNotEmpty
               ? currentUser.roles.first
@@ -173,7 +188,10 @@ class MockDataService extends ChangeNotifier {
           currentUser.id.isNotEmpty && currentUser.hasCompletedProgressiveForm;
       _hadServerProfile = restored.hadServerProfile;
 
-      _posts = restored.posts;
+      _posts = restored.posts.map((p) {
+        final clean = _sanitizeAvatarUrl(p.authorAvatarUrl);
+        return clean != p.authorAvatarUrl ? p.copyWith(authorAvatarUrl: clean) : p;
+      }).toList();
       _notifications = restored.notifications;
       _roleRequests = restored.roleRequests;
       _formSubmissions = restored.formSubmissions;
@@ -240,7 +258,7 @@ class MockDataService extends ChangeNotifier {
       department: 'Computer Science & Engineering',
       year: 'Third Year',
       mobileNumber: '+91 98765 43210',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400',
+      avatarUrl: '',
       roles: const [UserRole.student, UserRole.eventHost],
       savedPostIds: const ['pst_001'],
       registeredEventIds: const ['pst_002'],
@@ -1378,23 +1396,24 @@ class MockDataService extends ChangeNotifier {
   Future<bool> _syncProfilesForRegistrants(SupabaseClient client) async {
     final uids = <String>{
       for (final p in _posts) ...p.registeredUserIds,
+      for (final p in _posts) p.authorId,
       for (final s in _formSubmissions) s.userId,
     }.where((id) => id.isNotEmpty && id != currentUser.id).toList();
 
     if (uids.isEmpty) return false;
 
     try {
-      final filterList = uids.take(100).map((id) => 'user_id.eq.$id').join(',');
       final rows = await client
           .from('profiles')
           .select()
-          .or(filterList)
-          .timeout(const Duration(seconds: 10));
+          .inFilter('user_id', uids.take(50).toList())
+          .timeout(const Duration(seconds: 8));
 
       var changed = false;
       for (final row in rows) {
         final uid = row['user_id']?.toString() ?? '';
         if (uid.isEmpty) continue;
+        final avatar = _sanitizeAvatarUrl(row['avatar_url']?.toString()) ?? '';
         final user = UserModel(
           id: uid,
           name: row['name']?.toString() ?? '',
@@ -1403,16 +1422,29 @@ class MockDataService extends ChangeNotifier {
           department: row['department']?.toString() ?? '',
           year: row['year']?.toString() ?? '',
           mobileNumber: row['mobile_number']?.toString() ?? '',
-          avatarUrl: row['avatar_url']?.toString() ?? '',
+          avatarUrl: avatar,
           roles: const [UserRole.student],
           savedPostIds: const [],
           registeredEventIds: const [],
         );
         if (_knownProfiles[uid] == null ||
             _knownProfiles[uid]!.name != user.name ||
-            _knownProfiles[uid]!.mobileNumber != user.mobileNumber) {
+            _knownProfiles[uid]!.mobileNumber != user.mobileNumber ||
+            _knownProfiles[uid]!.avatarUrl != user.avatarUrl) {
           _knownProfiles[uid] = user;
           changed = true;
+        }
+        if (avatar.isNotEmpty) {
+          _authorAvatarCache[uid] = avatar;
+          for (var i = 0; i < _posts.length; i++) {
+            if (_posts[i].authorId == uid &&
+                (_posts[i].authorAvatarUrl == null ||
+                    _posts[i].authorAvatarUrl!.isEmpty ||
+                    _posts[i].authorAvatarUrl != avatar)) {
+              _posts[i] = _posts[i].copyWith(authorAvatarUrl: avatar);
+              changed = true;
+            }
+          }
         }
       }
       return changed;
@@ -1983,6 +2015,30 @@ class MockDataService extends ChangeNotifier {
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'user_id');
       _syncedDeviceId = deviceId;
+
+      // Update authorAvatarUrl on all posts authored by this user
+      if (avatar.isNotEmpty) {
+        _authorAvatarCache[currentUser.id] = avatar;
+        var postsUpdated = false;
+        for (var i = 0; i < _posts.length; i++) {
+          if (_posts[i].authorId == currentUser.id && _posts[i].authorAvatarUrl != avatar) {
+            _posts[i] = _posts[i].copyWith(authorAvatarUrl: avatar);
+            postsUpdated = true;
+          }
+        }
+        if (postsUpdated) {
+          _invalidateDataCaches();
+          notifyListeners();
+          _scheduleLocalSave();
+          try {
+            await client.from('posts').update({
+              'author_avatar_url': avatar,
+            }).eq('author_id', currentUser.id);
+          } catch (e) {
+            debugPrint('StudentHub: post author_avatar_url bulk update failed: $e');
+          }
+        }
+      }
     } catch (e) {
       debugPrint('StudentHub: profile not persisted: $e');
     }
@@ -2005,17 +2061,52 @@ class MockDataService extends ChangeNotifier {
       if (bytes == null || bytes.isEmpty) return url;
       final ext = _extFromDataUri(url);
       final path = 'avatars/${currentUser.id}.$ext';
-      await client.storage
-          .from('documents')
-          .uploadBinary(
-            path,
-            bytes,
-            fileOptions: FileOptions(
-              contentType: ext == 'png' ? 'image/png' : 'image/jpeg',
-              upsert: true,
-            ),
-          );
-      return client.storage.from('documents').getPublicUrl(path);
+      final ok = await _uploadBinaryWithRetry(
+        client,
+        path,
+        bytes,
+        ext == 'png' ? 'image/png' : 'image/jpeg',
+      );
+      if (!ok) return url;
+      final publicUrl = client.storage.from('documents').getPublicUrl(path);
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final stamped = '$publicUrl?v=$stamp';
+      clearCachedImage(url);
+      clearCachedImage(publicUrl);
+      return stamped;
+    } catch (_) {
+      return url;
+    }
+  }
+
+  Future<String?> _uploadAuthorAvatarIfNeeded(String? url, String authorId) async {
+    final client = _client;
+    if (client == null || url == null || url.isEmpty) return url;
+    if (!url.startsWith('data:') && !_localStore.isLocalRef(url)) return url;
+
+    try {
+      final bytes = url.startsWith('data:')
+          ? await compute(
+              _decodeBase64Helper,
+              url.substring(url.indexOf(',') + 1),
+            )
+          : await _localStore.readLocalBlob(url);
+      if (bytes == null || bytes.isEmpty) return url;
+      final ext = _extFromDataUri(url);
+      final path = 'avatars/${authorId}.$ext';
+      final ok = await _uploadBinaryWithRetry(
+        client,
+        path,
+        bytes,
+        ext == 'png' ? 'image/png' : 'image/jpeg',
+      );
+      if (!ok) return url;
+      final publicUrl = client.storage.from('documents').getPublicUrl(path);
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final stamped = '$publicUrl?v=$stamp';
+      clearCachedImage(url);
+      clearCachedImage(publicUrl);
+      return stamped;
     } catch (_) {
       return url;
     }
@@ -2380,8 +2471,13 @@ class MockDataService extends ChangeNotifier {
         orElse: () => UserRole.student,
       ),
       authorId: row['author_id']?.toString() ?? '',
-      authorAvatarUrl: (row['author_avatar_url'] as String?) ??
-          _resolveAuthorAvatar(row['author_id']?.toString(), row['author_name']?.toString()),
+      authorAvatarUrl: _sanitizeAvatarUrl(
+        (row['author_avatar_url'] as String?) ??
+            _resolveAuthorAvatar(
+              row['author_id']?.toString(),
+              row['author_name']?.toString(),
+            ),
+      ),
       timestamp: _parseDate(row['created_at']) ?? DateTime.now(),
       imageUrl: row['image_url'] as String?,
       imageUrls: ((row['image_urls'] as List?) ?? const []).cast<String>(),
@@ -2413,13 +2509,18 @@ class MockDataService extends ChangeNotifier {
         (authorName != null &&
             authorName.trim().isNotEmpty &&
             authorName.trim().toLowerCase() == currentUser.name.trim().toLowerCase())) {
-      return currentUser.avatarUrl;
+      return _sanitizeAvatarUrl(currentUser.avatarUrl);
+    }
+    if (authorId != null && _authorAvatarCache.containsKey(authorId)) {
+      final cached = _sanitizeAvatarUrl(_authorAvatarCache[authorId]);
+      if (cached != null && cached.isNotEmpty) return cached;
     }
     for (final p in _posts) {
       if ((authorId != null && p.authorId == authorId) ||
           (authorName != null && p.authorName.toLowerCase() == authorName.toLowerCase())) {
-        if (p.authorAvatarUrl != null && p.authorAvatarUrl!.isNotEmpty) {
-          return p.authorAvatarUrl;
+        final sanitized = _sanitizeAvatarUrl(p.authorAvatarUrl);
+        if (sanitized != null && sanitized.isNotEmpty) {
+          return sanitized;
         }
       }
     }
@@ -2431,7 +2532,7 @@ class MockDataService extends ChangeNotifier {
     // must NEVER reach the server row: other devices cannot resolve them and
     // would render grey boxes. If an upload failed and the source is still
     // device-only, the row stores a neutral placeholder instead.
-const placeholder = _fallbackImageUrl;
+    const placeholder = _fallbackImageUrl;
 
     String? cleanUrl(String? url) {
       if (url == null || url.isEmpty) return null;
@@ -2440,6 +2541,15 @@ const placeholder = _fallbackImageUrl;
         return placeholder;
       }
       return url;
+    }
+
+    String? cleanAvatarUrl(String? url) {
+      if (url == null || url.isEmpty) return null;
+      if (url.startsWith('data:') ||
+          url.startsWith(LocalStoreService.localPrefix)) {
+        return null;
+      }
+      return _sanitizeAvatarUrl(url);
     }
 
     String cleanAttachmentUrl(String url) {
@@ -2469,6 +2579,7 @@ const placeholder = _fallbackImageUrl;
       'author_name': p.authorName,
       'author_role': p.authorRole.name,
       'author_id': p.authorId,
+      'author_avatar_url': cleanAvatarUrl(p.authorAvatarUrl),
       'image_url': cleanUrl(p.imageUrl),
       'image_urls': cleanGallery,
       'is_urgent': p.isUrgent,
@@ -2524,49 +2635,48 @@ const placeholder = _fallbackImageUrl;
       var stored = post;
       var changed = false;
 
-      // Upload attachments, cover and gallery images in parallel so a
-      // multi-image gallery reaches the server in ~1s, not 1s per photo.
+      // Upload attachments, cover, gallery, and author avatar images in parallel
       final attachmentFuture = Future.wait(
         post.attachments.map(_uploadAttachmentIfNeeded),
       );
       final coverFuture = _uploadPostImageIfNeeded(post);
       final galleryFuture = _uploadGalleryImagesIfNeeded(post);
-      final results = await Future.wait<Object>(
-        [attachmentFuture, coverFuture, galleryFuture],
+      final avatarFuture = _uploadAuthorAvatarIfNeeded(post.authorAvatarUrl, post.authorId);
+      final results = await Future.wait<Object?>(
+        [attachmentFuture, coverFuture, galleryFuture, avatarFuture],
       );
       final attachments = List<PostAttachment>.from(
         results[0] as List<PostAttachment>,
       );
       final resolvedCover = results[1] as PostModel;
       final resolvedGallery = results[2] as PostModel;
+      final resolvedAvatar = results[3] as String?;
       for (var i = 0; i < attachments.length; i++) {
         if (attachments[i].url != post.attachments[i].url) changed = true;
       }
       if (resolvedCover.imageUrl != post.imageUrl) changed = true;
       if (resolvedGallery.imageUrls != post.imageUrls) changed = true;
+      if (resolvedAvatar != null && resolvedAvatar != post.authorAvatarUrl) {
+        changed = true;
+      }
       if (changed) {
         stored = post.copyWith(
           attachments: attachments,
           imageUrl: resolvedCover.imageUrl,
           imageUrls: resolvedGallery.imageUrls,
+          authorAvatarUrl: resolvedAvatar ?? post.authorAvatarUrl,
         );
       }
       await client.from('posts').upsert(_rowFromPost(stored), onConflict: 'id');
       final idx = _posts.indexWhere((p) => p.id == post.id);
       if (idx != -1) _posts[idx] = stored;
       _serverKnownIds.add(post.id);
-      // If any image/attachment still points at a device-only source (its
-      // upload failed and the row was sanitized), retry the uploads in the
-      // background so the server row gets backfilled with real URLs.
       if (_hasDeviceOnlySources(stored)) _scheduleRepersist(stored);
     } catch (e) {
       debugPrint('StudentHub: post ${post.id} persistence failed: $e');
       _scheduleLocalSave();
     }
   }
-
-  /// Uploads a post's cover image (data URI or local file ref) to Supabase
-  /// Storage and returns the post with the public URL. Remote/empty images are
   /// left untouched. Transient upload failures are retried; a persistent
   /// failure keeps the in-memory source untouched (the row write sanitizes it,
   /// and [_scheduleRepersist] backfills it once the network recovers).
@@ -4180,8 +4290,6 @@ const placeholder = _fallbackImageUrl;
         authorName: 'Dr. Ramesh K. Verma (Dean Academics)',
         authorRole: UserRole.faculty,
         authorId: 'fac_101',
-        authorAvatarUrl:
-            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400',
         timestamp: now.subtract(const Duration(hours: 2)),
         isUrgent: true,
         isPinned: true,
@@ -4208,8 +4316,6 @@ const placeholder = _fallbackImageUrl;
         authorName: 'Prof. Ananya Sen',
         authorRole: UserRole.faculty,
         authorId: 'fac_102',
-        authorAvatarUrl:
-            'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400',
         timestamp: now.subtract(const Duration(days: 1)),
         attachments: [
           PostAttachment(
@@ -4231,8 +4337,6 @@ const placeholder = _fallbackImageUrl;
         authorName: 'Mobile Dev Club',
         authorRole: UserRole.eventHost,
         authorId: 'host_202',
-        authorAvatarUrl:
-            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400',
         timestamp: now.subtract(const Duration(days: 1, hours: 4)),
         imageUrl:
             'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=800',
@@ -4253,8 +4357,6 @@ const placeholder = _fallbackImageUrl;
         authorName: 'Sports Directorate',
         authorRole: UserRole.admin,
         authorId: 'adm_001',
-        authorAvatarUrl:
-            'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=400',
         timestamp: now.subtract(const Duration(days: 2)),
         imageUrl:
             'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&q=80&w=800',
@@ -4273,8 +4375,6 @@ const placeholder = _fallbackImageUrl;
         authorName: 'Placement Cell',
         authorRole: UserRole.faculty,
         authorId: 'fac_103',
-        authorAvatarUrl:
-            'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400',
         timestamp: now.subtract(const Duration(days: 2, hours: 8)),
         attachments: [
           PostAttachment(

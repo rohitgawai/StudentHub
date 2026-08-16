@@ -303,8 +303,11 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     final profileLikesCount = dataService.getProfileLikes(widget.authorId);
 
     // Resolve avatar URL
-    final avatar = widget.authorAvatarUrl ??
-        (isMe ? dataService.currentUser.avatarUrl : '');
+    final avatar = (widget.authorAvatarUrl != null && widget.authorAvatarUrl!.isNotEmpty)
+        ? widget.authorAvatarUrl!
+        : (isMe
+            ? dataService.currentUser.avatarUrl
+            : (dataService.getAuthorAvatar(widget.authorId, widget.authorName) ?? ''));
 
     // Resolve department & year
     final dept = widget.department ??

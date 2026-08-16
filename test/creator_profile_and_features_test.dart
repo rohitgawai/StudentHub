@@ -130,6 +130,22 @@ void main() {
         timestamp: DateTime.now(),
         category: PostCategory.workshop,
         eventDate: DateTime(2026, 8, 20),
+        form: const FormDefinition(
+          id: 'form_1',
+          title: 'Workshop Form',
+          fields: [
+            FormFieldSpec(
+              id: 'Dietary Preference',
+              type: FormFieldType.shortText,
+              label: 'Dietary Preference',
+            ),
+            FormFieldSpec(
+              id: 'Experience Level',
+              type: FormFieldType.shortText,
+              label: 'Experience Level',
+            ),
+          ],
+        ),
       );
 
       final List<FormSubmission> submissions = [

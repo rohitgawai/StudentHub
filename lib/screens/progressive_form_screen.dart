@@ -22,7 +22,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
   int _currentStep = 0;
   bool _isSubmitting = false;
 
-  String _avatarUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=256';
+  String _avatarUrl = '';
   late String _selectedDepartment;
   late String _selectedYear;
   final _idController = TextEditingController(text: 'MIT25-A-03-UG-CSE-47484');
@@ -34,7 +34,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
     final user = dataService.currentUser;
     final cfg = dataService.config;
 
-    if (user.avatarUrl.isNotEmpty) {
+    if (user.avatarUrl.isNotEmpty && !user.avatarUrl.contains('unsplash.com')) {
       _avatarUrl = user.avatarUrl;
     }
     _selectedDepartment = user.department.isNotEmpty && cfg.departments.contains(user.department)
