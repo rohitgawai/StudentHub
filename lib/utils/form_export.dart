@@ -42,7 +42,10 @@ List<String> _answerHeaders(PostModel post, List<FormSubmission> subs) {
   for (final s in subs) {
     keys.addAll(s.answers.keys.where((k) => k.trim().isNotEmpty));
   }
-  return keys.toList();
+  // Sorted so the column order is deterministic for the same data on every
+  // device / Android version.
+  final sorted = keys.toList()..sort();
+  return sorted;
 }
 
 /// Answers keyed by question label -> value (fall back to field ids).
@@ -67,12 +70,29 @@ String _stringify(dynamic value) {
   return value.toString();
 }
 
+/// Display text for every attached link (`label: url`), one per line.
+String _attachedLinkText(PostModel post) => post.links
+    .map((l) => l.label.isEmpty ? l.url : '${l.label}: ${l.url}')
+    .join('\n');
+
 String buildRegistrantCsv({
   required PostModel post,
   required List<FormSubmission> submissions,
 }) {
-  final headers = _answerHeaders(post, submissions);
-  // UTF-8 BOM so Excel/LibreOffice/Google Sheets automatically detect encoding
+  final hasForm = post.form != null && post.form!.fields.isNotEmpty;
+  // Link-only events (no form) export the attached link instead of answers.
+  // When a no-form post has answered submissions (e.g. the host removed the
+  // form after collecting responses), the answer keys are appended so no
+  // data is ever lost.
+  final linkText = _attachedLinkText(post);
+  final headers = hasForm
+      ? _answerHeaders(post, submissions)
+      : [
+          if (post.links.isNotEmpty) 'Link Attached',
+          ..._answerHeaders(post, submissions),
+        ];
+  // UTF-8 BOM so Excel/LibreOffice detect the encoding instead of garbling
+  // non-ASCII characters.
   final buf = StringBuffer('\uFEFF');
 
   String escapeCell(dynamic value) {
@@ -120,7 +140,8 @@ String buildRegistrantCsv({
       s.year.isNotEmpty ? s.year : 'N/A',
       s.mobileNumber.isNotEmpty ? s.mobileNumber : 'N/A',
       _formatExportDate(s.submittedAt),
-      ...headers.map((h) => _stringify(answers[h])),
+      ...headers.map((h) =>
+          h == 'Link Attached' ? linkText : _stringify(answers[h])),
     ];
     buf.write('${rowCells.map(escapeCell).join(',')}\r\n');
   }
@@ -164,6 +185,16 @@ Future<Uint8List> buildRegistrantPdf({
           '${submissions.length} ${post.isEvent ? 'registrations' : 'responses'}',
           style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
         ),
+        // The attached link is a property of the post, not of each
+        // registrant. Print it once here so the table below stays clean and
+        // renders identically on every device / PDF viewer.
+        if (post.links.isNotEmpty) ...[
+          pw.SizedBox(height: 6),
+          pw.Text(
+            'Attached link: ${_attachedLinkText(post)}',
+            style: pw.TextStyle(fontSize: 9, color: PdfColors.blueGrey700),
+          ),
+        ],
         pw.SizedBox(height: 16),
         pw.TableHelper.fromTextArray(
           headers: const [
@@ -177,9 +208,12 @@ Future<Uint8List> buildRegistrantPdf({
           ],
           data: submissions.map((s) {
             final answers = _labelsToAnswers(post, s);
-            final answerText = answers.entries
-                .map((e) => '${e.key}: ${_stringify(e.value)}')
-                .join('\n');
+            final hasForm = post.form != null && post.form!.fields.isNotEmpty;
+            final answerText = hasForm
+                ? answers.entries
+                    .map((e) => '${e.key}: ${_stringify(e.value)}')
+                    .join('\n')
+                : '';
             return [
               s.name,
               s.studentOrEmployeeId,

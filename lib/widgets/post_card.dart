@@ -419,8 +419,12 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                           ),
                         ],
 
-                        // External links
-                        if (post.links.isNotEmpty) ...[
+                        // External links. For events the chips only appear
+                        // alongside a registration form (the form takes
+                        // priority on Register); link-only events surface
+                        // their link through the Register button instead.
+                        if (post.links.isNotEmpty &&
+                            (!_isEvent || post.form != null)) ...[
                           const SizedBox(height: 12),
                           Wrap(
                             spacing: 8,
@@ -983,6 +987,11 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
       } else {
         dataService.toggleEventRegistration(post.id);
         _showActionFeedback(context, '🎉 Registered successfully!', Icons.check_circle_rounded, const Color(0xFF059669));
+        // Link-only events: registration is counted like a no-form event AND
+        // the first attached link opens in the browser as usual.
+        if (_isEvent && post.links.isNotEmpty) {
+          openExternalLink(context, post.links.first.url);
+        }
       }
     }
   }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/form_models.dart';
 import '../services/mock_data_service.dart';
+import '../utils/external_links.dart';
 
 /// Full per-student view: profile snapshot + every form answer.
 class SubmissionDetailScreen extends StatelessWidget {
@@ -41,6 +42,13 @@ class SubmissionDetailScreen extends StatelessWidget {
     final displayMobile = s.mobileNumber.isEmpty ? (service.currentUser.mobileNumber.isNotEmpty ? service.currentUser.mobileNumber : 'N/A') : s.mobileNumber;
 
     final hasForm = post?.form != null;
+
+    // Link-only events (no registration form) surface their attached link
+    // here instead of a (non-existent) form response.
+    final isLinkOnlyEvent = post != null &&
+        post.isEvent &&
+        post.form == null &&
+        post.links.isNotEmpty;
 
     final answerRows = <Widget>[];
     if (hasForm) {
@@ -167,10 +175,20 @@ class SubmissionDetailScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.description_outlined, size: 17, color: accent),
+                    Icon(
+                      isLinkOnlyEvent
+                          ? Icons.link_rounded
+                          : Icons.description_outlined,
+                      size: 17,
+                      color: accent,
+                    ),
                     const SizedBox(width: 7),
                     Text(
-                      hasForm ? 'Form responses (${post!.form!.title})' : 'Form responses',
+                      isLinkOnlyEvent
+                          ? 'Link attached'
+                          : hasForm
+                              ? 'Form responses (${post!.form!.title})'
+                              : 'Form responses',
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -187,7 +205,11 @@ class SubmissionDetailScreen extends StatelessWidget {
                   ],
                 ),
                 const Divider(height: 18),
-                if (!hasForm && answerRows.isEmpty)
+                if (isLinkOnlyEvent)
+                  ...post.links.map(
+                    (link) => _LinkRow(link: link, accent: accent),
+                  )
+                else if (!hasForm && answerRows.isEmpty)
                   Text(
                     'Quick registration (no form attached).',
                     style: TextStyle(
@@ -250,6 +272,65 @@ class SubmissionDetailScreen extends StatelessWidget {
   String _formatDate(DateTime dt) {
     String pad(int v) => v.toString().padLeft(2, '0');
     return '${pad(dt.day)}/${pad(dt.month)}/${dt.year}';
+  }
+}
+
+class _LinkRow extends StatelessWidget {
+  final PostLink link;
+  final Color accent;
+
+  const _LinkRow({required this.link, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    final label =
+        link.label.isEmpty ? 'Registration link' : link.label;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: () => openExternalLink(context, link.url),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: accent.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.open_in_new_rounded, size: 16, color: accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: accent,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      link.url,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.grey.shade700,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
