@@ -33,12 +33,16 @@ String _safeFileName(String title) {
 List<String> _answerHeaders(PostModel post, List<FormSubmission> subs) {
   final form = post.form;
   if (form != null && form.fields.isNotEmpty) {
-    return form.fields.where((f) => !f.isHeader).map((f) => f.label).toList();
+    return form.fields
+        .where((f) => !f.isHeader && f.label.trim().isNotEmpty)
+        .map((f) => f.label.trim())
+        .toList();
   }
-  final maxAnswers = subs
-      .map((s) => s.answers.length)
-      .fold<int>(0, (a, b) => a > b ? a : b);
-  return List.generate(maxAnswers, (i) => 'Q${i + 1}');
+  final keys = <String>{};
+  for (final s in subs) {
+    keys.addAll(s.answers.keys.where((k) => k.trim().isNotEmpty));
+  }
+  return keys.toList();
 }
 
 /// Answers keyed by question label -> value (fall back to field ids).
@@ -68,49 +72,59 @@ String buildRegistrantCsv({
   required List<FormSubmission> submissions,
 }) {
   final headers = _answerHeaders(post, submissions);
-  // UTF-8 BOM so Excel/LibreOffice detect the encoding instead of garbling
-  // non-ASCII characters.
+  // UTF-8 BOM so Excel/LibreOffice/Google Sheets automatically detect encoding
   final buf = StringBuffer('\uFEFF');
-  // Cells are clipped to a single line of sane length: multi-line or very
-  // long content overflows into neighbouring columns and visually "merges"
-  // with them in Excel. The PDF export keeps the full text.
-  const int maxCellLength = 120;
-  List<String> esc(Iterable<String> cells) => cells.map((c) {
-        final safe = c
-            .replaceAll('"', '""')
-            .replaceAll(RegExp(r'\r?\n'), ' | ')
-            .replaceAll('\t', ' ');
-        final clipped = safe.length > maxCellLength
-            ? '${safe.substring(0, maxCellLength)}…'
-            : safe;
-        return '"$clipped"';
-      }).toList();
 
-  buf.writeln(
-    esc([
-      'Name',
-      'MIT ID',
-      'Department',
-      'Year',
-      'Mobile Number',
-      'Submitted At',
-      ...headers,
-    ]).join(','),
-  );
-  for (final s in submissions) {
-    final answers = _labelsToAnswers(post, s);
-    buf.writeln(
-      esc([
-        s.name,
-        s.studentOrEmployeeId,
-        s.department,
-        s.year,
-        s.mobileNumber,
-        _formatExportDate(s.submittedAt),
-        ...headers.map((h) => _stringify(answers[h])),
-      ]).join(','),
-    );
+  String escapeCell(dynamic value) {
+    if (value == null) return '""';
+    String str;
+    if (value is List) {
+      str = value.map((e) => e?.toString() ?? '').join('; ');
+    } else {
+      str = value.toString();
+    }
+    // Clean whitespace and remove newlines/tabs so each record stays strictly in its row
+    str = str
+        .replaceAll('\r\n', ' ')
+        .replaceAll('\n', ' ')
+        .replaceAll('\r', ' ')
+        .replaceAll('\t', ' ')
+        .trim();
+    // RFC 4180 standard quote escaping
+    str = str.replaceAll('"', '""');
+    return '"$str"';
   }
+
+  // Header row
+  final headerCells = [
+    'Sr. No.',
+    'Full Name',
+    'Student ID',
+    'Department',
+    'Academic Year',
+    'Mobile Number',
+    'Registration Date',
+    ...headers,
+  ];
+  buf.write('${headerCells.map(escapeCell).join(',')}\r\n');
+
+  // Data rows
+  for (var i = 0; i < submissions.length; i++) {
+    final s = submissions[i];
+    final answers = _labelsToAnswers(post, s);
+    final rowCells = [
+      '${i + 1}',
+      s.name.isNotEmpty ? s.name : 'N/A',
+      s.studentOrEmployeeId.isNotEmpty ? s.studentOrEmployeeId : 'N/A',
+      s.department.isNotEmpty ? s.department : 'N/A',
+      s.year.isNotEmpty ? s.year : 'N/A',
+      s.mobileNumber.isNotEmpty ? s.mobileNumber : 'N/A',
+      _formatExportDate(s.submittedAt),
+      ...headers.map((h) => _stringify(answers[h])),
+    ];
+    buf.write('${rowCells.map(escapeCell).join(',')}\r\n');
+  }
+
   return buf.toString();
 }
 

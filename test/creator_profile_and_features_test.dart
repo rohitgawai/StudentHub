@@ -7,6 +7,8 @@ import 'package:student_hub/models/post_model.dart';
 import 'package:student_hub/services/mock_data_service.dart';
 import 'package:student_hub/screens/user_profile_screen.dart';
 import 'package:student_hub/screens/events_screen.dart';
+import 'package:student_hub/models/form_models.dart';
+import 'package:student_hub/utils/form_export.dart';
 import 'package:student_hub/screens/notifications_screen.dart';
 
 void main() {
@@ -114,6 +116,79 @@ void main() {
       expect(find.text('Academic'), findsOneWidget);
       expect(find.text('Events'), findsOneWidget);
       service.dispose();
+    });
+
+    test('buildRegistrantCsv properly formats rows and prevents merged cells or line corruption', () {
+      final post = PostModel(
+        id: 'event_test_1',
+        title: 'Flutter Workshop 2026',
+        description: 'Deep dive into Flutter',
+        authorId: 'faculty_01',
+        authorName: 'Dr. Jane Doe',
+        authorRole: UserRole.faculty,
+        department: 'Computer Science',
+        timestamp: DateTime.now(),
+        category: PostCategory.workshop,
+        eventDate: DateTime(2026, 8, 20),
+      );
+
+      final List<FormSubmission> submissions = [
+        FormSubmission(
+          id: 'sub_1',
+          postId: 'event_test_1',
+          userId: 'user_01',
+          name: 'Rohit Sharma',
+          studentOrEmployeeId: 'MIT2024001',
+          department: 'Computer Science',
+          year: '3rd Year',
+          mobileNumber: '9876543210',
+          submittedAt: DateTime(2026, 8, 16, 10, 30),
+          answers: {
+            'Dietary Preference': 'Vegetarian, No Onion\nNo Garlic',
+            'Experience Level': 'Intermediate "Pro"',
+          },
+        ),
+        FormSubmission(
+          id: 'sub_2',
+          postId: 'event_test_1',
+          userId: 'user_02',
+          name: 'Priya Patel',
+          studentOrEmployeeId: 'MIT2024002',
+          department: 'Information Technology',
+          year: '2nd Year',
+          mobileNumber: '9876543211',
+          submittedAt: DateTime(2026, 8, 16, 11, 00),
+          answers: {
+            'Dietary Preference': 'Standard',
+            'Experience Level': 'Beginner',
+          },
+        ),
+      ];
+
+      final csv = buildRegistrantCsv(post: post, submissions: submissions);
+
+      // Verify UTF-8 BOM
+      expect(csv.startsWith('\uFEFF'), isTrue);
+
+      // Split lines by CRLF
+      final lines = csv.substring(1).split('\r\n').where((l) => l.isNotEmpty).toList();
+      expect(lines.length, equals(3)); // 1 header + 2 rows
+
+      // Verify Header
+      expect(lines[0], contains('"Sr. No."'));
+      expect(lines[0], contains('"Full Name"'));
+      expect(lines[0], contains('"Student ID"'));
+
+      // Verify First Row (Quotes and multiline properly escaped)
+      expect(lines[1], contains('"1"'));
+      expect(lines[1], contains('"Rohit Sharma"'));
+      expect(lines[1], contains('"MIT2024001"'));
+      expect(lines[1], contains('Intermediate ""Pro""'));
+
+      // Verify Second Row
+      expect(lines[2], contains('"2"'));
+      expect(lines[2], contains('"Priya Patel"'));
+      expect(lines[2], contains('"MIT2024002"'));
     });
   });
 }
