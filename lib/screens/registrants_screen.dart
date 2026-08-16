@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -46,7 +45,7 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
 
     setState(() => _isExporting = true);
     try {
-      final File savedFile = await saveRegistrantExportDirectly(
+      final saved = await saveRegistrantExportDirectly(
         post: widget.post,
         submissions: submissions,
         format: format,
@@ -54,7 +53,7 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
       );
 
       if (!mounted) return;
-      final fileName = savedFile.path.split(Platform.pathSeparator).last;
+      final fileName = saved.fileName;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(

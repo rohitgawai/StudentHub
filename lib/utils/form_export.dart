@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -9,6 +12,8 @@ import '../models/form_models.dart';
 import '../models/post_model.dart';
 
 enum ExportFormat { csv, pdf }
+
+const MethodChannel _mediaChannel = MethodChannel('student_hub/mediastore');
 
 String _formatExportDate(DateTime dt) {
   String pad(int v) => v.toString().padLeft(2, '0');
@@ -208,16 +213,86 @@ Future<Directory> _getDownloadsDir() async {
 }
 
 /// Saves the CSV or PDF export directly to the device's Downloads directory.
-Future<File> saveRegistrantExportDirectly({
+///
+/// Android strategy (scoped storage safe):
+/// 1. MediaStore insert (Android 10+) — instant, lands in real Downloads,
+///    no permission and no dialog.
+/// 2. Direct file copy (Android 9 & below) — legacy storage write.
+/// 3. System "Save" dialog (SAF) — guaranteed fallback on every Android
+///    version if the fast paths are unavailable.
+///
+/// Returns the saved file plus the real display file name (the SAF path can
+/// end in a numeric document id instead of the file name).
+Future<({File file, String fileName})> saveRegistrantExportDirectly({
   required PostModel post,
   required List<FormSubmission> submissions,
   required ExportFormat format,
   String collegeName = 'StudentHub',
 }) async {
-  final dir = await _getDownloadsDir();
   final base = _safeFileName(post.title);
   final ext = format == ExportFormat.csv ? 'csv' : 'pdf';
-  final file = File('${dir.path}/${base}_registrations.$ext');
+  final fileName = '${base}_registrations.$ext';
+
+  if (Platform.isAndroid) {
+    try {
+      final bytes = format == ExportFormat.csv
+          ? Uint8List.fromList(
+              utf8.encode(buildRegistrantCsv(post: post, submissions: submissions)),
+            )
+          : await buildRegistrantPdf(
+              post: post,
+              submissions: submissions,
+              collegeName: collegeName,
+            );
+      final uri = await _mediaChannel.invokeMethod<String>('insertDownload', {
+        'name': fileName,
+        'bytes': bytes,
+      });
+      if (uri != null) {
+        return (file: File(uri), fileName: fileName);
+      }
+    } catch (e) {
+      debugPrint('MediaStore insert failed ($e), falling back');
+    }
+
+    final tempDir = await getTemporaryDirectory();
+    final tempFile = File('${tempDir.path}/$fileName');
+
+    if (format == ExportFormat.csv) {
+      await tempFile.writeAsString(
+        buildRegistrantCsv(post: post, submissions: submissions),
+      );
+    } else {
+      await tempFile.writeAsBytes(
+        await buildRegistrantPdf(
+          post: post,
+          submissions: submissions,
+          collegeName: collegeName,
+        ),
+      );
+    }
+
+    try {
+      final downloadDir = Directory('/storage/emulated/0/Download');
+      if (await downloadDir.exists()) {
+        final out = await tempFile.copy('${downloadDir.path}/$fileName');
+        return (file: out, fileName: fileName);
+      }
+    } catch (e) {
+      debugPrint('Direct Downloads copy failed ($e), using SAF picker');
+    }
+
+    final picked = await FilePicker.platform.saveFile(
+      fileName: fileName,
+      bytes: await tempFile.readAsBytes(),
+      type: FileType.any,
+    );
+    if (picked != null) return (file: File(picked), fileName: fileName);
+    throw Exception('Export cancelled by user');
+  }
+
+  final dir = await _getDownloadsDir();
+  final file = File('${dir.path}/$fileName');
 
   if (format == ExportFormat.csv) {
     await file.writeAsString(
@@ -231,7 +306,7 @@ Future<File> saveRegistrantExportDirectly({
     );
     await file.writeAsBytes(bytes);
   }
-  return file;
+  return (file: file, fileName: fileName);
 }
 
 /// Writes the export to a temp file ready for sharing.
