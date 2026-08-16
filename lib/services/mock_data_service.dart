@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_config.dart';
+import '../widgets/app_image.dart' show clearCachedImage;
 import '../config/supabase_config.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
@@ -47,6 +48,12 @@ class PasswordRequiredException implements Exception {
   String toString() =>
       mode == PasswordMode.set ? 'set_password' : 'enter_password';
 }
+
+/// Neutral placeholder written into a server row when an image could not be
+/// uploaded (still device-only). Other devices see a generic image instead of
+/// a broken frame; a background backfill replaces it with the real URL later.
+const String _fallbackImageUrl =
+    'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=600';
 
 class MockDataService extends ChangeNotifier {
   late AppConfig config;
@@ -1487,7 +1494,17 @@ class MockDataService extends ChangeNotifier {
         _serverKnownIds.add(post.id);
         final idx = _posts.indexWhere((p) => p.id == post.id);
         if (idx != -1) {
-          _posts[idx] = post;
+          final existing = _posts[idx];
+          // A row with no real, resolvable URLs (device-only refs or the
+          // neutral fallback) is a stale write from a failed upload. Never
+          // downgrade the better in-memory version, which may hold URLs that
+          // are newer than the row — otherwise the author's own device would
+          // lose its local images to an echo of its own sanitized row.
+          final downgrade =
+              !_hasUsableRemoteSource(post) &&
+              (_hasUsableRemoteSource(existing) ||
+                  _hasDeviceOnlySources(existing));
+          if (!downgrade) _posts[idx] = post;
         } else {
           _posts.insert(0, post);
         }
@@ -1705,6 +1722,15 @@ class MockDataService extends ChangeNotifier {
         for (final post in localOnly) {
           _persistPost(post);
         }
+        // Rows written by older builds (or after failed uploads) may still
+        // carry `local://` device refs that other devices cannot resolve.
+        // Only the author's device has the files, so re-persist those posts
+        // to backfill the server row with real URLs.
+        for (final post in _posts) {
+          if (post.authorId == currentUser.id && _hasDeviceOnlySources(post)) {
+            _persistPost(post);
+          }
+        }
         changed =
             changed ||
             disappeared.isNotEmpty ||
@@ -1718,33 +1744,33 @@ class MockDataService extends ChangeNotifier {
       return (success: false, changed: false);
     }
 
-    // Profile (server-granted roles) and role requests are best-effort
-    // extras: a failure here never blocks the posts sync above.
-    try {
-      if (await _syncOwnProfile(client)) changed = true;
-    } catch (e) {
-      debugPrint('StudentHub: profile sync failed: $e');
-    }
-    try {
-      if (await _syncFormSubmissions(client)) changed = true;
-    } catch (e) {
-      debugPrint('StudentHub: form submissions sync failed: $e');
-    }
-    try {
-      if (await _syncProfilesForRegistrants(client)) changed = true;
-    } catch (e) {
-      debugPrint('StudentHub: registrant profiles sync failed: $e');
-    }
-    try {
-      if (await _syncRoleRequests(client)) changed = true;
-    } catch (e) {
-      debugPrint('StudentHub: role request sync failed: $e');
-    }
-    try {
-      if (await _syncAdminBroadcasts(client)) changed = true;
-    } catch (e) {
-      debugPrint('StudentHub: broadcast sync failed: $e');
-    }
+    // Profile (server-granted roles), forms, registrants, role requests and
+    // broadcasts are best-effort extras: failures never block the posts sync.
+    // They run concurrently so a full sync completes in ~1s instead of a
+    // chain of sequential round-trips.
+    final extras = await Future.wait<bool>([
+      _syncOwnProfile(client).catchError((e) {
+        debugPrint('StudentHub: profile sync failed: $e');
+        return false;
+      }),
+      _syncFormSubmissions(client).catchError((e) {
+        debugPrint('StudentHub: form submissions sync failed: $e');
+        return false;
+      }),
+      _syncProfilesForRegistrants(client).catchError((e) {
+        debugPrint('StudentHub: registrant profiles sync failed: $e');
+        return false;
+      }),
+      _syncRoleRequests(client).catchError((e) {
+        debugPrint('StudentHub: role request sync failed: $e');
+        return false;
+      }),
+      _syncAdminBroadcasts(client).catchError((e) {
+        debugPrint('StudentHub: broadcast sync failed: $e');
+        return false;
+      }),
+    ]);
+    if (extras.any((changedExtra) => changedExtra)) changed = true;
     _recordReachability(true);
     return (success: true, changed: changed);
   }
@@ -2401,18 +2427,34 @@ class MockDataService extends ChangeNotifier {
   }
 
   Map<String, dynamic> _rowFromPost(PostModel p) {
+    // Device-only sources (picked photos, `data:` URIs, `local://` file refs)
+    // must NEVER reach the server row: other devices cannot resolve them and
+    // would render grey boxes. If an upload failed and the source is still
+    // device-only, the row stores a neutral placeholder instead.
+const placeholder = _fallbackImageUrl;
+
     String? cleanUrl(String? url) {
       if (url == null || url.isEmpty) return null;
-      if (url.startsWith('data:')) {
-        return 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=600';
+      if (url.startsWith('data:') ||
+          url.startsWith(LocalStoreService.localPrefix)) {
+        return placeholder;
+      }
+      return url;
+    }
+
+    String cleanAttachmentUrl(String url) {
+      if (url.startsWith('data:') ||
+          url.startsWith(LocalStoreService.localPrefix)) {
+        return '';
       }
       return url;
     }
 
     final cleanGallery = p.imageUrls
         .map(
-          (u) => u.startsWith('data:')
-              ? 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=600'
+          (u) => u.startsWith('data:') ||
+                  u.startsWith(LocalStoreService.localPrefix)
+              ? placeholder
               : u,
         )
         .toList();
@@ -2448,7 +2490,7 @@ class MockDataService extends ChangeNotifier {
             (a) => {
               'title': a.title,
               'fileType': a.fileType,
-              'url': cleanUrl(a.url) ?? a.url,
+              'url': cleanAttachmentUrl(a.url),
               'fileSize': a.fileSize,
             },
           )
@@ -2481,21 +2523,42 @@ class MockDataService extends ChangeNotifier {
     try {
       var stored = post;
       var changed = false;
-      final uploaded = <PostAttachment>[];
-      for (final att in post.attachments) {
-        final resolved = await _uploadAttachmentIfNeeded(att);
-        uploaded.add(resolved);
-        if (resolved.url != att.url) changed = true;
+
+      // Upload attachments, cover and gallery images in parallel so a
+      // multi-image gallery reaches the server in ~1s, not 1s per photo.
+      final attachmentFuture = Future.wait(
+        post.attachments.map(_uploadAttachmentIfNeeded),
+      );
+      final coverFuture = _uploadPostImageIfNeeded(post);
+      final galleryFuture = _uploadGalleryImagesIfNeeded(post);
+      final results = await Future.wait<Object>(
+        [attachmentFuture, coverFuture, galleryFuture],
+      );
+      final attachments = List<PostAttachment>.from(
+        results[0] as List<PostAttachment>,
+      );
+      final resolvedCover = results[1] as PostModel;
+      final resolvedGallery = results[2] as PostModel;
+      for (var i = 0; i < attachments.length; i++) {
+        if (attachments[i].url != post.attachments[i].url) changed = true;
       }
+      if (resolvedCover.imageUrl != post.imageUrl) changed = true;
+      if (resolvedGallery.imageUrls != post.imageUrls) changed = true;
       if (changed) {
-        stored = post.copyWith(attachments: uploaded);
+        stored = post.copyWith(
+          attachments: attachments,
+          imageUrl: resolvedCover.imageUrl,
+          imageUrls: resolvedGallery.imageUrls,
+        );
       }
-      stored = await _uploadPostImageIfNeeded(stored);
-      stored = await _uploadGalleryImagesIfNeeded(stored);
       await client.from('posts').upsert(_rowFromPost(stored), onConflict: 'id');
       final idx = _posts.indexWhere((p) => p.id == post.id);
       if (idx != -1) _posts[idx] = stored;
       _serverKnownIds.add(post.id);
+      // If any image/attachment still points at a device-only source (its
+      // upload failed and the row was sanitized), retry the uploads in the
+      // background so the server row gets backfilled with real URLs.
+      if (_hasDeviceOnlySources(stored)) _scheduleRepersist(stored);
     } catch (e) {
       debugPrint('StudentHub: post ${post.id} persistence failed: $e');
       _scheduleLocalSave();
@@ -2504,7 +2567,9 @@ class MockDataService extends ChangeNotifier {
 
   /// Uploads a post's cover image (data URI or local file ref) to Supabase
   /// Storage and returns the post with the public URL. Remote/empty images are
-  /// left untouched.
+  /// left untouched. Transient upload failures are retried; a persistent
+  /// failure keeps the in-memory source untouched (the row write sanitizes it,
+  /// and [_scheduleRepersist] backfills it once the network recovers).
   Future<PostModel> _uploadPostImageIfNeeded(PostModel post) async {
     final client = _client;
     final url = post.imageUrl;
@@ -2522,18 +2587,23 @@ class MockDataService extends ChangeNotifier {
 
       final ext = _extFromDataUri(url);
       final path = 'posts/${post.id}_cover.$ext';
-      await client.storage
-          .from('documents')
-          .uploadBinary(
-            path,
-            bytes,
-            fileOptions: FileOptions(
-              contentType: ext == 'png' ? 'image/png' : 'image/jpeg',
-              upsert: true,
-            ),
-          );
+      if (!await _uploadBinaryWithRetry(
+        client,
+        path,
+        bytes,
+        ext == 'png' ? 'image/png' : 'image/jpeg',
+      )) {
+        return post;
+      }
+
+      // Cache-busting query: re-uploading an edited cover keeps the same
+      // storage path, so a `?v=` stamp forces every device to reload the new
+      // bytes instead of the stale cached frame.
       final publicUrl = client.storage.from('documents').getPublicUrl(path);
-      return post.copyWith(imageUrl: publicUrl);
+      final stamped = '$publicUrl?v=${DateTime.now().millisecondsSinceEpoch}';
+      clearCachedImage(url);
+      clearCachedImage(publicUrl);
+      return post.copyWith(imageUrl: stamped);
     } catch (_) {
       return post;
     }
@@ -2541,23 +2611,25 @@ class MockDataService extends ChangeNotifier {
 
   /// Uploads every gallery image (data URI or local file ref) to Supabase
   /// Storage as `posts/<id>_gallery_<index>.<ext>` and returns the post with
-  /// all public URLs. Remote/empty images are left untouched.
+  /// all public URLs. Remote/empty images are left untouched. Uploads run in
+  /// parallel waves (with per-image retries) so a full gallery reaches the
+  /// server in ~1s like any other social app, instead of one sequential
+  /// round-trip per photo. An image that still fails keeps its in-memory
+  /// source; the row write sanitizes it and [_scheduleRepersist] backfills.
   Future<PostModel> _uploadGalleryImagesIfNeeded(PostModel post) async {
     final client = _client;
     if (client == null || post.imageUrls.isEmpty) return post;
 
-    final uploaded = <String>[];
+    final uploaded = List<String>.from(post.imageUrls);
     var changed = false;
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+
+    // (index, bytes, ext) triples for every image that needs a real upload.
+    final pending = <(int, Uint8List, String)>[];
     for (var i = 0; i < post.imageUrls.length; i++) {
       final url = post.imageUrls[i];
-      if (url.isEmpty) {
-        uploaded.add(url);
-        continue;
-      }
-      if (!url.startsWith('data:') && !_localStore.isLocalRef(url)) {
-        uploaded.add(url);
-        continue;
-      }
+      if (url.isEmpty) continue;
+      if (!url.startsWith('data:') && !_localStore.isLocalRef(url)) continue;
       try {
         final bytes = url.startsWith('data:')
             ? await compute(
@@ -2565,30 +2637,75 @@ class MockDataService extends ChangeNotifier {
                 url.substring(url.indexOf(',') + 1),
               )
             : await _localStore.readLocalBlob(url);
-        if (bytes == null || bytes.isEmpty) {
-          uploaded.add(url);
-          continue;
-        }
-        final ext = _extFromDataUri(url);
-        final path = 'posts/${post.id}_gallery_$i.$ext';
-        await client.storage
-            .from('documents')
-            .uploadBinary(
-              path,
-              bytes,
-              fileOptions: FileOptions(
-                contentType: ext == 'png' ? 'image/png' : 'image/jpeg',
-                upsert: true,
-              ),
-            );
-        uploaded.add(client.storage.from('documents').getPublicUrl(path));
-        changed = true;
+        if (bytes == null || bytes.isEmpty) continue;
+        pending.add((i, bytes, _extFromDataUri(url)));
       } catch (_) {
-        uploaded.add(url);
+        // Keep the original source for this image.
+      }
+    }
+    if (pending.isEmpty) return post;
+
+    // Upload up to 3 images concurrently; Supabase handles parallel uploads
+    // well and this keeps memory spikes bounded on lower-end devices.
+    const waveSize = 3;
+    for (var start = 0; start < pending.length; start += waveSize) {
+      final wave = pending.skip(start).take(waveSize).toList();
+      final results = await Future.wait(
+        wave.map((item) async {
+          final (i, bytes, ext) = item;
+          final path = 'posts/${post.id}_gallery_$i.$ext';
+          final ok = await _uploadBinaryWithRetry(
+            client,
+            path,
+            bytes,
+            ext == 'png' ? 'image/png' : 'image/jpeg',
+          );
+          return (i, path, ok);
+        }),
+      );
+      for (final (i, path, ok) in results) {
+        if (!ok) continue; // keep original source; backfill later
+        final publicUrl =
+            client.storage.from('documents').getPublicUrl(path);
+        clearCachedImage(uploaded[i]);
+        uploaded[i] = '$publicUrl?v=$stamp';
+        changed = true;
       }
     }
     if (!changed) return post;
     return post.copyWith(imageUrls: uploaded);
+  }
+
+  /// Uploads [bytes] to Supabase Storage at [path], retrying transient
+  /// failures with a short backoff. Returns whether the upload succeeded.
+  Future<bool> _uploadBinaryWithRetry(
+    SupabaseClient client,
+    String path,
+    Uint8List bytes,
+    String contentType, {
+    int attempts = 3,
+  }) async {
+    Object? lastError;
+    for (var attempt = 0; attempt < attempts; attempt++) {
+      try {
+        await client.storage.from('documents').uploadBinary(
+              path,
+              bytes,
+              fileOptions: FileOptions(
+                contentType: contentType,
+                upsert: true,
+              ),
+            );
+        return true;
+      } catch (e) {
+        lastError = e;
+        if (attempt < attempts - 1) {
+          await Future.delayed(Duration(milliseconds: 300 * (attempt + 1)));
+        }
+      }
+    }
+    debugPrint('StudentHub: upload failed for $path: $lastError');
+    return false;
   }
 
   Future<PostAttachment> _uploadAttachmentIfNeeded(PostAttachment att) async {
@@ -2606,16 +2723,14 @@ class MockDataService extends ChangeNotifier {
       if (bytes == null || bytes.isEmpty) return att;
       final safeName = att.title.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
       final path = 'docs/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-      await client.storage
-          .from('documents')
-          .uploadBinary(
-            path,
-            bytes,
-            fileOptions: const FileOptions(
-              contentType: 'application/pdf',
-              upsert: true,
-            ),
-          );
+      final ok = await _uploadBinaryWithRetry(
+        client,
+        path,
+        bytes,
+        'application/pdf',
+        attempts: 3,
+      );
+      if (!ok) return att;
       final publicUrl = client.storage.from('documents').getPublicUrl(path);
       return PostAttachment(
         title: att.title,
@@ -2626,6 +2741,70 @@ class MockDataService extends ChangeNotifier {
     } catch (_) {
       return att;
     }
+  }
+
+  /// True when [p] still carries device-only image/attachment sources (data
+  /// URIs or `local://` refs) after an upload attempt — i.e. the row needs a
+  /// backfill upload later.
+  bool _hasDeviceOnlySources(PostModel p) {
+    final imageUrl = p.imageUrl;
+    if (imageUrl != null &&
+        imageUrl.isNotEmpty &&
+        (imageUrl.startsWith('data:') ||
+            _localStore.isLocalRef(imageUrl))) {
+      return true;
+    }
+    for (final u in p.imageUrls) {
+      if (u.startsWith('data:') || _localStore.isLocalRef(u)) return true;
+    }
+    for (final a in p.attachments) {
+      if (a.url.startsWith('data:') || _localStore.isLocalRef(a.url)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// True when [p] carries at least one real, other-device-resolvable image or
+  /// attachment URL (not a device-only source and not the neutral fallback).
+  bool _hasUsableRemoteSource(PostModel p) {
+    bool usable(String url) {
+      if (url.isEmpty) return false;
+      if (url.startsWith('data:') || _localStore.isLocalRef(url)) return false;
+      if (url == _fallbackImageUrl) return false;
+      return true;
+    }
+
+    final cover = p.imageUrl;
+    if (cover != null && cover.isNotEmpty && usable(cover)) return true;
+    for (final u in p.imageUrls) {
+      if (usable(u)) return true;
+    }
+    for (final a in p.attachments) {
+      if (usable(a.url)) return true;
+    }
+    return false;
+  }
+
+  final Set<String> _pendingRepersistIds = {};
+  Timer? _repersistTimer;
+
+  /// Re-runs [_persistPost] for posts whose images failed to upload earlier,
+  /// so the server row gets backfilled with real URLs once the network is
+  /// back. Only the author's own device has the local files, so only their
+  /// posts are ever re-persisted.
+  void _scheduleRepersist(PostModel post) {
+    if (post.authorId != currentUser.id) return;
+    _pendingRepersistIds.add(post.id);
+    _repersistTimer ??= Timer(const Duration(seconds: 25), () {
+      _repersistTimer = null;
+      final ids = List<String>.from(_pendingRepersistIds);
+      _pendingRepersistIds.clear();
+      for (final id in ids) {
+        final idx = _posts.indexWhere((p) => p.id == id);
+        if (idx != -1) _persistPost(_posts[idx]);
+      }
+    });
   }
 
   // --- Feed & Priority Logic ---
