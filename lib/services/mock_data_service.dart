@@ -1453,6 +1453,11 @@ class MockDataService extends ChangeNotifier {
           }
         }
       }
+      if (changed) {
+        _invalidateDataCaches();
+        notifyListeners();
+        _scheduleLocalSave();
+      }
       return changed;
     } catch (e) {
       debugPrint('StudentHub: profiles lookup failed: $e');
@@ -2030,11 +2035,24 @@ class MockDataService extends ChangeNotifier {
     // device without a re-login. An empty server list means "nothing granted
     // yet", so the local default (Student) survives for fresh profiles.
     final effectiveRoles = serverRoles.isEmpty ? currentUser.roles : serverRoles;
+    final serverAvatar = _sanitizeAvatarUrl(row['avatar_url']?.toString()) ?? '';
+    final avatarToSet = (serverAvatar.isNotEmpty && (currentUser.avatarUrl.isEmpty || !currentUser.avatarUrl.startsWith('http')))
+        ? serverAvatar
+        : currentUser.avatarUrl;
+
     currentUser = currentUser.copyWith(
       roles: effectiveRoles,
+      avatarUrl: avatarToSet,
       isVerified: row['is_verified'] as bool? ?? currentUser.isVerified,
       hasCompletedProgressiveForm: serverHasCompleted,
     );
+    if (avatarToSet.isNotEmpty) {
+      _authorAvatarCache[currentUser.id] = avatarToSet;
+    }
+    if (currentUser.avatarUrl.isNotEmpty &&
+        (currentUser.avatarUrl.startsWith('data:') || _localStore.isLocalRef(currentUser.avatarUrl))) {
+      unawaited(_persistProfile());
+    }
     if (!effectiveRoles.contains(activeRole)) {
       activeRole = effectiveRoles.isNotEmpty
           ? effectiveRoles.first
@@ -2151,7 +2169,7 @@ class MockDataService extends ChangeNotifier {
         bytes,
         ext == 'png' ? 'image/png' : 'image/jpeg',
       );
-      if (!ok) return url;
+      if (!ok) return null;
       final publicUrl = client.storage.from('documents').getPublicUrl(path);
       final stamp = DateTime.now().millisecondsSinceEpoch;
       final stamped = '$publicUrl?v=$stamp';
@@ -2159,7 +2177,7 @@ class MockDataService extends ChangeNotifier {
       clearCachedImage(publicUrl);
       return stamped;
     } catch (_) {
-      return url;
+      return null;
     }
   }
 
@@ -2767,7 +2785,7 @@ class MockDataService extends ChangeNotifier {
         bytes,
         ext == 'png' ? 'image/png' : 'image/jpeg',
       )) {
-        return post;
+        return post.copyWith(imageUrl: null);
       }
 
       // Cache-busting query: re-uploading an edited cover keeps the same
@@ -2779,7 +2797,7 @@ class MockDataService extends ChangeNotifier {
       clearCachedImage(publicUrl);
       return post.copyWith(imageUrl: stamped);
     } catch (_) {
-      return post;
+      return post.copyWith(imageUrl: null);
     }
   }
 
@@ -2788,8 +2806,8 @@ class MockDataService extends ChangeNotifier {
   /// all public URLs. Remote/empty images are left untouched. Uploads run in
   /// parallel waves (with per-image retries) so a full gallery reaches the
   /// server in ~1s like any other social app, instead of one sequential
-  /// round-trip per photo. An image that still fails keeps its in-memory
-  /// source; the row write sanitizes it and [_scheduleRepersist] backfills.
+  /// round-trip per photo. An image that still fails is dropped so unsynced
+  /// local device blobs are never displayed on the feed.
   Future<PostModel> _uploadGalleryImagesIfNeeded(PostModel post) async {
     final client = _client;
     if (client == null || post.imageUrls.isEmpty) return post;
@@ -2814,10 +2832,15 @@ class MockDataService extends ChangeNotifier {
         if (bytes == null || bytes.isEmpty) continue;
         pending.add((i, bytes, _extFromDataUri(url)));
       } catch (_) {
-        // Keep the original source for this image.
+        // Drop failed local blob
       }
     }
-    if (pending.isEmpty) return post;
+    if (pending.isEmpty) {
+      final validRemoteOnly = post.imageUrls
+          .where((u) => !u.startsWith('data:') && !_localStore.isLocalRef(u))
+          .toList();
+      return post.copyWith(imageUrls: validRemoteOnly);
+    }
 
     // Upload up to 3 images concurrently; Supabase handles parallel uploads
     // well and this keeps memory spikes bounded on lower-end devices.
@@ -2838,7 +2861,7 @@ class MockDataService extends ChangeNotifier {
         }),
       );
       for (final (i, path, ok) in results) {
-        if (!ok) continue; // keep original source; backfill later
+        if (!ok) continue;
         final publicUrl =
             client.storage.from('documents').getPublicUrl(path);
         clearCachedImage(uploaded[i]);
@@ -2846,8 +2869,10 @@ class MockDataService extends ChangeNotifier {
         changed = true;
       }
     }
-    if (!changed) return post;
-    return post.copyWith(imageUrls: uploaded);
+    final validSyncedGallery = uploaded
+        .where((u) => !u.startsWith('data:') && !_localStore.isLocalRef(u))
+        .toList();
+    return post.copyWith(imageUrls: validSyncedGallery);
   }
 
   /// Uploads [bytes] to Supabase Storage at [path], retrying transient

@@ -191,10 +191,16 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                 radius: 19,
                                 backgroundColor: const Color(0xFFF1F5F9),
                                 child: ClipOval(
-                                  child: post.authorAvatarUrl != null &&
-                                          post.authorAvatarUrl!.isNotEmpty
-                                      ? AppImage(
-                                          source: post.authorAvatarUrl!,
+                                  child: Builder(
+                                    builder: (context) {
+                                      final dataService = Provider.of<MockDataService>(context, listen: true);
+                                      final avatarUrl = (post.authorAvatarUrl != null && post.authorAvatarUrl!.isNotEmpty)
+                                          ? post.authorAvatarUrl!
+                                          : (dataService.getAuthorAvatar(post.authorId, post.authorName) ?? '');
+
+                                      if (avatarUrl.isNotEmpty) {
+                                        return AppImage(
+                                          source: avatarUrl,
                                           fit: BoxFit.cover,
                                           width: 38,
                                           height: 38,
@@ -208,17 +214,20 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                               fontSize: 13,
                                             ),
                                           ),
-                                        )
-                                      : Text(
-                                          post.authorName.isNotEmpty
-                                              ? post.authorName.substring(0, 1).toUpperCase()
-                                              : '?',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF334155),
-                                            fontSize: 13,
-                                          ),
+                                        );
+                                      }
+                                      return Text(
+                                        post.authorName.isNotEmpty
+                                            ? post.authorName.substring(0, 1).toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF334155),
+                                          fontSize: 13,
                                         ),
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             ),
@@ -304,30 +313,57 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                           _ExpandableDescription(text: post.description),
                         ],
 
-                        // Gallery Images — Instagram square aspect ratio carousel
-                        if (_isGallery && post.imageUrls.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          _GalleryCarousel(images: post.imageUrls),
-                        ] else if (post.imageUrl != null && post.imageUrl!.trim().isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          // Instagram post image framing (spacious, breathable 1.15 ratio)
-                          AspectRatio(
-                            aspectRatio: 1.15,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color: const Color(0xFFF1F5F9),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: AppImage(
-                                source: post.imageUrl!,
-                                height: double.infinity,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        ],
+                        // Gallery & Cover Images — Only display verified synced images
+                        Builder(
+                          builder: (context) {
+                            final validGallery = post.imageUrls
+                                .where((u) =>
+                                    u.trim().isNotEmpty &&
+                                    !u.startsWith('data:') &&
+                                    !u.startsWith('local://') &&
+                                    !u.startsWith('file://'))
+                                .toList();
+                            final hasValidCover = post.imageUrl != null &&
+                                post.imageUrl!.trim().isNotEmpty &&
+                                !post.imageUrl!.startsWith('data:') &&
+                                !post.imageUrl!.startsWith('local://') &&
+                                !post.imageUrl!.startsWith('file://');
+
+                            if (_isGallery && validGallery.isNotEmpty) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 12),
+                                  _GalleryCarousel(images: validGallery),
+                                ],
+                              );
+                            } else if (hasValidCover) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 12),
+                                  AspectRatio(
+                                    aspectRatio: 1.15,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(16),
+                                        color: const Color(0xFFF1F5F9),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: AppImage(
+                                        source: post.imageUrl!,
+                                        height: double.infinity,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
 
                         // Event & Workshop Details Box
                         if (post.isEvent) ...[
