@@ -2873,12 +2873,19 @@ class MockDataService extends ChangeNotifier {
         return true;
       } catch (e) {
         lastError = e;
+        final errStr = e.toString().toLowerCase();
+        // If the server rejects due to storage RLS policies (403 Unauthorized), fail fast
+        if (errStr.contains('403') ||
+            errStr.contains('row-level security') ||
+            errStr.contains('unauthorized')) {
+          break;
+        }
         if (attempt < attempts - 1) {
           await Future.delayed(Duration(milliseconds: 300 * (attempt + 1)));
         }
       }
     }
-    debugPrint('StudentHub: upload failed for $path: $lastError');
+    debugPrint('StudentHub: storage upload skipped/unauthorized for $path: $lastError');
     return false;
   }
 

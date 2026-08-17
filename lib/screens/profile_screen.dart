@@ -483,41 +483,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ),
                     ],
 
-                    // Creator Appreciation Count Display
-                    Builder(
-                      builder: (context) {
-                        final myAppreciations = dataService.getProfileLikes(user.id);
-                        return Container(
-                          margin: const EdgeInsets.only(top: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF1F2),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFFDA4AF), width: 1),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.favorite_rounded,
-                                color: Color(0xFFE11D48),
-                                size: 14,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '$myAppreciations Appreciations',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFFE11D48),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-
                     // Role Expiration Warning Notice if applicable
                     if (showRoleExpiredNotice) ...[
                       const SizedBox(height: 14),
