@@ -4,6 +4,7 @@ import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
 import '../widgets/post_card.dart';
 import '../widgets/post_card_skeleton.dart';
+import '../widgets/app_toast.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -37,17 +38,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   Future<void> _handleRefresh(MockDataService dataService) async {
     final success = await dataService.refreshFeed();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? '✨ Campus feed refreshed!'
-                : '⚠️ No network · Connect to the internet to refresh',
-          ),
-          duration: const Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (success) {
+        AppToast.showSuccess(context, 'Campus feed refreshed');
+      } else {
+        AppToast.showWarning(context, 'No internet · Showing cached feed');
+      }
     }
   }
 

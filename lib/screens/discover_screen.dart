@@ -8,6 +8,7 @@ import '../widgets/app_image.dart';
 import '../widgets/post_card.dart';
 import '../widgets/role_badge.dart';
 import '../models/user_model.dart';
+import 'user_profile_screen.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -317,15 +318,17 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     final featuredDepts = topDepts.take(3).toList();
 
     // People: real faculty & event hosts from the feed
-    final people = <({String name, UserRole role, String dept, int postCount})>[];
+    final people = <({String authorId, String name, UserRole role, String dept, String? avatarUrl, int postCount})>[];
     final seen = <String>{};
     for (final p in nonEventPosts) {
       if (p.authorRole == UserRole.student) continue;
       if (!seen.add(p.authorName)) continue;
       people.add((
+        authorId: p.authorId,
         name: p.authorName,
         role: p.authorRole,
         dept: p.department,
+        avatarUrl: p.authorAvatarUrl,
         postCount: nonEventPosts.where((x) => x.authorName == p.authorName).length,
       ));
     }
@@ -589,7 +592,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Text(
-              '👨‍🏫 People to Follow',
+              '👨‍🏫 People to Know',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
@@ -601,7 +604,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: ListTile(
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  borderRadius: const BorderRadius.all(Radius.circular(12)),
                   side: BorderSide(color: Colors.grey.shade200),
                 ),
                 leading: CircleAvatar(
@@ -637,10 +640,23 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   children: [
                     RoleBadge(role: person.role, isCompact: true),
                     const SizedBox(width: 6),
-                    Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+                    const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
                   ],
                 ),
-                onTap: () => _openSearch(person.name),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (c) => UserProfileScreen(
+                        authorId: person.authorId,
+                        authorName: person.name,
+                        authorRole: person.role,
+                        authorAvatarUrl: person.avatarUrl,
+                        department: person.dept,
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),

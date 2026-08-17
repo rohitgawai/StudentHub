@@ -4,6 +4,7 @@ import '../config/app_config.dart';
 import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
 import '../widgets/post_card.dart';
+import '../widgets/app_toast.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -45,17 +46,11 @@ class _EventsScreenState extends State<EventsScreen>
     final success = await dataService.refreshFeed();
     if (mounted) {
       setState(() => isRefreshing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? '✨ Events refreshed!'
-                : '⚠️ No network · Connect to the internet to refresh',
-          ),
-          duration: const Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (success) {
+        AppToast.showSuccess(context, 'Events & workshops refreshed');
+      } else {
+        AppToast.showWarning(context, 'No internet · Showing cached events');
+      }
     }
   }
 
