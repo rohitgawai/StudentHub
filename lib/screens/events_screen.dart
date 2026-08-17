@@ -15,12 +15,29 @@ class EventsScreen extends StatefulWidget {
 class _EventsScreenState extends State<EventsScreen>
     with SingleTickerProviderStateMixin {
   late TabController tabController;
+  final List<ScrollController> _scrollControllers = [
+    ScrollController(),
+    ScrollController(),
+    ScrollController(),
+  ];
   bool isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
     tabController = TabController(length: 3, vsync: this);
+  }
+
+  void scrollToTop() {
+    final idx = tabController.index.clamp(0, _scrollControllers.length - 1);
+    final controller = _scrollControllers[idx];
+    if (controller.hasClients) {
+      controller.animateTo(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   Future<void> _handleRefresh(MockDataService dataService) async {
@@ -45,6 +62,9 @@ class _EventsScreenState extends State<EventsScreen>
   @override
   void dispose() {
     tabController.dispose();
+    for (final c in _scrollControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -123,6 +143,7 @@ class _EventsScreenState extends State<EventsScreen>
           _buildEventList(
             context,
             eventsOnly,
+            scrollController: _scrollControllers[0],
             cfg: cfg,
             savedIds: savedIds,
             registeredIds: registeredIds,
@@ -135,6 +156,7 @@ class _EventsScreenState extends State<EventsScreen>
           _buildEventList(
             context,
             workshopsOnly,
+            scrollController: _scrollControllers[1],
             cfg: cfg,
             savedIds: savedIds,
             registeredIds: registeredIds,
@@ -147,6 +169,7 @@ class _EventsScreenState extends State<EventsScreen>
           _buildEventList(
             context,
             registeredEvents,
+            scrollController: _scrollControllers[2],
             cfg: cfg,
             savedIds: savedIds,
             registeredIds: registeredIds,
@@ -164,6 +187,7 @@ class _EventsScreenState extends State<EventsScreen>
   Widget _buildEventList(
     BuildContext context,
     List<PostModel> events, {
+    ScrollController? scrollController,
     required AppConfig cfg,
     required Set<String> savedIds,
     required Set<String> registeredIds,
@@ -190,6 +214,7 @@ class _EventsScreenState extends State<EventsScreen>
     }
 
     Widget list = ListView.builder(
+      controller: scrollController,
       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       padding: const EdgeInsets.only(top: 10, bottom: 96),
       itemCount: events.length,

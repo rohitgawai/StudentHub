@@ -15,11 +15,23 @@ class HomeFeedScreen extends StatefulWidget {
 class _HomeFeedScreenState extends State<HomeFeedScreen> {
   String searchQuery = '';
   final searchController = TextEditingController();
+  final scrollController = ScrollController();
 
   @override
   void dispose() {
     searchController.dispose();
+    scrollController.dispose();
     super.dispose();
+  }
+
+  void scrollToTop() {
+    if (scrollController.hasClients) {
+      scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   Future<void> _handleRefresh(MockDataService dataService) async {
@@ -152,6 +164,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                       ],
                     )
                   : ListView.builder(
+                      controller: scrollController,
                       padding: const EdgeInsets.only(bottom: 96),
                       itemCount: posts.length,
                       itemBuilder: (context, index) {

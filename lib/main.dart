@@ -101,12 +101,27 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   // completed onboarding (see restoredCompletedSession below).
   bool isAuthenticated = false;
 
-  final List<Widget> screens = const [
-    HomeFeedScreen(),
-    EventsScreen(),
-    DiscoverScreen(),
-    ProfileScreen(),
+  final GlobalKey _homeKey = GlobalKey();
+  final GlobalKey _eventsKey = GlobalKey();
+
+  late final List<Widget> screens = [
+    HomeFeedScreen(key: _homeKey),
+    EventsScreen(key: _eventsKey),
+    const DiscoverScreen(),
+    const ProfileScreen(),
   ];
+
+  void _handleBottomNavTap(int idx) {
+    if (currentIndex == idx) {
+      if (idx == 0) {
+        (_homeKey.currentState as dynamic)?.scrollToTop();
+      } else if (idx == 1) {
+        (_eventsKey.currentState as dynamic)?.scrollToTop();
+      }
+    } else {
+      setState(() => currentIndex = idx);
+    }
+  }
 
   @override
   void initState() {
@@ -317,7 +332,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       bottomNavigationBar: _PillNavigationBar(
         currentIndex: currentIndex,
         activeColor: cfg.primaryColor,
-        onTap: (idx) => setState(() => currentIndex = idx),
+        onTap: _handleBottomNavTap,
       ),
     );
   }
