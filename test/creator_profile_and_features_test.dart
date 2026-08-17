@@ -41,6 +41,25 @@ void main() {
       service.dispose();
     });
 
+    test('MockDataService toggleLikePost does not send notification to self', () async {
+      final service = MockDataService();
+      final post = service.posts.first;
+      final initialNotifsCount = service.notifications.length;
+
+      service.toggleLikePost(post.id);
+
+      // Verify no like notification was added for self
+      expect(
+        service.notifications
+            .where((n) => n.title.contains('New Like'))
+            .length,
+        equals(0),
+      );
+      expect(service.notifications.length, equals(initialNotifsCount));
+
+      service.dispose();
+    });
+
     testWidgets('UserProfileScreen renders creator info without phone or dashboard', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;

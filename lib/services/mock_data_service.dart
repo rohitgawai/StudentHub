@@ -1541,6 +1541,74 @@ class MockDataService extends ChangeNotifier {
             },
           )
           .onBroadcast(
+            event: 'post_liked',
+            callback: (payload) {
+              try {
+                final targetAuthorId = payload['target_author_id']?.toString() ?? '';
+                final targetAuthorName = payload['target_author_name']?.toString() ?? '';
+                final likerId = payload['liker_id']?.toString() ?? '';
+                final likerName = payload['liker_name']?.toString() ?? 'Someone';
+                final postId = payload['post_id']?.toString() ?? '';
+                final postTitle = payload['post_title']?.toString() ?? 'your post';
+
+                // ONLY notify the creator on their own device, never the liker
+                final isMyPost = (targetAuthorId.isNotEmpty && targetAuthorId == currentUser.id) ||
+                    (targetAuthorName.isNotEmpty &&
+                        targetAuthorName.trim().toLowerCase() == currentUser.name.trim().toLowerCase());
+                if (isMyPost && likerId != currentUser.id) {
+                  _notifications.insert(
+                    0,
+                    NotificationModel(
+                      id: 'notif_like_${DateTime.now().millisecondsSinceEpoch}',
+                      title: '❤️ New Like',
+                      body: '$likerName liked your post "$postTitle"',
+                      category: NotificationCategory.personal,
+                      timestamp: DateTime.now().toUtc(),
+                      relatedPostId: postId,
+                    ),
+                  );
+                  _invalidateDataCaches();
+                  notifyListeners();
+                  _scheduleLocalSave();
+                }
+              } catch (_) {}
+            },
+          )
+          .onBroadcast(
+            event: 'post_congratulated',
+            callback: (payload) {
+              try {
+                final targetAuthorId = payload['target_author_id']?.toString() ?? '';
+                final targetAuthorName = payload['target_author_name']?.toString() ?? '';
+                final likerId = payload['liker_id']?.toString() ?? '';
+                final likerName = payload['liker_name']?.toString() ?? 'Someone';
+                final postId = payload['post_id']?.toString() ?? '';
+                final postTitle = payload['post_title']?.toString() ?? 'your post';
+
+                // ONLY notify the creator on their own device, never the sender
+                final isMyPost = (targetAuthorId.isNotEmpty && targetAuthorId == currentUser.id) ||
+                    (targetAuthorName.isNotEmpty &&
+                        targetAuthorName.trim().toLowerCase() == currentUser.name.trim().toLowerCase());
+                if (isMyPost && likerId != currentUser.id) {
+                  _notifications.insert(
+                    0,
+                    NotificationModel(
+                      id: 'notif_congrat_${DateTime.now().millisecondsSinceEpoch}',
+                      title: '👏 New Congratulation!',
+                      body: '$likerName congratulated you on "$postTitle"',
+                      category: NotificationCategory.personal,
+                      timestamp: DateTime.now().toUtc(),
+                      relatedPostId: postId,
+                    ),
+                  );
+                  _invalidateDataCaches();
+                  notifyListeners();
+                  _scheduleLocalSave();
+                }
+              } catch (_) {}
+            },
+          )
+          .onBroadcast(
             event: 'profile_appreciated',
             callback: (payload) {
               try {
@@ -3215,22 +3283,26 @@ class MockDataService extends ChangeNotifier {
       }
       userCongratulated.add(postId);
 
-      // Instant congratulation notification
+      // Broadcast congratulation to the creator's device only (never self-notify)
       if (post.authorId != currentUser.id &&
           post.authorName.trim().toLowerCase() !=
               currentUser.name.trim().toLowerCase()) {
-        _notifications.insert(
-          0,
-          NotificationModel(
-            id: 'notif_congrat_${DateTime.now().millisecondsSinceEpoch}',
-            title: '👏 New Congratulation!',
-            body:
-                '${currentUser.name} congratulated you on "${post.title}"',
-            category: NotificationCategory.personal,
-            timestamp: DateTime.now(),
-            relatedPostId: post.id,
-          ),
-        );
+        final client = _client;
+        if (client != null) {
+          try {
+            client.channel('public:posts').sendBroadcastMessage(
+              event: 'post_congratulated',
+              payload: {
+                'target_author_id': post.authorId,
+                'target_author_name': post.authorName,
+                'liker_id': currentUser.id,
+                'liker_name': currentUser.name,
+                'post_id': post.id,
+                'post_title': post.title,
+              },
+            );
+          } catch (_) {}
+        }
       }
     }
 
@@ -3262,21 +3334,26 @@ class MockDataService extends ChangeNotifier {
       liked.add(currentUser.id);
       userLiked.add(postId);
 
-      // Instant social notification for post creator ONLY if not liking own post
+      // Broadcast like to the creator's device only (never self-notify)
       if (post.authorId != currentUser.id &&
           post.authorName.trim().toLowerCase() !=
               currentUser.name.trim().toLowerCase()) {
-        _notifications.insert(
-          0,
-          NotificationModel(
-            id: 'notif_like_${DateTime.now().millisecondsSinceEpoch}',
-            title: '❤️ New Like',
-            body: '${currentUser.name} liked your post "${post.title}"',
-            category: NotificationCategory.personal,
-            timestamp: DateTime.now().toUtc(),
-            relatedPostId: post.id,
-          ),
-        );
+        final client = _client;
+        if (client != null) {
+          try {
+            client.channel('public:posts').sendBroadcastMessage(
+              event: 'post_liked',
+              payload: {
+                'target_author_id': post.authorId,
+                'target_author_name': post.authorName,
+                'liker_id': currentUser.id,
+                'liker_name': currentUser.name,
+                'post_id': post.id,
+                'post_title': post.title,
+              },
+            );
+          } catch (_) {}
+        }
       }
     }
 
