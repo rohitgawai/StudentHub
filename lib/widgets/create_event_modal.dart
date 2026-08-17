@@ -152,27 +152,40 @@ class _CreateEventModalState extends State<CreateEventModal> {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: Colors.orange.shade50,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF6B6B).withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: const Icon(Icons.event_available_rounded, color: Colors.orange, size: 20),
+              child: const Icon(Icons.celebration_rounded, color: Colors.white, size: 19),
             ),
             const SizedBox(width: 10),
             const Text(
-              'Create Event & Workshops',
+              'Event & Workshop',
               style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                fontSize: 17.5,
                 color: Color(0xFF0F172A),
+                letterSpacing: -0.2,
               ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.close_rounded),
+            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
             tooltip: 'Close',
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -236,7 +249,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
                   TextFormField(
                     controller: titleController,
                     decoration: InputDecoration(
-                      labelText: 'Event Title *',
+                      labelText: 'Event Title',
                       hintText: 'e.g. HackCampus 2026 24-Hour Hackathon',
                       prefixIcon: const Icon(Icons.event_note_rounded, color: Colors.orange),
                       filled: true,
@@ -258,7 +271,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
                     controller: descController,
                     maxLines: 3,
                     decoration: InputDecoration(
-                      labelText: 'Event Description *',
+                      labelText: 'Event Description',
                       hintText: 'Rules, prerequisites, agenda and team details...',
                       prefixIcon: const Icon(Icons.description_outlined, color: Colors.orange),
                       alignLabelWithHint: true,
@@ -280,7 +293,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
                   TextFormField(
                     controller: venueController,
                     decoration: InputDecoration(
-                      labelText: 'Venue / Hall / Lab *',
+                      labelText: 'Venue / Hall / Lab',
                       hintText: 'e.g. Main Auditorium / Lab 302',
                       prefixIcon: const Icon(Icons.location_on_outlined, color: Colors.orange),
                       filled: true,
@@ -386,7 +399,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Event Cover Poster *',
+                    'Event Cover Poster',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
@@ -395,7 +408,6 @@ class _CreateEventModalState extends State<CreateEventModal> {
                   ),
                   const SizedBox(height: 14),
                   ImagePickerField(
-                    label: 'Cover Image',
                     initialUrl: selectedImageUrl,
                     onImageSelected: (url) {
                       setState(() => selectedImageUrl = url);
@@ -533,12 +545,12 @@ class _CreateEventModalState extends State<CreateEventModal> {
               height: 52,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFEA580C), Color(0xFFF97316)],
+                  colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
                 ),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFF97316).withValues(alpha: 0.35),
+                    color: const Color(0xFFFF6B6B).withOpacity(0.35),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),

@@ -5,13 +5,15 @@ import 'app_image.dart';
 class ImagePickerField extends StatefulWidget {
   final String? initialUrl;
   final ValueChanged<String?> onImageSelected;
-  final String label;
+  final String? label;
+  final bool showHeader;
 
   const ImagePickerField({
     super.key,
     this.initialUrl,
     required this.onImageSelected,
-    this.label = 'Cover Image',
+    this.label,
+    this.showHeader = false,
   });
 
   @override
@@ -75,30 +77,32 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.add_a_photo_outlined, size: 18, color: Colors.blue),
-                  const SizedBox(width: 8),
-                  Text(
-                    widget.label,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              if (selectedUrl != null && selectedUrl!.isNotEmpty)
-                GestureDetector(
-                  onTap: _clearImage,
-                  child: const Text(
-                    'Remove Image',
-                    style: TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.w600),
-                  ),
+          if (widget.showHeader && widget.label != null && widget.label!.isNotEmpty) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.add_a_photo_outlined, size: 18, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.label!,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  ],
                 ),
-            ],
-          ),
-          const SizedBox(height: 10),
+                if (selectedUrl != null && selectedUrl!.isNotEmpty)
+                  GestureDetector(
+                    onTap: _clearImage,
+                    child: const Text(
+                      'Remove Image',
+                      style: TextStyle(fontSize: 11, color: Colors.red, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
 
           // Selected Image Preview
           if (selectedUrl != null && selectedUrl!.isNotEmpty) ...[

@@ -98,27 +98,40 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF10B981), Color(0xFF047857)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF10B981).withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: const Icon(Icons.photo_library_rounded, color: Colors.green, size: 20),
+              child: const Icon(Icons.collections_rounded, color: Colors.white, size: 19),
             ),
             const SizedBox(width: 10),
             const Text(
-              'Upload Gallery',
+              'Photo Gallery',
               style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                fontSize: 17.5,
                 color: Color(0xFF0F172A),
+                letterSpacing: -0.2,
               ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.close_rounded),
+            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
             tooltip: 'Close',
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -190,7 +203,7 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
                   TextFormField(
                     controller: titleController,
                     decoration: InputDecoration(
-                      labelText: 'Post Title *',
+                      labelText: 'Post Title',
                       hintText: 'e.g. Annual Tech Symposium Highlights 2026',
                       prefixIcon: const Icon(Icons.title_rounded, color: Colors.green),
                       filled: true,
@@ -309,43 +322,13 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      const Text(
-                        'Gallery Photos',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: selectedImages.length >= _minImages
-                              ? Colors.green.shade50
-                              : Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: selectedImages.length >= _minImages
-                                ? Colors.green.shade300
-                                : Colors.orange.shade300,
-                            width: 0.8,
-                          ),
-                        ),
-                        child: Text(
-                          '${selectedImages.length}/$_maxImages photos',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: selectedImages.length >= _minImages
-                                ? Colors.green.shade800
-                                : Colors.orange.shade900,
-                          ),
-                        ),
-                      ),
-                    ],
+                  const Text(
+                    'Gallery Photos',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1E293B),
+                    ),
                   ),
                   const SizedBox(height: 14),
 
@@ -367,12 +350,12 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
               height: 52,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF059669), Color(0xFF10B981)],
+                  colors: [Color(0xFF10B981), Color(0xFF047857)],
                 ),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                    color: const Color(0xFF10B981).withOpacity(0.35),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),

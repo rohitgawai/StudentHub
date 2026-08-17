@@ -103,27 +103,40 @@ class _CreatePostModalState extends State<CreatePostModal> {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: cfg.primaryColor.withValues(alpha: 0.1),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF3B82F6).withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: Icon(Icons.campaign_rounded, color: cfg.primaryColor, size: 20),
+              child: const Icon(Icons.campaign_rounded, color: Colors.white, size: 19),
             ),
             const SizedBox(width: 10),
             const Text(
-              'Create Campus Post',
+              'Campus Post',
               style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                fontSize: 17.5,
                 color: Color(0xFF0F172A),
+                letterSpacing: -0.2,
               ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.close_rounded),
+            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
             tooltip: 'Close',
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -180,7 +193,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
                   TextFormField(
                     controller: titleController,
                     decoration: InputDecoration(
-                      labelText: 'Post Title *',
+                      labelText: 'Post Title',
                       hintText: 'e.g. Revised Mid-Semester Examination Schedule',
                       prefixIcon: Icon(Icons.title_rounded, color: cfg.primaryColor),
                       filled: true,
@@ -204,7 +217,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
                     controller: descController,
                     maxLines: 4,
                     decoration: InputDecoration(
-                      labelText: 'Detailed Description *',
+                      labelText: 'Detailed Description',
                       hintText: 'Write all details, instructions or timetable info...',
                       prefixIcon: Icon(Icons.description_outlined, color: cfg.primaryColor),
                       alignLabelWithHint: true,
@@ -408,13 +421,13 @@ class _CreatePostModalState extends State<CreatePostModal> {
             Container(
               height: 52,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [cfg.primaryColor, cfg.primaryColor.withBlue(220)],
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
                 ),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: cfg.primaryColor.withValues(alpha: 0.35),
+                    color: const Color(0xFF3B82F6).withOpacity(0.35),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),

@@ -78,45 +78,6 @@ class _MultiImagePickerFieldState extends State<MultiImagePickerField> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.photo_library_outlined,
-                    size: 18,
-                    color: Colors.green,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Gallery Images',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              Text(
-                '${_images.length}/${widget.maxImages}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: _images.length >= widget.minImages
-                      ? Colors.green.shade700
-                      : Colors.orange.shade800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Select ${widget.minImages}-${widget.maxImages} photos in one go (minimum ${widget.minImages} required)',
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
-          ),
-          const SizedBox(height: 10),
-
           if (_images.isNotEmpty) ...[
             GridView.builder(
               shrinkWrap: true,

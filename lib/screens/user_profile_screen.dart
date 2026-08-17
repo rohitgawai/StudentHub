@@ -320,8 +320,16 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         (isMe
             ? dataService.currentUser.department
             : 'Department Member');
-    final academicYear = widget.year ??
-        (isMe ? dataService.currentUser.year : 'Campus Student');
+    final academicYear = (widget.year != null &&
+            widget.year!.trim().isNotEmpty &&
+            widget.year!.trim().toLowerCase() != 'all' &&
+            widget.year!.trim().toLowerCase() != 'all academic years')
+        ? widget.year!
+        : (isMe &&
+                dataService.currentUser.year.toLowerCase() != 'all' &&
+                dataService.currentUser.year.toLowerCase() != 'all academic years'
+            ? dataService.currentUser.year
+            : '');
     final email = widget.email ??
         (isMe ? dataService.currentUser.email : '');
     final studentId = widget.studentOrEmployeeId ??
@@ -520,7 +528,11 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                         ],
                       ),
                     ),
-                    if (academicYear.isNotEmpty && academicYear != 'N/A')
+                    if (academicYear.isNotEmpty &&
+                        academicYear != 'N/A' &&
+                        academicYear.toLowerCase() != 'all' &&
+                        academicYear.toLowerCase() != 'all academic years' &&
+                        academicYear.toLowerCase() != 'campus student')
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(

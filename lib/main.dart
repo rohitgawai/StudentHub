@@ -328,80 +328,227 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   }) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'What would you like to publish?',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.orange.shade100,
-                    child: const Icon(Icons.event, color: Colors.orange),
-                  ),
-                  title: const Text('Create Event & Workshops'),
-                  subtitle: const Text(
-                    'Hackathons, workshops, competitions with registration',
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    showDialog(
-                      context: context,
-                      builder: (c) => const CreateEventModal(),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.blue.shade100,
-                    child: const Icon(Icons.announcement, color: Colors.blue),
-                  ),
-                  title: const Text('Create Campus Post'),
-                  subtitle: const Text(
-                    'Post academic updates, notices, or achievements',
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    showDialog(
-                      context: context,
-                      builder: (c) => const CreatePostModal(),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.green.shade100,
-                    child: const Icon(
-                      Icons.photo_library_outlined,
-                      color: Colors.green,
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x1A000000),
+                blurRadius: 24,
+                offset: Offset(0, -4),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top Drag Handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4.5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
                     ),
                   ),
-                  title: const Text('Upload Gallery'),
-                  subtitle: const Text(
-                    'Publish campus event photos and highlights',
+                  const SizedBox(height: 18),
+
+                  // Header with title and close button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'What would you like to publish?',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F172A),
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          SizedBox(height: 3),
+                          Text(
+                            'Share updates, organize campus events, or photos',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w400,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF94A3B8)),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ],
                   ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    showDialog(
-                      context: context,
-                      builder: (c) => const CreateGalleryModal(),
-                    );
-                  },
-                ),
-              ],
+                  const SizedBox(height: 20),
+
+                  // 1. Create Event & Workshop
+                  _buildPublishOptionCard(
+                    title: 'Event & Workshop',
+                    subtitle: 'Host competitions, hackathons & sessions with registrations',
+                    badgeGradient: const [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                    icon: Icons.celebration_rounded,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      showDialog(
+                        context: context,
+                        builder: (c) => const CreateEventModal(),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 2. Create Campus Post
+                  _buildPublishOptionCard(
+                    title: 'Campus Post',
+                    subtitle: 'Post announcements, achievements, notes & academic updates',
+                    badgeGradient: const [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                    icon: Icons.campaign_rounded,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      showDialog(
+                        context: context,
+                        builder: (c) => const CreatePostModal(),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 3. Upload Photo Gallery
+                  _buildPublishOptionCard(
+                    title: 'Photo Gallery',
+                    subtitle: 'Publish campus event highlights & photo albums',
+                    badgeGradient: const [Color(0xFF10B981), Color(0xFF047857)],
+                    icon: Icons.collections_rounded,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      showDialog(
+                        context: context,
+                        builder: (c) => const CreateGalleryModal(),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPublishOptionCard({
+    required String title,
+    required String subtitle,
+    required List<Color> badgeGradient,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        splashColor: badgeGradient.first.withOpacity(0.08),
+        highlightColor: badgeGradient.first.withOpacity(0.04),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+          ),
+          child: Row(
+            children: [
+              // Vibrant Gradient Icon Badge
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: badgeGradient,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: badgeGradient.first.withOpacity(0.28),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(icon, color: Colors.white, size: 23),
+              ),
+              const SizedBox(width: 14),
+
+              // Title and Subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: Color(0xFF64748B),
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Arrow action indicator
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 12,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
