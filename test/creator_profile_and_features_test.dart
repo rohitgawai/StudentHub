@@ -27,9 +27,17 @@ void main() {
       expect(service.isProfileLiked(authorId), isTrue);
       expect(service.getProfileLikes(authorId), equals(initialLikes + 1));
 
-      // Check notification dispatch
+      // Check that liker does not get spammed with self-notification
       final notifs = service.notifications;
-      expect(notifs.any((n) => n.title.contains('Profile Liked')), isTrue);
+      expect(notifs.any((n) => n.title.contains('Profile Appreciated')), isFalse);
+
+      // Verify self-appreciation is completely prevented
+      final myId = service.currentUser.id;
+      final myLikesBefore = service.getProfileLikes(myId);
+      service.toggleLikeProfile(myId, service.currentUser.name);
+      expect(service.getProfileLikes(myId), equals(myLikesBefore));
+      expect(service.isProfileLiked(myId), isFalse);
+
       service.dispose();
     });
 
@@ -60,7 +68,7 @@ void main() {
       // Verify name, department, role badge are rendered
       expect(find.text('Dr. Katherine Johnson'), findsOneWidget);
       expect(find.textContaining('Aerospace Engineering'), findsWidgets);
-      expect(find.textContaining('Appreciate Profile'), findsOneWidget);
+      expect(find.textContaining('Appreciate'), findsOneWidget);
 
       // Verify phone number and dashboard are NOT present
       expect(find.textContaining('Mobile Number'), findsNothing);
@@ -68,10 +76,42 @@ void main() {
       expect(find.byIcon(Icons.dashboard_outlined), findsNothing);
 
       // Tap profile like button
-      await tester.tap(find.textContaining('Appreciate Profile'));
+      await tester.tap(find.textContaining('Appreciate'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Appreciated'), findsWidgets);
+      service.dispose();
+    });
+
+    testWidgets('UserProfileScreen renders read-only appreciation count when viewing own profile', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final service = MockDataService();
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<MockDataService>.value(
+          value: service,
+          child: MaterialApp(
+            home: UserProfileScreen(
+              authorId: service.currentUser.id,
+              authorName: service.currentUser.name,
+              authorRole: service.currentUser.roles.first,
+              department: service.currentUser.department,
+              year: service.currentUser.year,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Verify read-only appreciation count badge is shown
+      expect(find.textContaining('Appreciations'), findsWidgets);
+      // Interactive appreciate button should NOT be shown
+      expect(find.widgetWithText(ElevatedButton, 'Appreciate (0)'), findsNothing);
+
       service.dispose();
     });
 

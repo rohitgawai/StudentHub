@@ -308,7 +308,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                         if (_isGallery && post.imageUrls.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           _GalleryCarousel(images: post.imageUrls),
-                        ] else if (post.imageUrl != null) ...[
+                        ] else if (post.imageUrl != null && post.imageUrl!.trim().isNotEmpty) ...[
                           const SizedBox(height: 12),
                           // Instagram post image framing (spacious, breathable 1.15 ratio)
                           AspectRatio(
@@ -767,6 +767,11 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
 
   Widget _buildSmartActionBar(BuildContext context) {
     final post = widget.post;
+    final currentUserId = widget.currentUserId;
+    final isOwnPost = currentUserId != null &&
+        (post.authorId == currentUserId ||
+            (post.authorId.isNotEmpty && post.authorId == currentUserId));
+
     final List<Widget> actions = [];
 
     // Like is available on every post
@@ -781,12 +786,14 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
         burstOnActivate: true,
         onTap: () {
           widget.onToggleLike?.call();
-          _showActionFeedback(
-            context,
-            widget.isLiked ? 'Removed like' : '❤️ Liked post',
-            Icons.favorite_rounded,
-            const Color(0xFFE11D48),
-          );
+          if (!isOwnPost) {
+            _showActionFeedback(
+              context,
+              widget.isLiked ? 'Removed like' : '❤️ Liked post',
+              Icons.favorite_rounded,
+              const Color(0xFFE11D48),
+            );
+          }
         },
       ),
     );
@@ -804,12 +811,14 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
           burstStyle: _BurstStyle.confetti,
           onTap: () {
             widget.onToggleCongratulate?.call();
-            _showActionFeedback(
-              context,
-              widget.isCongratulated ? 'Removed congratulations' : '🎉 Congratulated ${post.authorName}!',
-              Icons.celebration_rounded,
-              const Color(0xFFD97706),
-            );
+            if (!isOwnPost) {
+              _showActionFeedback(
+                context,
+                widget.isCongratulated ? 'Removed congratulations' : '🎉 Congratulated ${post.authorName}!',
+                Icons.celebration_rounded,
+                const Color(0xFFD97706),
+              );
+            }
           },
         ),
       );

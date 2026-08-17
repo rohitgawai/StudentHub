@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -61,30 +61,44 @@ class PickedDeviceFile {
   }
 }
 
-/// Opens the native OS file picker for images and returns the picked file.
+/// Opens the native photo gallery for single image selection (Android Photo Picker / iOS PHPicker).
 Future<PickedDeviceFile?> pickImageFromDevice() async {
-  final result = await FilePicker.platform.pickFiles(
-    type: FileType.image,
-    dialogTitle: 'Choose an image from your device',
-    allowMultiple: false,
-    withData: true,
-  );
-
-final file = result?.files.singleOrNull;
-  if (file == null) return null;
-
-  return PickedDeviceFile(
-    name: file.name,
-    path: file.path,
-    bytes: file.bytes,
-    size: file.size,
-  );
+  try {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 85,
+    );
+    if (picked == null) return null;
+    final bytes = await picked.readAsBytes();
+    final size = await picked.length();
+    return PickedDeviceFile(
+      name: picked.name,
+      path: picked.path,
+      bytes: bytes,
+      size: size,
+    );
+  } catch (e) {
+    // Fallback to FilePicker if ImagePicker fails on unsupported platform
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      dialogTitle: 'Choose an image from your device',
+      allowMultiple: false,
+      withData: true,
+    );
+    final file = result?.files.singleOrNull;
+    if (file == null) return null;
+    return PickedDeviceFile(
+      name: file.name,
+      path: file.path,
+      bytes: file.bytes,
+      size: file.size,
+    );
+  }
 }
 
-/// Opens the native photo gallery in multi-select mode so the user can pick
-/// up to [limit] images in a single selection (Android Photo Picker /
-/// iOS PHPicker). Falls back to the generic multi-select file picker on
-/// platforms without native photo multi-pick support.
 Future<List<PickedDeviceFile>> pickMultipleImagesFromDevice({
   int limit = 6,
 }) async {

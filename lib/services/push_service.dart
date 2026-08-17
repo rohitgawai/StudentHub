@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -124,19 +125,59 @@ class PushService {
 
   Future<void> _onForegroundMessage(RemoteMessage message) async {
     final data = message.data;
-    final title = message.notification?.title ?? data['title'];
-    final body = message.notification?.body ?? data['body'];
+    final title = message.notification?.title ?? data['title']?.toString();
+    final body = message.notification?.body ?? data['body']?.toString();
     final postId = data['post_id']?.toString();
-    if (title != null) {
-      const details = NotificationDetails(
+    final category = data['category']?.toString().toLowerCase() ?? '';
+    final type = data['type']?.toString().toLowerCase() ?? '';
+
+    if (title != null && title.isNotEmpty) {
+      String channelId = 'campus_updates';
+      String channelName = 'Campus Updates & Announcements';
+      String channelDesc = 'Official updates, notifications and campus events';
+      Color notifColor = const Color(0xFF1E3A8A); // StudentHub Deep Blue
+
+      if (type.contains('like') || type.contains('appreciat')) {
+        channelId = 'social_activity';
+        channelName = 'Likes & Appreciations';
+        channelDesc = 'Social interactions from students and faculty';
+        notifColor = const Color(0xFFE11D48);
+      } else if (type.contains('ban') || type.contains('role') || type.contains('security')) {
+        channelId = 'account_security';
+        channelName = 'Account & Role Alerts';
+        channelDesc = 'Security alerts and official role status updates';
+        notifColor = const Color(0xFFD97706);
+      } else if (category == 'event' || category == 'workshop') {
+        channelId = 'events_workshops';
+        channelName = 'Events & Workshops';
+        channelDesc = 'Live campus events, workshops and registrations';
+        notifColor = const Color(0xFF4F46E5);
+      }
+
+      final bigTextStyle = BigTextStyleInformation(
+        body ?? '',
+        htmlFormatBigText: false,
+        contentTitle: title,
+        htmlFormatContentTitle: false,
+        summaryText: 'StudentHub MIT',
+        htmlFormatSummaryText: false,
+      );
+
+      final details = NotificationDetails(
         android: AndroidNotificationDetails(
-          'high_importance',
-          'High Importance',
-          channelDescription: 'New campus posts, events and announcements',
+          channelId,
+          channelName,
+          channelDescription: channelDesc,
           importance: Importance.max,
           priority: Priority.high,
+          color: notifColor,
+          styleInformation: bigTextStyle,
+          enableVibration: true,
+          channelShowBadge: true,
+          icon: '@mipmap/ic_launcher',
         ),
       );
+
       await _localNotifications.show(
         id: DateTime.now().microsecondsSinceEpoch.remainder(1 << 31),
         title: title,

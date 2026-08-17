@@ -1402,47 +1402,53 @@ class MockDataService extends ChangeNotifier {
 
     if (uids.isEmpty) return false;
 
+    var changed = false;
     try {
-      final rows = await client
-          .from('profiles')
-          .select()
-          .inFilter('user_id', uids.take(50).toList())
-          .timeout(const Duration(seconds: 8));
+      final chunks = <List<String>>[];
+      for (var i = 0; i < uids.length; i += 50) {
+        chunks.add(uids.sublist(i, math.min(i + 50, uids.length)));
+      }
+      for (final chunk in chunks) {
+        final rows = await client
+            .from('profiles')
+            .select()
+            .inFilter('user_id', chunk)
+            .timeout(const Duration(seconds: 8));
 
-      var changed = false;
-      for (final row in rows) {
-        final uid = row['user_id']?.toString() ?? '';
-        if (uid.isEmpty) continue;
-        final avatar = _sanitizeAvatarUrl(row['avatar_url']?.toString()) ?? '';
-        final user = UserModel(
-          id: uid,
-          name: row['name']?.toString() ?? '',
-          email: row['email']?.toString() ?? '',
-          studentOrEmployeeId: row['student_or_employee_id']?.toString() ?? '',
-          department: row['department']?.toString() ?? '',
-          year: row['year']?.toString() ?? '',
-          mobileNumber: row['mobile_number']?.toString() ?? '',
-          avatarUrl: avatar,
-          roles: const [UserRole.student],
-          savedPostIds: const [],
-          registeredEventIds: const [],
-        );
-        if (_knownProfiles[uid] == null ||
-            _knownProfiles[uid]!.name != user.name ||
-            _knownProfiles[uid]!.mobileNumber != user.mobileNumber ||
-            _knownProfiles[uid]!.avatarUrl != user.avatarUrl) {
-          _knownProfiles[uid] = user;
-          changed = true;
-        }
-        if (avatar.isNotEmpty) {
-          _authorAvatarCache[uid] = avatar;
-          for (var i = 0; i < _posts.length; i++) {
-            if (_posts[i].authorId == uid &&
-                (_posts[i].authorAvatarUrl == null ||
-                    _posts[i].authorAvatarUrl!.isEmpty ||
-                    _posts[i].authorAvatarUrl != avatar)) {
-              _posts[i] = _posts[i].copyWith(authorAvatarUrl: avatar);
-              changed = true;
+        for (final row in rows) {
+          final uid = row['user_id']?.toString() ?? '';
+          if (uid.isEmpty) continue;
+          final avatar = _sanitizeAvatarUrl(row['avatar_url']?.toString()) ?? '';
+          final user = UserModel(
+            id: uid,
+            name: row['name']?.toString() ?? '',
+            email: row['email']?.toString() ?? '',
+            studentOrEmployeeId: row['student_or_employee_id']?.toString() ?? '',
+            department: row['department']?.toString() ?? '',
+            year: row['year']?.toString() ?? '',
+            mobileNumber: row['mobile_number']?.toString() ?? '',
+            avatarUrl: avatar,
+            roles: const [UserRole.student],
+            savedPostIds: const [],
+            registeredEventIds: const [],
+          );
+          if (_knownProfiles[uid] == null ||
+              _knownProfiles[uid]!.name != user.name ||
+              _knownProfiles[uid]!.mobileNumber != user.mobileNumber ||
+              _knownProfiles[uid]!.avatarUrl != user.avatarUrl) {
+            _knownProfiles[uid] = user;
+            changed = true;
+          }
+          if (avatar.isNotEmpty) {
+            _authorAvatarCache[uid] = avatar;
+            for (var i = 0; i < _posts.length; i++) {
+              if (_posts[i].authorId == uid &&
+                  (_posts[i].authorAvatarUrl == null ||
+                      _posts[i].authorAvatarUrl!.isEmpty ||
+                      _posts[i].authorAvatarUrl != avatar)) {
+                _posts[i] = _posts[i].copyWith(authorAvatarUrl: avatar);
+                changed = true;
+              }
             }
           }
         }
@@ -1504,6 +1510,58 @@ class MockDataService extends ChangeNotifier {
             table: 'posts',
             callback: (payload) {
               _handleRealtimePostPayload(payload);
+            },
+          )
+          .onBroadcast(
+            event: 'post_sync',
+            callback: (payload) {
+              try {
+                final record = payload['record'] as Map<String, dynamic>?;
+                if (record != null && record.isNotEmpty) {
+                  final post = _postFromRow(record);
+                  if (post != null) {
+                    _serverKnownIds.add(post.id);
+                    final idx = _posts.indexWhere((p) => p.id == post.id);
+                    if (idx != -1) {
+                      _posts[idx] = post;
+                    } else {
+                      _posts.insert(0, post);
+                    }
+                    _invalidateDataCaches();
+                    notifyListeners();
+                    _scheduleLocalSave();
+                  }
+                }
+              } catch (_) {}
+            },
+          )
+          .onBroadcast(
+            event: 'profile_appreciated',
+            callback: (payload) {
+              try {
+                final targetAuthorId = payload['target_author_id']?.toString() ?? '';
+                final likerId = payload['liker_id']?.toString() ?? '';
+                final likerName = payload['liker_name']?.toString() ?? 'Someone';
+                if (targetAuthorId.isNotEmpty) {
+                  _profileLikes[targetAuthorId] = (_profileLikes[targetAuthorId] ?? 0) + 1;
+                  // If this is the creator's device and not the liker, show notification
+                  if (targetAuthorId == currentUser.id && likerId != currentUser.id) {
+                    _notifications.insert(
+                      0,
+                      NotificationModel(
+                        id: 'notif_prof_like_${DateTime.now().millisecondsSinceEpoch}',
+                        title: '⭐ Profile Appreciated!',
+                        body: '$likerName appreciated your creator profile.',
+                        category: NotificationCategory.personal,
+                        timestamp: DateTime.now().toUtc(),
+                      ),
+                    );
+                  }
+                  _invalidateDataCaches();
+                  notifyListeners();
+                  _scheduleLocalSave();
+                }
+              } catch (_) {}
             },
           )
           .subscribe();
@@ -2016,7 +2074,7 @@ class MockDataService extends ChangeNotifier {
       }, onConflict: 'user_id');
       _syncedDeviceId = deviceId;
 
-      // Update authorAvatarUrl on all posts authored by this user
+      // Update authorAvatarUrl on all posts authored by this user locally
       if (avatar.isNotEmpty) {
         _authorAvatarCache[currentUser.id] = avatar;
         var postsUpdated = false;
@@ -2030,13 +2088,6 @@ class MockDataService extends ChangeNotifier {
           _invalidateDataCaches();
           notifyListeners();
           _scheduleLocalSave();
-          try {
-            await client.from('posts').update({
-              'author_avatar_url': avatar,
-            }).eq('author_id', currentUser.id);
-          } catch (e) {
-            debugPrint('StudentHub: post author_avatar_url bulk update failed: $e');
-          }
         }
       }
     } catch (e) {
@@ -2479,7 +2530,9 @@ class MockDataService extends ChangeNotifier {
             ),
       ),
       timestamp: _parseDate(row['created_at']) ?? DateTime.now(),
-      imageUrl: row['image_url'] as String?,
+      imageUrl: (row['image_url'] is String && (row['image_url'] as String).trim().isNotEmpty)
+          ? (row['image_url'] as String).trim()
+          : null,
       imageUrls: ((row['image_urls'] as List?) ?? const []).cast<String>(),
       attachments: attachments,
       links: links,
@@ -2515,6 +2568,10 @@ class MockDataService extends ChangeNotifier {
       final cached = _sanitizeAvatarUrl(_authorAvatarCache[authorId]);
       if (cached != null && cached.isNotEmpty) return cached;
     }
+    if (authorId != null && _knownProfiles.containsKey(authorId)) {
+      final profileAvatar = _sanitizeAvatarUrl(_knownProfiles[authorId]?.avatarUrl);
+      if (profileAvatar != null && profileAvatar.isNotEmpty) return profileAvatar;
+    }
     for (final p in _posts) {
       if ((authorId != null && p.authorId == authorId) ||
           (authorName != null && p.authorName.toLowerCase() == authorName.toLowerCase())) {
@@ -2535,12 +2592,12 @@ class MockDataService extends ChangeNotifier {
     const placeholder = _fallbackImageUrl;
 
     String? cleanUrl(String? url) {
-      if (url == null || url.isEmpty) return null;
+      if (url == null || url.trim().isEmpty) return null;
       if (url.startsWith('data:') ||
           url.startsWith(LocalStoreService.localPrefix)) {
-        return placeholder;
+        return null;
       }
-      return url;
+      return url.trim();
     }
 
     String? cleanAvatarUrl(String? url) {
@@ -2579,7 +2636,6 @@ class MockDataService extends ChangeNotifier {
       'author_name': p.authorName,
       'author_role': p.authorRole.name,
       'author_id': p.authorId,
-      'author_avatar_url': cleanAvatarUrl(p.authorAvatarUrl),
       'image_url': cleanUrl(p.imageUrl),
       'image_urls': cleanGallery,
       'is_urgent': p.isUrgent,
@@ -2606,15 +2662,16 @@ class MockDataService extends ChangeNotifier {
             },
           )
           .toList(),
-      'created_at': p.timestamp.toIso8601String(),
+      'created_at': p.timestamp.toUtc().toIso8601String(),
     };
   }
 
   DateTime? _parseDate(dynamic value) {
     if (value is String && value.isNotEmpty) {
-      return DateTime.tryParse(value);
+      final parsed = DateTime.tryParse(value);
+      return parsed?.toUtc();
     }
-    if (value is DateTime) return value;
+    if (value is DateTime) return value.toUtc();
     return null;
   }
 
@@ -2667,7 +2724,14 @@ class MockDataService extends ChangeNotifier {
           authorAvatarUrl: resolvedAvatar ?? post.authorAvatarUrl,
         );
       }
-      await client.from('posts').upsert(_rowFromPost(stored), onConflict: 'id');
+      final row = _rowFromPost(stored);
+      await client.from('posts').upsert(row, onConflict: 'id');
+      try {
+        client.channel('public:posts').sendBroadcastMessage(
+          event: 'post_sync',
+          payload: {'record': row},
+        );
+      } catch (_) {}
       final idx = _posts.indexWhere((p) => p.id == post.id);
       if (idx != -1) _posts[idx] = stored;
       _serverKnownIds.add(post.id);
@@ -3166,7 +3230,7 @@ class MockDataService extends ChangeNotifier {
       liked.add(currentUser.id);
       userLiked.add(postId);
 
-      // Instant social notification for post creator
+      // Instant social notification for post creator ONLY if not liking own post
       if (post.authorId != currentUser.id &&
           post.authorName.trim().toLowerCase() !=
               currentUser.name.trim().toLowerCase()) {
@@ -3177,7 +3241,7 @@ class MockDataService extends ChangeNotifier {
             title: '❤️ New Like',
             body: '${currentUser.name} liked your post "${post.title}"',
             category: NotificationCategory.personal,
-            timestamp: DateTime.now(),
+            timestamp: DateTime.now().toUtc(),
             relatedPostId: post.id,
           ),
         );
@@ -3208,6 +3272,12 @@ class MockDataService extends ChangeNotifier {
 
   void toggleLikeProfile(String authorId, String authorName) {
     if (authorId.isEmpty) return;
+    if (authorId == currentUser.id ||
+        (authorName.trim().isNotEmpty &&
+            authorName.trim().toLowerCase() ==
+                currentUser.name.trim().toLowerCase())) {
+      return;
+    }
     final isLiked = _likedProfileAuthorIds.contains(authorId);
     final currentLikes = _profileLikes[authorId] ?? 0;
 
@@ -3218,26 +3288,26 @@ class MockDataService extends ChangeNotifier {
       _likedProfileAuthorIds.add(authorId);
       _profileLikes[authorId] = currentLikes + 1;
 
-      // Instant notification for creator if not self
-      if (authorId != currentUser.id &&
-          authorName.trim().toLowerCase() !=
-              currentUser.name.trim().toLowerCase()) {
-        _notifications.insert(
-          0,
-          NotificationModel(
-            id: 'notif_prof_like_${DateTime.now().millisecondsSinceEpoch}',
-            title: '⭐ Profile Liked!',
-            body: '${currentUser.name} appreciated your creator profile.',
-            category: NotificationCategory.personal,
-            timestamp: DateTime.now(),
-          ),
-        );
+      // Broadcast appreciation to creator's device and other connected users
+      final client = _client;
+      if (client != null && authorId != currentUser.id) {
+        try {
+          client.channel('public:posts').sendBroadcastMessage(
+            event: 'profile_appreciated',
+            payload: {
+              'target_author_id': authorId,
+              'liker_id': currentUser.id,
+              'liker_name': currentUser.name,
+            },
+          );
+        } catch (_) {}
       }
     }
 
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
+    unawaited(_persistProfile());
   }
 
   void toggleEventRegistration(String postId) {

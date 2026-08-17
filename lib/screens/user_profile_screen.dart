@@ -84,6 +84,12 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   }
 
   void _onLikeTapped(MockDataService dataService) {
+    if (widget.authorId == dataService.currentUser.id ||
+        (widget.authorName.isNotEmpty &&
+            widget.authorName.trim().toLowerCase() ==
+                dataService.currentUser.name.trim().toLowerCase())) {
+      return;
+    }
     _likeAnimController.forward(from: 0.0);
     final wasLiked = dataService.isProfileLiked(widget.authorId);
     dataService.toggleLikeProfile(widget.authorId, widget.authorName);
@@ -567,44 +573,83 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
                 const SizedBox(height: 18),
 
-                // Animated Profile Like / Appreciate Button
-                ScaleTransition(
-                  scale: _likeScaleAnim,
-                  child: Container(
+                // If viewing own profile: show dedicated read-only Appreciations Count badge
+                // If viewing another creator's profile: show interactive animated Appreciate button
+                if (isMe) ...[
+                  Container(
                     width: double.infinity,
                     constraints: const BoxConstraints(maxWidth: 320),
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                        backgroundColor: isLiked ? const Color(0xFFFFF1F2) : cfg.primaryColor,
-                        foregroundColor: isLiked ? const Color(0xFFE11D48) : Colors.white,
-                        elevation: isLiked ? 0 : 2,
-                        side: isLiked
-                            ? const BorderSide(color: Color(0xFFFDA4AF), width: 1.5)
-                            : BorderSide.none,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF1F2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFFDA4AF), width: 1.5),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.favorite_rounded,
+                          color: Color(0xFFE11D48),
+                          size: 18,
                         ),
-                      ),
-                      onPressed: () => _onLikeTapped(dataService),
-                      icon: Icon(
-                        isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        color: isLiked ? const Color(0xFFE11D48) : Colors.white,
-                        size: 20,
-                      ),
-                      label: Text(
-                        isLiked
-                            ? 'Appreciated ($profileLikesCount)'
-                            : 'Appreciate Profile ($profileLikesCount)',
-                        style: TextStyle(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w800,
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            '$profileLikesCount Appreciations',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFFE11D48),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  // Animated Profile Like / Appreciate Button
+                  ScaleTransition(
+                    scale: _likeScaleAnim,
+                    child: Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(maxWidth: 320),
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+                          backgroundColor: isLiked ? const Color(0xFFFFF1F2) : cfg.primaryColor,
+                          foregroundColor: isLiked ? const Color(0xFFE11D48) : Colors.white,
+                          elevation: isLiked ? 0 : 2,
+                          side: isLiked
+                              ? const BorderSide(color: Color(0xFFFDA4AF), width: 1.5)
+                              : BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: () => _onLikeTapped(dataService),
+                        icon: Icon(
+                          isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                           color: isLiked ? const Color(0xFFE11D48) : Colors.white,
+                          size: 20,
+                        ),
+                        label: Text(
+                          isLiked
+                              ? 'Appreciated ($profileLikesCount)'
+                              : 'Appreciate ($profileLikesCount)',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                            color: isLiked ? const Color(0xFFE11D48) : Colors.white,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
