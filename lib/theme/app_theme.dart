@@ -22,8 +22,8 @@ class AppTheme {
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF0F172A),
         titleTextStyle: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
+          fontSize: 18.5,
+          fontWeight: FontWeight.w700,
           color: Color(0xFF0F172A),
         ),
       ),
@@ -72,8 +72,8 @@ class AppTheme {
         backgroundColor: Color(0xFF1E293B),
         foregroundColor: Colors.white,
         titleTextStyle: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
+          fontSize: 18.5,
+          fontWeight: FontWeight.w700,
           color: Colors.white,
         ),
       ),

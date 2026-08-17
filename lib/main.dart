@@ -74,6 +74,13 @@ class StudentHubApp extends StatelessWidget {
       theme: AppTheme.lightTheme(cfg),
       darkTheme: AppTheme.darkTheme(cfg),
       themeMode: ThemeMode.light,
+      builder: (context, child) {
+        return MediaQuery.withClampedTextScaling(
+          minScaleFactor: 0.95,
+          maxScaleFactor: 1.0,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: const MainNavigationContainer(),
     );
   }
@@ -221,9 +228,10 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                 Text(
                   cfg.appName,
                   style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.5,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                    height: 1.15,
                     color: cfg.primaryColor,
                   ),
                 ),
@@ -232,8 +240,8 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                   style: const TextStyle(
                     fontSize: 10,
                     color: Colors.grey,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.6,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ],

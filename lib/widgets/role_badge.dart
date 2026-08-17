@@ -36,9 +36,10 @@ class RoleBadge extends StatelessWidget {
     return Text(
       '• ${role.displayName}',
       style: TextStyle(
-        fontSize: isCompact ? 12 : 13,
-        fontWeight: FontWeight.w600,
+        fontSize: isCompact ? 11.5 : 12.5,
+        fontWeight: FontWeight.w500,
         color: color,
+        height: 1.2,
       ),
     );
   }

@@ -249,15 +249,16 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                           child: Text(
                                             post.authorName,
                                             style: const TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 13.5,
                                               color: Color(0xFF0F172A),
+                                              height: 1.2,
                                             ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                         if (post.authorRole != UserRole.student) ...[
-                                          const SizedBox(width: 6),
+                                          const SizedBox(width: 4),
                                           RoleBadge(
                                             role: post.authorRole,
                                             isCompact: true,
@@ -271,7 +272,8 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                       style: const TextStyle(
                                         fontSize: 11.5,
                                         color: Color(0xFF64748B),
-                                        fontWeight: FontWeight.w500,
+                                        fontWeight: FontWeight.w400,
+                                        height: 1.2,
                                       ),
                                     ),
                                   ],
@@ -281,24 +283,26 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                           ],
                         ),
 
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
 
                         // Post Title
-                        Text(
-                          post.title,
-                          style: const TextStyle(
-                            fontSize: 16.5,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A),
-                            height: 1.3,
-                            letterSpacing: -0.2,
+                        if (post.title.isNotEmpty) ...[
+                          Text(
+                            post.title,
+                            style: const TextStyle(
+                              fontSize: 14.0,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF0F172A),
+                              height: 1.25,
+                            ),
                           ),
-                        ),
-
-                        const SizedBox(height: 6),
+                        ],
 
                         // Post Description
-                        _ExpandableDescription(text: post.description),
+                        if (post.description.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          _ExpandableDescription(text: post.description),
+                        ],
 
                         // Gallery Images — Instagram square aspect ratio carousel
                         if (_isGallery && post.imageUrls.isNotEmpty) ...[
@@ -1039,17 +1043,19 @@ class _ExpandableDescriptionState extends State<_ExpandableDescription> {
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 13.5,
+              fontSize: 13.0,
               color: Color(0xFF334155),
-              height: 1.45,
+              fontWeight: FontWeight.w400,
+              height: 1.35,
             ),
           ),
           secondChild: Text(
             widget.text,
             style: const TextStyle(
-              fontSize: 13.5,
+              fontSize: 13.0,
               color: Color(0xFF334155),
-              height: 1.45,
+              fontWeight: FontWeight.w400,
+              height: 1.35,
             ),
           ),
         ),
