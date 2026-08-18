@@ -217,6 +217,7 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
     setState(() => _isSending = true);
 
     final service = Provider.of<AdminSupabaseService>(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
     final success = await service.sendBroadcastAnnouncement(
       title: _titleController.text.trim(),
       body: _bodyController.text.trim(),
@@ -224,26 +225,25 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
       targetYear: _selectedYear,
     );
 
+    if (!mounted) return;
     setState(() => _isSending = false);
 
-    if (mounted) {
-      if (success) {
-        _titleController.clear();
-        _bodyController.clear();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('📢 Push notification alert sent successfully to student devices!'),
-            backgroundColor: AdminTheme.statusOnline,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to send broadcast alert. Please try again.'),
-            backgroundColor: AdminTheme.statusDanger,
-          ),
-        );
-      }
+    if (success) {
+      _titleController.clear();
+      _bodyController.clear();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('📢 Push notification alert sent successfully to student devices!'),
+          backgroundColor: AdminTheme.statusOnline,
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Failed to send broadcast alert. Please try again.'),
+          backgroundColor: AdminTheme.statusDanger,
+        ),
+      );
     }
   }
 }

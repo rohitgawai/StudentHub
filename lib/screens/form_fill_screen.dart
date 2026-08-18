@@ -846,13 +846,24 @@ class _FormFillScreenState extends State<FormFillScreen> {
             InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () async {
-                final initial = _dateSelections[f.id] ??
-                    DateTime.now().add(const Duration(days: 1));
+                final today = DateTime.now();
+                final todayDate = DateTime(today.year, today.month, today.day);
+                final maxDate =
+                    todayDate.add(const Duration(days: 365));
+                var initial = _dateSelections[f.id] ?? todayDate.add(const Duration(days: 1));
+                // Clamp into the picker's allowed range: a previously picked
+                // date can be before today (or past the 1-year horizon), which
+                // would crash showDatePicker with an assertion.
+                if (initial.isBefore(todayDate)) {
+                  initial = todayDate.add(const Duration(days: 1));
+                } else if (initial.isAfter(maxDate)) {
+                  initial = maxDate;
+                }
                 final picked = await showDatePicker(
                   context: context,
                   initialDate: initial,
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                  firstDate: todayDate,
+                  lastDate: maxDate,
                 );
                 if (picked != null && mounted) {
                   setState(() => _dateSelections[f.id] = picked);

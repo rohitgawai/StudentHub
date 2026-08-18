@@ -1469,28 +1469,37 @@ class _RegisterButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isRegistered) {
-      return Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFECFDF5),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFA7F3D0), width: 1.2),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF059669)),
-            SizedBox(width: 5),
-            Text(
-              'Registered',
-              style: TextStyle(
-                color: Color(0xFF059669),
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
+      return Material(
+        color: Colors.transparent,
+        child: Ink(
+          height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFA7F3D0), width: 1.2),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onPressed,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF059669)),
+                  SizedBox(width: 5),
+                  Text(
+                    'Registered',
+                    style: TextStyle(
+                      color: Color(0xFF059669),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       );
     }

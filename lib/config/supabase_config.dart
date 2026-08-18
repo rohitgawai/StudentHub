@@ -54,8 +54,9 @@ class SupabaseConfig {
   /// Shared secret gate for the send-push function. Must equal the
   /// `PUSH_SECRET` secret set on the deployed Edge Function:
   ///   supabase secrets set PUSH_SECRET=...
-  static const String pushSecret = String.fromEnvironment(
-    'PUSH_SECRET',
-    defaultValue: 'studenthub-dev-push-secret',
-  );
+  ///
+  /// There is intentionally NO default value: the secret is injected at build
+  /// time with --dart-define=PUSH_SECRET=... so it never ships in source.
+  /// Builds without it run in degraded mode (push features skipped).
+  static const String pushSecret = String.fromEnvironment('PUSH_SECRET');
 }

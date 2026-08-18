@@ -123,6 +123,24 @@ class PushService {
     });
   }
 
+  /// Re-binds the FCM token to the CURRENTLY logged-in user. Must be called
+  /// after every login: the token is keyed by token string in device_tokens,
+  /// so registering again with a different user_id moves the device to the
+  /// right account (otherwise the previous user keeps getting this device's
+  /// pushes, and the new user receives none).
+  Future<void> rebindToken() async {
+    final dataService = _dataService;
+    if (dataService == null) return;
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        await dataService.registerDeviceToken(token);
+      }
+    } catch (e) {
+      debugPrint('StudentHub: push token rebind failed: $e');
+    }
+  }
+
   Future<void> _onForegroundMessage(RemoteMessage message) async {
     final data = message.data;
     final title = message.notification?.title ?? data['title']?.toString();

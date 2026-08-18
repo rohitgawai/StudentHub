@@ -289,7 +289,7 @@ class _StudentLookupScreenState extends State<StudentLookupScreen> {
                   _selectedStudent!.id,
                   _selectedStudent!.isVerifiedStudent,
                 );
-                if (success) {
+                if (success && mounted) {
                   setState(() {
                     _selectedStudent = AdminUserModel.fromMap({
                       ..._selectedStudent!.toMap(),

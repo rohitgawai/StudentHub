@@ -177,7 +177,10 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         });
       }
       return AuthScreen(
-        onLoginComplete: () => setState(() => isAuthenticated = true),
+        onLoginComplete: () {
+          setState(() => isAuthenticated = true);
+          unawaited(PushService.instance.rebindToken());
+        },
       );
     }
 
@@ -189,7 +192,10 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
 
     if (!isAuthenticated && !dataService.restoredCompletedSession) {
       return AuthScreen(
-        onLoginComplete: () => setState(() => isAuthenticated = true),
+        onLoginComplete: () {
+          setState(() => isAuthenticated = true);
+          unawaited(PushService.instance.rebindToken());
+        },
       );
     }
 

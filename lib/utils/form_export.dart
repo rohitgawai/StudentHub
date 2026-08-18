@@ -310,8 +310,14 @@ Future<({File file, String fileName})> saveRegistrantExportDirectly({
         'name': fileName,
         'bytes': bytes,
       });
-      if (uri != null) {
-        return (file: File(uri), fileName: fileName);
+      if (uri != null && uri.isNotEmpty) {
+        // MediaStore hands back a content:// URI (Android 10+ scoped storage).
+        // A File cannot wrap a content URI (its path would be the URI string,
+        // which no File API can resolve), so return the real Downloads path —
+        // that is where MediaStore actually placed the file — and keep the
+        // display name for the confirmation snackbar.
+        final downloadsPath = '/storage/emulated/0/Download/$fileName';
+        return (file: File(downloadsPath), fileName: fileName);
       }
     } catch (e) {
       debugPrint('MediaStore insert failed ($e), falling back');

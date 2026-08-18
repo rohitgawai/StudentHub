@@ -51,6 +51,10 @@ class _CreatePostModalState extends State<CreatePostModal> {
 
     if (!_formKey.currentState!.validate()) return;
 
+    // Lock the button while the post is being added (prevents a double-tap
+    // that would publish the same post twice).
+    setState(() => _isPublishing = true);
+
     final newPost = PostModel(
       id: 'pst_${DateTime.now().millisecondsSinceEpoch}',
       title: titleController.text.trim(),

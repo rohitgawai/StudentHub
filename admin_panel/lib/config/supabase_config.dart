@@ -34,8 +34,25 @@ class SupabaseConfig {
         'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/delete-user',
   );
 
-  static const String pushSecret = String.fromEnvironment(
-    'PUSH_SECRET',
-    defaultValue: 'studenthub-dev-push-secret',
+  /// Server-side admin verification. The admin panel logs in with email +
+  /// password; this function checks the bcrypt hash and the admin role.
+  static const String verifyAdminFunctionUrl = String.fromEnvironment(
+    'VERIFY_ADMIN_FUNCTION_URL',
+    defaultValue:
+        'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/verify-admin',
   );
+
+  /// Server-side admin actions (role grants, bans, student verification).
+  /// Verified by the caller's admin role in `profiles` — never by the anon
+  /// key alone.
+  static const String adminActionsFunctionUrl = String.fromEnvironment(
+    'ADMIN_ACTIONS_FUNCTION_URL',
+    defaultValue:
+        'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/admin-actions',
+  );
+
+  /// Shared secret gate for edge functions. No default value on purpose —
+  /// inject at build time with --dart-define=PUSH_SECRET=... so it never
+  /// ships in source. Builds without it degrade (push features skipped).
+  static const String pushSecret = String.fromEnvironment('PUSH_SECRET');
 }

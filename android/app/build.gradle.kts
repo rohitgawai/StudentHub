@@ -21,7 +21,11 @@ android {
         applicationId = "com.example.student_hub"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = maxOf(23, flutter.minSdkVersion)
+        // Minimum supported version: Android 10 (API 29) and above. All
+        // version-sensitive features (scoped storage exports, notification
+        // permission, legacy-storage fallbacks) are implemented for this
+        // range only — legacy paths for API < 29 have been removed.
+        minSdk = 29
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

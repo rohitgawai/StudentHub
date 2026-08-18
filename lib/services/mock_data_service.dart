@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_config.dart';
@@ -55,7 +56,7 @@ class PasswordRequiredException implements Exception {
 const String _fallbackImageUrl =
     'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=600';
 
-class MockDataService extends ChangeNotifier {
+class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
   late AppConfig config;
   late UserModel currentUser;
   late UserRole activeRole;
@@ -148,13 +149,38 @@ class MockDataService extends ChangeNotifier {
     config = initialConfig ?? AppConfig.defaultConfig();
     _seedDefaults();
     _invalidateDataCaches();
+    _attachLifecycleObserver();
     _initData(initialConfig);
   }
   bool _isDisposed = false;
 
+  /// Registers for app lifecycle events so a pending debounced snapshot is
+  /// flushed before the process is suspended or killed. Without this, read /
+  /// clear marks made right before closing the app (within the 400ms debounce
+  /// window) never reach disk and the notifications come back on the next
+  /// launch. Guarded because unit tests may run without a widget binding.
+  void _attachLifecycleObserver() {
+    try {
+      WidgetsBinding.instance.addObserver(this);
+    } catch (_) {
+      // No binding (pure Dart tests): lifecycle flush simply won't fire.
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(flushLocalSave());
+    }
+  }
+
   @override
   void dispose() {
     _isDisposed = true;
+    try {
+      WidgetsBinding.instance.removeObserver(this);
+    } catch (_) {}
     _expiryTimer?.cancel();
     _syncTimer?.cancel();
     super.dispose();
@@ -193,6 +219,8 @@ class MockDataService extends ChangeNotifier {
         return clean != p.authorAvatarUrl ? p.copyWith(authorAvatarUrl: clean) : p;
       }).toList();
       _notifications = restored.notifications;
+      _notificationsCleared = restored.notificationsCleared;
+      _notificationsClearedAt = restored.notificationsClearedAt;
       _roleRequests = restored.roleRequests;
       _formSubmissions = restored.formSubmissions;
       _showAllYearsFeed = restored.showAllYearsFeed;
@@ -243,10 +271,20 @@ class MockDataService extends ChangeNotifier {
   /// Merges the Supabase mirror into the device state (background; safe to
   /// call repeatedly). Only notifies listeners when something actually
   /// changed, so the periodic poll is silent when the feed is unchanged.
+  ///
+  /// Concurrent calls coalesce into a single run: many flows trigger a sync
+  /// back-to-back (post publish, push arrival, login), and overlapping merges
+  /// could double-apply rows or interleave updates.
   Future<void> syncNow() async {
-    await _syncFromBackend();
-    _invalidateDataCaches();
-    notifyListeners();
+    if (_syncInFlight) return;
+    _syncInFlight = true;
+    try {
+      await _syncFromBackend();
+      _invalidateDataCaches();
+      notifyListeners();
+    } finally {
+      _syncInFlight = false;
+    }
   }
 
   Future<void> _seedDefaults() async {
@@ -261,7 +299,7 @@ class MockDataService extends ChangeNotifier {
       avatarUrl: '',
       roles: const [UserRole.student, UserRole.eventHost],
       savedPostIds: const ['pst_001'],
-      registeredEventIds: const ['pst_002'],
+      registeredEventIds: const ['pst_004'],
       congratulatedPostIds: const ['pst_005'],
       likedPostIds: const ['pst_001'],
       isVerified: true,
@@ -390,6 +428,9 @@ class MockDataService extends ChangeNotifier {
         'profileLikes': _profileLikes,
         'likedProfileAuthorIds': _likedProfileAuthorIds.toList(),
         'hadServerProfile': _hadServerProfile,
+        'notificationsCleared': _notificationsCleared,
+        'notificationsClearedAt':
+            _notificationsClearedAt?.toIso8601String(),
       };
 
       await _localStore.saveSnapshot(jsonEncode(payload));
@@ -450,6 +491,11 @@ class MockDataService extends ChangeNotifier {
               .toSet();
       final hadServerProfile =
           payload['hadServerProfile'] as bool? ?? false;
+      final notificationsCleared =
+          payload['notificationsCleared'] as bool? ?? false;
+      final notificationsClearedAt = DateTime.tryParse(
+        payload['notificationsClearedAt']?.toString() ?? '',
+      );
 
       return _LocalState(
         currentUser: user,
@@ -464,6 +510,8 @@ class MockDataService extends ChangeNotifier {
         profileLikes: profileLikes,
         likedProfileAuthorIds: likedProfileAuthorIds,
         hadServerProfile: hadServerProfile,
+        notificationsCleared: notificationsCleared,
+        notificationsClearedAt: notificationsClearedAt,
       );
     } catch (_) {
       return null;
@@ -1104,6 +1152,13 @@ class MockDataService extends ChangeNotifier {
     required String password,
     required String deviceId,
   }) async {
+    if (SupabaseConfig.pushSecret.isEmpty) {
+      // Misconfigured build: the edge function rejects anonymous calls, so
+      // fail with an explicit message instead of a confusing 401.
+      throw Exception(
+        'This build is missing the PUSH_SECRET. Rebuild with --dart-define=PUSH_SECRET=...',
+      );
+    }
     final res = await http
         .post(
           Uri.parse(SupabaseConfig.credentialsFunctionUrl),
@@ -1160,6 +1215,7 @@ class MockDataService extends ChangeNotifier {
   }) async {
     final client = _client;
     if (client == null) return;
+    if (SupabaseConfig.pushSecret.isEmpty) return;
     try {
       final res = await http
           .post(
@@ -1271,6 +1327,8 @@ class MockDataService extends ChangeNotifier {
     _hadServerProfile = false;
     _profilesRealtimeChannel?.unsubscribe();
     _profilesRealtimeChannel = null;
+    _postsRealtimeChannel?.unsubscribe();
+    _postsRealtimeChannel = null;
     _untrackPresence();
     await LocalStoreService.instance.clearSnapshot();
     currentUser = UserModel(
@@ -1466,7 +1524,10 @@ class MockDataService extends ChangeNotifier {
   }
 
   void switchActiveRole(UserRole newRole) {
-    if (currentUser.roles.contains(newRole) || activeRole != newRole) {
+    // Both conditions required: the role must actually be granted, and it must
+    // differ from the current one (an OR here would let a user "switch" into a
+    // role they were never granted).
+    if (currentUser.roles.contains(newRole) && activeRole != newRole) {
       activeRole = newRole;
       notifyListeners();
       _scheduleLocalSave();
@@ -1528,7 +1589,17 @@ class MockDataService extends ChangeNotifier {
                     _serverKnownIds.add(post.id);
                     final idx = _posts.indexWhere((p) => p.id == post.id);
                     if (idx != -1) {
-                      _posts[idx] = post;
+                      final existing = _posts[idx];
+                      // Same guard as the postgres realtime handler: the
+                      // broadcast echo carries the author's own post row as it
+                      // was written to the server — sanitized, with any still
+                      //-uploading device-only images stripped. Never let the
+                      // echo downgrade the better in-memory version.
+                      final downgrade =
+                          !_hasUsableRemoteSource(post) &&
+                          (_hasUsableRemoteSource(existing) ||
+                              _hasDeviceOnlySources(existing));
+                      if (!downgrade) _posts[idx] = post;
                     } else {
                       _posts.insert(0, post);
                     }
@@ -1672,7 +1743,14 @@ class MockDataService extends ChangeNotifier {
           _posts.insert(0, post);
         }
 
-        if (!_notifications.any((n) => n.relatedPostId == post.id)) {
+        // Respect the "notifications cleared" marker exactly like the sync
+        // path: a late-arriving row for an old post must not re-populate the
+        // bell after the user cleared it.
+        final cleared =
+            _notificationsCleared &&
+            _notificationsClearedAt != null &&
+            post.timestamp.isBefore(_notificationsClearedAt!);
+        if (!cleared && !_notifications.any((n) => n.relatedPostId == post.id)) {
           _notifications.insert(
             0,
             _postNotification(
@@ -2014,7 +2092,7 @@ class MockDataService extends ChangeNotifier {
     final currentDeviceId = await LocalStoreService.instance.getDeviceId();
     final rows = await client
         .from('profiles')
-        .select('user_id, roles, is_verified, active_device_id, has_completed_progressive_form')
+        .select('user_id, roles, is_verified, active_device_id, has_password, has_completed_progressive_form')
         .eq('user_id', currentUser.id)
         .limit(1)
         .timeout(const Duration(seconds: 12));
@@ -2154,7 +2232,6 @@ class MockDataService extends ChangeNotifier {
         'registered_event_ids': currentUser.registeredEventIds,
         'congratulated_post_ids': currentUser.congratulatedPostIds,
         'liked_post_ids': currentUser.likedPostIds,
-        'roles': currentUser.roles.map((r) => r == UserRole.eventHost ? 'host' : r.name).toList(),
         'is_verified': currentUser.isVerified,
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'user_id');
@@ -2353,7 +2430,10 @@ class MockDataService extends ChangeNotifier {
             );
           }
         } else if (remote.status == RoleRequestStatus.rejected &&
-            !_notifications.any((n) => n.relatedPostId == remote.id)) {
+            !_notifications.any((n) => n.relatedPostId == remote.id) &&
+            !(_notificationsCleared &&
+                _notificationsClearedAt != null &&
+                remote.submittedAt.isBefore(_notificationsClearedAt!))) {
           final hasNote =
               remote.adminNotes != null && remote.adminNotes!.trim().isNotEmpty;
           _notifications.insert(
@@ -2454,6 +2534,12 @@ class MockDataService extends ChangeNotifier {
     if (status == RoleRequestStatus.pending) return;
     final client = _client;
     if (client == null) return;
+    if (SupabaseConfig.pushSecret.isEmpty) {
+      // Server review unavailable without the secret: keep the local decision
+      // (it is retried on the next review).
+      debugPrint('StudentHub: review-role skipped (no PUSH_SECRET in build).');
+      return;
+    }
     try {
       final res = await http
           .post(
@@ -2500,6 +2586,7 @@ class MockDataService extends ChangeNotifier {
   }) async {
     final client = _client;
     if (client == null) return;
+    if (SupabaseConfig.pushSecret.isEmpty) return;
     try {
       final deviceId = await LocalStoreService.instance.getDeviceId();
       final approved = status == RoleRequestStatus.approved;
@@ -2678,21 +2765,12 @@ class MockDataService extends ChangeNotifier {
     const placeholder = _fallbackImageUrl;
 
     String? cleanUrl(String? url) {
-      if (url == null || url.trim().isEmpty) return null;
-      if (url.startsWith('data:') ||
-          url.startsWith(LocalStoreService.localPrefix)) {
-        return null;
-      }
-      return url.trim();
-    }
-
-    String? cleanAvatarUrl(String? url) {
       if (url == null || url.isEmpty) return null;
       if (url.startsWith('data:') ||
           url.startsWith(LocalStoreService.localPrefix)) {
         return null;
       }
-      return _sanitizeAvatarUrl(url);
+      return url.trim();
     }
 
     String cleanAttachmentUrl(String url) {
@@ -2881,7 +2959,6 @@ class MockDataService extends ChangeNotifier {
     if (client == null || post.imageUrls.isEmpty) return post;
 
     final uploaded = List<String>.from(post.imageUrls);
-    var changed = false;
     final stamp = DateTime.now().millisecondsSinceEpoch;
 
     // (index, bytes, ext) triples for every image that needs a real upload.
@@ -2934,7 +3011,6 @@ class MockDataService extends ChangeNotifier {
             client.storage.from('documents').getPublicUrl(path);
         clearCachedImage(uploaded[i]);
         uploaded[i] = '$publicUrl?v=$stamp';
-        changed = true;
       }
     }
     final validSyncedGallery = uploaded
@@ -3101,11 +3177,10 @@ class MockDataService extends ChangeNotifier {
   /// user's year by default). Returns true for null, empty, 'All', 'ALL', exact year matches,
   /// or when the current user is the author or has enabled showAllYearsFeed.
   bool matchesYear(PostModel p, [String? userYear]) {
-    // 1. Authors can always see their own posts on their own devices
-    final cName = currentUser.name.trim().toLowerCase();
-    final aName = p.authorName.trim().toLowerCase();
-    if ((p.authorId.isNotEmpty && p.authorId == currentUser.id) ||
-        (cName.isNotEmpty && aName.isNotEmpty && (aName == cName || aName.contains(cName) || cName.contains(aName)))) {
+    // 1. Authors can always see their own posts on their own devices. Matched
+    // strictly by user id — name comparison can't be used here (a substring
+    // collision like "Aarav" matching "Aarav Gupta" would leak posts).
+    if (p.authorId.isNotEmpty && p.authorId == currentUser.id) {
       return true;
     }
 
@@ -3586,7 +3661,16 @@ class MockDataService extends ChangeNotifier {
     required Map<String, dynamic> answers,
   }) async {
     final isEvent = post.isEvent;
+    if (isEvent && currentUser.cancelledEventIds.contains(post.id)) return false;
     if (isEvent && !_canRegister(post)) return false;
+    if (isEvent &&
+        (post.registeredUserIds.contains(currentUser.id) ||
+            currentUser.registeredEventIds.contains(post.id))) {
+      // Already registered (quick toggle or a previous form submit): treat the
+      // repeat submission as an idempotent success instead of adding the user
+      // a second time to registeredUserIds / registeredEventIds.
+      return true;
+    }
     if (!isEvent && post.form?.allowResubmit == false) {
       final existing = _formSubmissions.any(
         (s) =>
@@ -3616,7 +3700,17 @@ class MockDataService extends ChangeNotifier {
       final regUsers = List<String>.from(post.registeredUserIds);
       final userRegEvents = List<String>.from(currentUser.registeredEventIds);
       regUsers.add(currentUser.id);
-      userRegEvents.add(post.id);
+      if (!userRegEvents.contains(post.id)) {
+        userRegEvents.add(post.id);
+      }
+      // One submission row per event+user (same rule as the quick toggle):
+      // drop any previous rows for this event+user, keep the fresh one.
+      _formSubmissions.removeWhere(
+        (s) =>
+            s.postId == post.id &&
+            s.userId == currentUser.id &&
+            s.id != submission.id,
+      );
 
       _notifications.insert(
         0,
@@ -4028,9 +4122,6 @@ class MockDataService extends ChangeNotifier {
     // write, the id can never be re-pushed or resurrected by this device.
     _serverKnownIds.add(postId);
     _deviceOnlyPostIds.remove(postId);
-    if (client != null && !neverOnServer) {
-      await _client?.from('posts').delete().eq('id', postId);
-    }
     _localStore.deleteLocalBlob(removed.imageUrl);
     for (final img in removed.imageUrls) {
       _localStore.deleteLocalBlob(img);
@@ -4097,6 +4188,7 @@ class MockDataService extends ChangeNotifier {
   }) async {
     final client = _client;
     if (client == null) return;
+    if (SupabaseConfig.pushSecret.isEmpty) return;
     try {
       final deviceId = await LocalStoreService.instance.getDeviceId();
       final res = await http
@@ -4288,7 +4380,9 @@ class MockDataService extends ChangeNotifier {
         id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
         title: 'Role Application Submitted',
         body: isLimitedAccess
-            ? 'Your request for ${requestedRole.displayName} status (temporary, until ${_formatDate(newReq.expiresAt!)}) has been sent to Admin for review.'
+            ? (newReq.expiresAt != null
+                ? 'Your request for ${requestedRole.displayName} status (temporary, until ${_formatDate(newReq.expiresAt!)}) has been sent to Admin for review.'
+                : 'Your request for ${requestedRole.displayName} status (temporary) has been sent to Admin for review.')
             : 'Your request for ${requestedRole.displayName} status has been sent to Admin for review.',
         category: NotificationCategory.personal,
         timestamp: DateTime.now(),
@@ -4612,11 +4706,11 @@ class MockDataService extends ChangeNotifier {
       ),
       NotificationModel(
         id: 'notif_002',
-        title: '🚀 HackCampus 2026 Event Tomorrow',
-        body: 'Don\'t forget your registration deadline is in 2 days.',
+        title: '🤖 Flutter & Mobile AI Workshop Tomorrow',
+        body: 'Don\'t forget your registration deadline is in 3 days.',
         category: NotificationCategory.events,
         timestamp: now.subtract(const Duration(hours: 5)),
-        relatedPostId: 'pst_002',
+        relatedPostId: 'pst_004',
       ),
       NotificationModel(
         id: 'notif_003',
@@ -4635,7 +4729,7 @@ class MockDataService extends ChangeNotifier {
     _formSubmissions = [
       FormSubmission(
         id: 'sub_101',
-        postId: 'pst_002',
+        postId: 'pst_004',
         userId: 'usr_102',
         name: 'Rohan Gupta',
         studentOrEmployeeId: 'MIT/CS/2023/118',
@@ -4647,7 +4741,7 @@ class MockDataService extends ChangeNotifier {
       ),
       FormSubmission(
         id: 'sub_102',
-        postId: 'pst_002',
+        postId: 'pst_004',
         userId: 'usr_103',
         name: 'Sneha Kulkarni',
         studentOrEmployeeId: 'MIT/CS/2023/071',
@@ -4689,6 +4783,8 @@ class _LocalState {
     this.profileLikes = const {},
     this.likedProfileAuthorIds = const {},
     this.hadServerProfile = false,
+    this.notificationsCleared = false,
+    this.notificationsClearedAt,
   });
 
   final UserModel currentUser;
@@ -4703,6 +4799,8 @@ class _LocalState {
   final Map<String, int> profileLikes;
   final Set<String> likedProfileAuthorIds;
   final bool hadServerProfile;
+  final bool notificationsCleared;
+  final DateTime? notificationsClearedAt;
 }
 
 Uint8List _decodeBase64Helper(String base64) => base64Decode(base64);

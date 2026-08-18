@@ -1,7 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import '../config/supabase_config.dart';
 import '../theme/admin_theme.dart';
 import '../layouts/responsive_admin_shell.dart';
 
@@ -18,12 +20,22 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
 
-  Future<void> _login() async {
-    final adminId = _adminIdController.text.trim();
-    final password = _passwordController.text.trim();
+  @override
+  void dispose() {
+    _adminIdController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
-    if (adminId.isEmpty || password.isEmpty) {
-      setState(() => _errorMessage = 'Please enter both Admin ID and Password.');
+  /// Verifies the admin email + password against the server (bcrypt hash in
+  /// `profile_credentials` + admin role check). No credentials exist in this
+  /// codebase; the panel only receives an ok/user_id from the server.
+  Future<void> _login() async {
+    final email = _adminIdController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Please enter both Admin Email and Password.');
       return;
     }
 
@@ -32,44 +44,59 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       _errorMessage = null;
     });
 
-    // Dedicated Credentials Check
-    if (adminId == 'rohitgawai' && password == 'mit@34') {
-      await _persistAdminAuth();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const ResponsiveAdminShell()),
-        );
-      }
-      return;
-    }
-
-    // Supabase Auth Fallback
     try {
-      final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: adminId,
-        password: password,
-      );
+      final res = await http
+          .post(
+            Uri.parse(SupabaseConfig.verifyAdminFunctionUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              if (SupabaseConfig.pushSecret.isNotEmpty)
+                'X-Push-Secret': SupabaseConfig.pushSecret,
+            },
+            body: jsonEncode({'email': email, 'password': password}),
+          )
+          .timeout(const Duration(seconds: 15));
 
-      if (response.user != null) {
-        await _persistAdminAuth();
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body) as Map<String, dynamic>;
         if (mounted) {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const ResponsiveAdminShell()),
+            MaterialPageRoute(
+              builder: (_) => ResponsiveAdminShell(
+                adminUserId: decoded['user_id']?.toString() ?? '',
+                adminName: decoded['name']?.toString() ?? 'Admin',
+              ),
+            ),
           );
         }
         return;
       }
-    } catch (_) {}
 
-    setState(() {
-      _isLoading = false;
-      _errorMessage = 'Invalid Admin ID or Password. Please check credentials.';
-    });
-  }
-
-  Future<void> _persistAdminAuth() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('admin_authenticated', true);
+      String message = 'Invalid Admin Email or Password. Please check credentials.';
+      if (res.statusCode == 401) {
+        message = 'Wrong password. Please try again.';
+      } else if (res.statusCode == 403) {
+        message = 'This account does not have admin access.';
+      } else if (res.statusCode == 404) {
+        message = 'Account not found. Please check the email.';
+      } else if (res.statusCode == 401 || res.statusCode == 500) {
+        message = 'Admin service unavailable (${res.statusCode}). Try again later.';
+      }
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = message;
+        });
+      }
+    } catch (e) {
+      debugPrint('Admin login error: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Cannot reach the admin service. Check your connection.';
+        });
+      }
+    }
   }
 
   @override
@@ -135,8 +162,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 controller: _adminIdController,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  labelText: 'Admin ID',
-                  hintText: 'e.g. rohitgawai',
+                  labelText: 'Admin Email',
+                  hintText: 'admin@example.com',
                   labelStyle: GoogleFonts.inter(color: AdminTheme.textMuted),
                   hintStyle: GoogleFonts.inter(color: AdminTheme.textMuted.withValues(alpha: 0.5)),
                   prefixIcon: const Icon(Icons.badge_outlined, color: AdminTheme.textMuted),

@@ -10,18 +10,17 @@ const supabase = createClient(
 // entries, reports (as author OR reporter) and finally the profile row itself
 // (which cascades profile_credentials via the ON DELETE CASCADE FK).
 //
-// Authorization is the shared push secret (same trust model as send-push and
-// account-credentials): only the admin panel — which has its own hardcoded
-// login UI — can call it. Returns 404 when the target account does not exist.
-// The app side force-logs-out the deleted user via its profiles realtime
-// subscription + periodic sync when the row disappears.
+// Authorization requires BOTH the shared push secret AND proof that the
+// caller holds the admin role (admin_user_id is verified against
+// `profiles.roles`, same trust model as delete-post). Without the role check,
+// anyone with the leaked secret could delete arbitrary accounts.
 Deno.serve(async (req) => {
   const secret = Deno.env.get('PUSH_SECRET')
   if (!secret || req.headers.get('X-Push-Secret') !== secret) {
     return new Response('Unauthorized', { status: 401 })
   }
 
-  let payload: { user_id?: string }
+  let payload: { user_id?: string; admin_user_id?: string }
   try {
     payload = await req.json()
   } catch {
@@ -30,6 +29,25 @@ Deno.serve(async (req) => {
   const user_id = (payload.user_id ?? '').trim()
   if (!user_id) {
     return new Response('Missing user_id', { status: 400 })
+  }
+
+  const adminUserId = (payload.admin_user_id ?? '').trim()
+  if (!adminUserId) {
+    return new Response('Missing admin_user_id', { status: 400 })
+  }
+  const { data: admins, error: adminError } = await supabase
+    .from('profiles')
+    .select('roles')
+    .eq('user_id', adminUserId)
+    .limit(1)
+  if (adminError) {
+    console.error('delete-user admin lookup failed', adminError.message)
+    return new Response('Internal error', { status: 500 })
+  }
+  const isAdmin = (admins ?? []).some((p) =>
+    Array.isArray(p.roles) && p.roles.includes('admin'))
+  if (!isAdmin) {
+    return new Response('Not an admin', { status: 403 })
   }
 
   // Target must exist — refuse to delete nothing.

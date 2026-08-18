@@ -53,14 +53,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     });
   }
 
-  void _openSearch(String query) {
-    setState(() {
-      selectedDept = null;
-      searchQuery = query;
-      searchController.text = query;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final dataService = context.watch<MockDataService>();

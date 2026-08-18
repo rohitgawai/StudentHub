@@ -133,6 +133,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   ? const FeedSkeleton()
                   : posts.isEmpty
                   ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
                       children: const [
                         SizedBox(height: 100),
                         Center(
@@ -160,6 +163,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                     )
                   : ListView.builder(
                       controller: scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
                       padding: const EdgeInsets.only(bottom: 96),
                       itemCount: posts.length,
                       itemBuilder: (context, index) {

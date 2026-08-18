@@ -11,6 +11,7 @@ import '../screens/user_directory_screen.dart';
 import '../screens/role_removals_screen.dart';
 import '../screens/content_moderation_screen.dart';
 import '../screens/broadcast_screen.dart';
+import '../screens/admin_login_screen.dart';
 
 enum AdminTab {
   dashboard,
@@ -24,7 +25,15 @@ enum AdminTab {
 }
 
 class ResponsiveAdminShell extends StatefulWidget {
-  const ResponsiveAdminShell({super.key});
+  const ResponsiveAdminShell({
+    super.key,
+    this.adminUserId = '',
+    this.adminName = 'Admin',
+  });
+
+  /// Verified server-side by the verify-admin edge function during login.
+  final String adminUserId;
+  final String adminName;
 
   @override
   State<ResponsiveAdminShell> createState() => _ResponsiveAdminShellState();
@@ -38,10 +47,20 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final service = Provider.of<AdminSupabaseService>(context, listen: false);
+      service.adminUserId = widget.adminUserId;
       service.fetchUsers();
       service.fetchRoleRequests();
       service.fetchReportedContent();
     });
+  }
+
+  /// Returns to the login screen. Nothing is persisted, so the next launch
+  /// requires a fresh server-verified login.
+  void _logout() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+      (route) => false,
+    );
   }
 
   Widget _buildTabScreen() {
@@ -192,6 +211,12 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
               service.fetchReportedContent();
             },
           ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: AdminTheme.statusDanger),
+            tooltip: 'Logout',
+            onPressed: _logout,
+          ),
         ],
       ),
     );
@@ -325,12 +350,14 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Admin Control',
+                        widget.adminName.isEmpty ? 'Admin Control' : widget.adminName,
                         style: GoogleFonts.inter(
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                           fontSize: 13,
                         ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                       Text(
                         'Super Administrator',
@@ -341,6 +368,11 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                       ),
                     ],
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded, color: AdminTheme.statusDanger, size: 20),
+                  tooltip: 'Logout',
+                  onPressed: _logout,
                 ),
               ],
             ),

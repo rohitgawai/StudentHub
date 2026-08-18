@@ -79,6 +79,10 @@ class _CreateEventModalState extends State<CreateEventModal> {
       return;
     }
 
+    // Lock the button while the event is being added (prevents a double-tap
+    // that would publish the same event twice).
+    setState(() => _isPublishing = true);
+
     final maxCap = int.tryParse(maxSeatsController.text.trim()) ?? 100;
 
     final newEvent = PostModel(
@@ -118,9 +122,15 @@ class _CreateEventModalState extends State<CreateEventModal> {
     required DateTime first,
     required DateTime last,
   }) async {
+    // Clamp into the picker's allowed range: a pre-filled date (e.g. an edited
+    // event's original date) can be outside [first, last] and would crash
+    // showDatePicker with an assertion.
+    var clampedInitial = initial;
+    if (clampedInitial.isBefore(first)) clampedInitial = first;
+    if (clampedInitial.isAfter(last)) clampedInitial = last;
     final date = await showDatePicker(
       context: context,
-      initialDate: initial,
+      initialDate: clampedInitial,
       firstDate: first,
       lastDate: last,
     );

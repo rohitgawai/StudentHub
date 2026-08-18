@@ -249,7 +249,9 @@ class _ProfileScreenState extends State<ProfileScreen>
           await dataService.refreshUserProfile();
         },
         child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           slivers: [
             // Floating Profile Header Card
             SliverToBoxAdapter(
@@ -748,35 +750,31 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
           ),
 
-          SliverToBoxAdapter(
-            child: IndexedStack(
-              index: tabController.index,
-              children: [
-                _buildList(
-                  savedPosts,
-                  'Tap the bookmark icon on any feed post to save it for quick access later.',
-                  cfg: cfg,
-                  isSavedForAll: true,
-                  dataService: dataService,
-                ),
-                _buildList(
-                  registeredEvents,
-                  'You haven\'t registered for any upcoming campus events yet.',
-                  cfg: cfg,
-                  isRegisteredForAll: true,
-                  dataService: dataService,
-                ),
-              ],
+          if (tabController.index == 0)
+            _buildListSliver(
+              savedPosts,
+              'Tap the bookmark icon on any feed post to save it for quick access later.',
+              cfg: cfg,
+              isSavedForAll: true,
+              dataService: dataService,
+            )
+          else
+            _buildListSliver(
+              registeredEvents,
+              'You haven\'t registered for any upcoming campus events yet.',
+              cfg: cfg,
+              isRegisteredForAll: true,
+              dataService: dataService,
             ),
-          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
         ],
       ),
     ),
   );
 }
 
-  Widget _buildList(
-    List posts,
+  Widget _buildListSliver(
+    List<PostModel> posts,
     String emptyMsg, {
     required AppConfig cfg,
     required MockDataService dataService,
@@ -784,51 +782,50 @@ class _ProfileScreenState extends State<ProfileScreen>
     bool isRegisteredForAll = false,
   }) {
     if (posts.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cfg.primaryColor.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cfg.primaryColor.withValues(alpha: 0.15)),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isSavedForAll ? Icons.bookmark_border : Icons.event_note,
-              size: 48,
-              color: cfg.primaryColor.withValues(alpha: 0.6),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              isSavedForAll ? 'No Saved Posts' : 'No Registered Events',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey.shade800,
+      return SliverToBoxAdapter(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+          margin: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cfg.primaryColor.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cfg.primaryColor.withValues(alpha: 0.15)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isSavedForAll ? Icons.bookmark_border : Icons.event_note,
+                size: 48,
+                color: cfg.primaryColor.withValues(alpha: 0.6),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              emptyMsg,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
+              const SizedBox(height: 12),
+              Text(
+                isSavedForAll ? 'No Saved Posts' : 'No Registered Events',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade800,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              Text(
+                emptyMsg,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+    return SliverList.builder(
       itemCount: posts.length,
       itemBuilder: (ctx, idx) {
-        final post = posts[idx] as PostModel;
+        final post = posts[idx];
         return PostCard(
           key: ValueKey(post.id),
           post: post,
@@ -854,14 +851,15 @@ class _ProfileScreenState extends State<ProfileScreen>
     MockDataService dataService,
     String email,
   ) {
-    final newPasswordController = TextEditingController();
+final newPasswordController = TextEditingController();
     final confirmController = TextEditingController();
+    String errorText = '';
+    bool isResetting = false;
 
     showDialog(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          String errorText = '';
           return AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
@@ -893,6 +891,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 TextField(
                   controller: newPasswordController,
                   obscureText: true,
+                  enabled: !isResetting,
                   decoration: InputDecoration(
                     labelText: 'New Password (min 6 characters)',
                     prefixIcon: const Icon(Icons.lock_outline),
@@ -905,6 +904,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 TextField(
                   controller: confirmController,
                   obscureText: true,
+                  enabled: !isResetting,
                   decoration: InputDecoration(
                     labelText: 'Confirm New Password',
                     prefixIcon: const Icon(Icons.lock_outline),
@@ -924,7 +924,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(dialogCtx),
+                onPressed: isResetting ? null : () => Navigator.pop(dialogCtx),
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
@@ -934,38 +934,63 @@ class _ProfileScreenState extends State<ProfileScreen>
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                onPressed: () async {
-                  final newPassword = newPasswordController.text;
-                  if (newPassword.length < 6) {
-                    setDialogState(
-                      () => errorText = 'Password must be at least 6 characters.',
-                    );
-                    return;
-                  }
-                  if (newPassword != confirmController.text) {
-                    setDialogState(
-                      () => errorText = 'Passwords do not match.',
-                    );
-                    return;
-                  }
-                  try {
-                    await dataService.resetPassword(
-                      email: email,
-                      password: newPassword,
-                    );
-                    if (dialogCtx.mounted) Navigator.pop(dialogCtx);
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('✅ Password reset successfully!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  } catch (e) {
-                    setDialogState(() => errorText = e.toString());
-                  }
-                },
-                child: const Text('Reset Password'),
+                onPressed: isResetting
+                    ? null
+                    : () async {
+                        final newPassword = newPasswordController.text;
+                        if (newPassword.length < 6) {
+                          setDialogState(
+                            () => errorText =
+                                'Password must be at least 6 characters.',
+                          );
+                          return;
+                        }
+                        if (newPassword != confirmController.text) {
+                          setDialogState(
+                            () => errorText = 'Passwords do not match.',
+                          );
+                          return;
+                        }
+                        setDialogState(() {
+                          isResetting = true;
+                          errorText = '';
+                        });
+                        try {
+                          await dataService.resetPassword(
+                            email: email,
+                            password: newPassword,
+                          );
+                          if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context)
+                            ..hideCurrentSnackBar()
+                            ..showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  '✅ Password reset successfully! '
+                                  'You can now log in with your new password.',
+                                ),
+                                backgroundColor: Colors.green,
+                                duration: Duration(seconds: 4),
+                              ),
+                            );
+                        } catch (e) {
+                          setDialogState(() {
+                            isResetting = false;
+                            errorText = e.toString();
+                          });
+                        }
+                      },
+                child: isResetting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Reset Password'),
               ),
             ],
           );

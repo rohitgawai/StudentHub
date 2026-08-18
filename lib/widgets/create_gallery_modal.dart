@@ -57,6 +57,10 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
       return;
     }
 
+    // Lock the button while the gallery is being added (prevents a double-tap
+    // that would publish the same gallery twice).
+    setState(() => _isPublishing = true);
+
     final newPost = PostModel(
       id: 'pst_${DateTime.now().millisecondsSinceEpoch}',
       title: titleController.text.trim(),

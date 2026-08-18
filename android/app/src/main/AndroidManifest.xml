@@ -1,16 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Legacy-storage write access for direct export-to-Downloads on
-         Android 9 and below; ignored on Android 10+ (scoped storage). -->
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+    <!-- Scoped storage (Android 10+) covers all exports; the legacy
+         WRITE_EXTERNAL_STORAGE path is removed because minSdk is 29. -->
     <application
         android:label="student_hub"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:requestLegacyExternalStorage="true">
+        android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../models/post_model.dart';
 import '../services/mock_data_service.dart';
 import '../utils/date_formatter.dart';

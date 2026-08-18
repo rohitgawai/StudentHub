@@ -10,6 +10,11 @@ import '../models/reported_content_model.dart';
 class AdminSupabaseService extends ChangeNotifier {
   final SupabaseClient _client = Supabase.instance.client;
 
+  /// Verified server-side by the verify-admin edge function during login.
+  /// Attached to admin-only edge function calls so the server can re-check
+  /// the admin role on every sensitive operation.
+  String adminUserId = '';
+
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
@@ -37,6 +42,25 @@ class AdminSupabaseService extends ChangeNotifier {
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
+  }
+
+  /// Posts to an admin-only edge function with the shared secret. Sensitive
+  /// operations verify the caller's admin role server-side (adminUserId).
+  Future<http.Response> _callAdminFunction(
+    String url,
+    Map<String, dynamic> body,
+  ) async {
+    return http
+        .post(
+          Uri.parse(url),
+          headers: {
+            'Content-Type': 'application/json',
+            if (SupabaseConfig.pushSecret.isNotEmpty)
+              'X-Push-Secret': SupabaseConfig.pushSecret,
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 15));
   }
 
   // --- 1. Realtime Online Presence Tracker ---
@@ -112,9 +136,20 @@ class AdminSupabaseService extends ChangeNotifier {
 
   Future<bool> toggleVerifyStudent(String userId, bool currentStatus) async {
     try {
-      await _client.from('profiles').update({
-        'is_verified': !currentStatus,
-      }).eq('user_id', userId);
+      // Server-side with admin verification; anon clients cannot flip
+      // verification flags directly anymore.
+      final res = await _callAdminFunction(
+        SupabaseConfig.adminActionsFunctionUrl,
+        {
+          'admin_user_id': adminUserId,
+          'action': 'verify_student',
+          'user_id': userId,
+        },
+      );
+      if (res.statusCode != 200) {
+        debugPrint('Toggle verify rejected: ${res.statusCode} ${res.body}');
+        return false;
+      }
 
       await fetchUsers();
       return true;
@@ -134,9 +169,22 @@ class AdminSupabaseService extends ChangeNotifier {
         targetRoles = ['faculty'];
       }
 
-      await _client.from('profiles').update({
-        'roles': targetRoles,
-      }).eq('user_id', userId);
+      // Server-side: the function re-verifies the caller's admin role before
+      // granting anything. Anon clients can no longer mutate roles at all
+      // (see guard_profiles_roles trigger).
+      final res = await _callAdminFunction(
+        SupabaseConfig.adminActionsFunctionUrl,
+        {
+          'admin_user_id': adminUserId,
+          'action': 'set_roles',
+          'user_id': userId,
+          'roles': targetRoles,
+        },
+      );
+      if (res.statusCode != 200) {
+        debugPrint('Update user role rejected: ${res.statusCode} ${res.body}');
+        return false;
+      }
 
       await fetchUsers();
       return true;
@@ -148,18 +196,29 @@ class AdminSupabaseService extends ChangeNotifier {
 
   Future<bool> removeUserRoleWithNotice(String userId, String userName) async {
     try {
-      // 1. Revert user role to student
-      await _client.from('profiles').update({
-        'roles': ['student'],
-      }).eq('user_id', userId);
+      // 1. Revert user role to student — server-side with admin verification.
+      final res = await _callAdminFunction(
+        SupabaseConfig.adminActionsFunctionUrl,
+        {
+          'admin_user_id': adminUserId,
+          'action': 'set_roles',
+          'user_id': userId,
+          'roles': ['student'],
+        },
+      );
+      if (res.statusCode != 200) {
+        debugPrint('Remove user role rejected: ${res.statusCode} ${res.body}');
+        return false;
+      }
 
       // 2. Dispatch push notification to user
       try {
-        await http.post(
+        final push = await http.post(
           Uri.parse(SupabaseConfig.pushFunctionUrl),
           headers: {
             'Content-Type': 'application/json',
-            'X-Push-Secret': SupabaseConfig.pushSecret,
+            if (SupabaseConfig.pushSecret.isNotEmpty)
+              'X-Push-Secret': SupabaseConfig.pushSecret,
           },
           body: jsonEncode({
             'post_id': 'role_removal_${DateTime.now().millisecondsSinceEpoch}',
@@ -170,6 +229,9 @@ class AdminSupabaseService extends ChangeNotifier {
             'type': 'role_removal',
           }),
         );
+        if (push.statusCode < 200 || push.statusCode >= 300) {
+          debugPrint('Role removal push failed: ${push.statusCode} ${push.body}');
+        }
       } catch (e) {
         debugPrint('Push role removal notice error: $e');
       }
@@ -184,28 +246,31 @@ class AdminSupabaseService extends ChangeNotifier {
 
   Future<bool> toggleBanUser(String userId, bool targetBannedState) async {
     try {
-      final newRoles = targetBannedState ? ['banned'] : ['student'];
-
-      try {
-        await _client.from('profiles').update({
-          'roles': newRoles,
-        }).eq('user_id', userId);
-      } catch (_) {}
-
-      try {
-        await _client.from('profiles').update({
-          'is_banned': targetBannedState,
-        }).eq('user_id', userId);
-      } catch (_) {}
+      // Server-side ban/unban: the function re-verifies the caller's admin
+      // role before touching roles (guard_profiles_roles trigger blocks anon
+      // writes entirely).
+      final res = await _callAdminFunction(
+        SupabaseConfig.adminActionsFunctionUrl,
+        {
+          'admin_user_id': adminUserId,
+          'action': targetBannedState ? 'ban' : 'unban',
+          'user_id': userId,
+        },
+      );
+      if (res.statusCode != 200) {
+        debugPrint('Toggle ban rejected: ${res.statusCode} ${res.body}');
+        return false;
+      }
 
       if (targetBannedState) {
-        // Dispatch Ban push notification & in-app bell notification
+        // Dispatch Ban push notification
         try {
-          await http.post(
+          final push = await http.post(
             Uri.parse(SupabaseConfig.pushFunctionUrl),
             headers: {
               'Content-Type': 'application/json',
-              'X-Push-Secret': SupabaseConfig.pushSecret,
+              if (SupabaseConfig.pushSecret.isNotEmpty)
+                'X-Push-Secret': SupabaseConfig.pushSecret,
             },
             body: jsonEncode({
               'post_id': 'ban_${DateTime.now().millisecondsSinceEpoch}',
@@ -216,29 +281,21 @@ class AdminSupabaseService extends ChangeNotifier {
               'type': 'account_ban',
             }),
           );
+          if (push.statusCode < 200 || push.statusCode >= 300) {
+            debugPrint('Ban push failed: ${push.statusCode} ${push.body}');
+          }
         } catch (e) {
           debugPrint('Push ban notice error: $e');
         }
-
-        try {
-          await _client.from('notifications').insert({
-            'user_id': userId,
-            'title': 'Account Suspended 🚫',
-            'body': 'Your account has been suspended by Administrator. Please contact support if you have any questions.',
-            'category': 'personal',
-            'created_at': DateTime.now().toIso8601String(),
-          });
-        } catch (e) {
-          debugPrint('In-app ban notice error: $e');
-        }
       } else {
-        // Dispatch Unban push notification & in-app bell notification
+        // Dispatch Unban push notification
         try {
-          await http.post(
+          final push = await http.post(
             Uri.parse(SupabaseConfig.pushFunctionUrl),
             headers: {
               'Content-Type': 'application/json',
-              'X-Push-Secret': SupabaseConfig.pushSecret,
+              if (SupabaseConfig.pushSecret.isNotEmpty)
+                'X-Push-Secret': SupabaseConfig.pushSecret,
             },
             body: jsonEncode({
               'post_id': 'unban_${DateTime.now().millisecondsSinceEpoch}',
@@ -249,20 +306,11 @@ class AdminSupabaseService extends ChangeNotifier {
               'type': 'account_unban',
             }),
           );
+          if (push.statusCode < 200 || push.statusCode >= 300) {
+            debugPrint('Unban push failed: ${push.statusCode} ${push.body}');
+          }
         } catch (e) {
           debugPrint('Push unban notice error: $e');
-        }
-
-        try {
-          await _client.from('notifications').insert({
-            'user_id': userId,
-            'title': 'Account Restored! 🎉',
-            'body': 'Your account has been unbanned by Administrator. You now have full access to StudentHub.',
-            'category': 'personal',
-            'created_at': DateTime.now().toIso8601String(),
-          });
-        } catch (e) {
-          debugPrint('In-app unban notice error: $e');
         }
       }
 
@@ -301,20 +349,17 @@ class AdminSupabaseService extends ChangeNotifier {
     // Permanent server-side deletion runs through the delete-user Edge
     // Function (service role): it removes device tokens, form submissions,
     // role requests, the user's posts, push log entries, reports and finally
-    // the profile row (cascading password credentials). The deleted user's app
-    // detects the missing row and force-logs-out + wipes the local account.
-    // The local UI list is only updated AFTER the server confirms.
+    // the profile row (cascading password credentials). The function now also
+    // verifies the caller's admin role before deleting. The local UI list is
+    // only updated AFTER the server confirms.
     try {
-      final res = await http
-          .post(
-            Uri.parse(SupabaseConfig.deleteUserFunctionUrl),
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Push-Secret': SupabaseConfig.pushSecret,
-            },
-            body: jsonEncode({'user_id': userId}),
-          )
-          .timeout(const Duration(seconds: 15));
+      final res = await _callAdminFunction(
+        SupabaseConfig.deleteUserFunctionUrl,
+        {
+          'user_id': userId,
+          'admin_user_id': adminUserId,
+        },
+      );
 
       if (res.statusCode != 200) {
         debugPrint('Delete user rejected: ${res.statusCode} ${res.body}');
@@ -340,7 +385,7 @@ class AdminSupabaseService extends ChangeNotifier {
       final response = await _client
           .from('role_requests')
           .select()
-          .order('created_at', ascending: false)
+          .order('submitted_at', ascending: false)
           .timeout(const Duration(seconds: 12));
 
       final List<dynamic> data = response as List<dynamic>;
@@ -364,31 +409,21 @@ class AdminSupabaseService extends ChangeNotifier {
     String? note,
   }) async {
     try {
-      final status = approve ? 'approved' : 'rejected';
-
-      await _client.from('role_requests').update({
-        'status': status,
-        'admin_notes': note ?? (approve ? 'Approved by Admin' : 'Rejected by Admin'),
-      }).eq('id', requestId);
-
-      if (approve) {
-        final rows = await _client
-            .from('profiles')
-            .select('roles')
-            .eq('user_id', userId)
-            .limit(1);
-        final existingRoles = (rows as List<dynamic>).isNotEmpty
-            ? ((rows.first as Map)['roles'] as List?) ?? const <dynamic>[]
-            : const <dynamic>[];
-        // Merge instead of replace so switching between roles keeps working;
-        // Faculty is a strict upgrade that drops the Student role.
-        var merged = {...existingRoles.whereType<String>(), targetRole}.toList();
-        if (targetRole == 'faculty') {
-          merged = merged.where((r) => r != 'student').toList();
-        }
-        await _client.from('profiles').update({
-          'roles': merged,
-        }).eq('user_id', userId);
+      // Server-side review: the function verifies the caller's admin role,
+      // updates the request status, and seeds the granted role into the
+      // applicant's profiles row (creating it if the applicant has none).
+      final res = await _callAdminFunction(
+        SupabaseConfig.reviewRoleFunctionUrl,
+        {
+          'request_id': requestId,
+          'admin_user_id': adminUserId,
+          'status': approve ? 'approved' : 'rejected',
+          'notes': note,
+        },
+      );
+      if (res.statusCode != 200) {
+        debugPrint('Review role request rejected: ${res.statusCode} ${res.body}');
+        return false;
       }
 
       await fetchRoleRequests();
@@ -422,9 +457,22 @@ class AdminSupabaseService extends ChangeNotifier {
 
   Future<bool> deletePost(String postId, String reportId) async {
     try {
-      await _client.from('posts').delete().eq('id', postId);
-      await _client.from('reported_posts').update({'status': 'resolved'}).eq('id', reportId);
+      // Server-side moderation delete: the function verifies the caller's
+      // admin role before deleting (anon clients cannot delete posts directly
+      // via the client anymore).
+      final res = await _callAdminFunction(
+        SupabaseConfig.deleteFunctionUrl,
+        {
+          'post_id': postId,
+          'admin_user_id': adminUserId,
+        },
+      );
+      if (res.statusCode != 200) {
+        debugPrint('Moderation delete rejected: ${res.statusCode} ${res.body}');
+        return false;
+      }
 
+      await _client.from('reported_posts').update({'status': 'resolved'}).eq('id', reportId);
       await fetchReportedContent();
       return true;
     } catch (e) {
@@ -459,7 +507,8 @@ class AdminSupabaseService extends ChangeNotifier {
         Uri.parse(SupabaseConfig.pushFunctionUrl),
         headers: {
           'Content-Type': 'application/json',
-          'X-Push-Secret': SupabaseConfig.pushSecret,
+          if (SupabaseConfig.pushSecret.isNotEmpty)
+            'X-Push-Secret': SupabaseConfig.pushSecret,
         },
         body: jsonEncode({
           'post_id': notifId,
@@ -476,6 +525,9 @@ class AdminSupabaseService extends ChangeNotifier {
       ).timeout(const Duration(seconds: 10));
 
       debugPrint('Push Edge Function status: ${res.statusCode} ${res.body}');
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        return false;
+      }
       return true;
     } catch (e) {
       debugPrint('Broadcast notification error: $e');

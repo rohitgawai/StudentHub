@@ -113,10 +113,16 @@ class AppConfig {
   }
 
   Color hexToColor(String hexString) {
+    final cleaned = hexString.replaceFirst('#', '');
     final buffer = StringBuffer();
-    if (hexString.length == 6 || hexString.length == 7) buffer.write('ff');
-    buffer.write(hexString.replaceFirst('#', ''));
-    return Color(int.parse(buffer.toString(), radix: 16));
+    if (cleaned.length == 6 || cleaned.length == 7) buffer.write('ff');
+    buffer.write(cleaned);
+    // A malformed value from server config must never crash the app.
+    final parsed = int.tryParse(buffer.toString(), radix: 16);
+    if (parsed == null || parsed > 0xFFFFFFFF) {
+      return const Color(0xFF1976D2);
+    }
+    return Color(parsed);
   }
 
   Color get primaryColor => hexToColor(primaryColorHex);

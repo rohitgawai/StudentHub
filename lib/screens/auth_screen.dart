@@ -23,6 +23,13 @@ class _AuthScreenState extends State<AuthScreen> {
   String _passwordError = '';
   bool _obscurePassword = true;
 
+  /// Account details from the "Continue as..." card while its password is
+  /// being verified. The 3-field form controllers stay empty during that flow,
+  /// so the password submit must use these instead.
+  String? _pendingName;
+  String? _pendingEmail;
+  String? _pendingMobile;
+
   final nameController = TextEditingController();
   final emailController = TextEditingController();
   final mobileController = TextEditingController();
@@ -69,6 +76,11 @@ class _AuthScreenState extends State<AuthScreen> {
           _passwordError = '';
           passwordController.clear();
           confirmPasswordController.clear();
+          // Continue-as card flow: the form controllers are empty, remember
+          // the account so the password submit targets the right identity.
+          _pendingName = name == null ? loginName : null;
+          _pendingEmail = name == null ? loginEmail : null;
+          _pendingMobile = name == null ? loginMobile : null;
         });
       }
     } catch (e) {
@@ -104,9 +116,10 @@ class _AuthScreenState extends State<AuthScreen> {
     });
 
     final dataService = Provider.of<MockDataService>(context, listen: false);
-    final name = nameController.text.trim();
-    final email = emailController.text.trim();
-    final mobile = mobileController.text.trim();
+    // Prefer the pending continue-as account; fall back to the form fields.
+    final name = _pendingName ?? nameController.text.trim();
+    final email = _pendingEmail ?? emailController.text.trim();
+    final mobile = _pendingMobile ?? mobileController.text.trim();
 
     try {
       if (_passwordMode == PasswordMode.set) {
@@ -746,6 +759,9 @@ class _AuthScreenState extends State<AuthScreen> {
               _passwordError = '';
               passwordController.clear();
               confirmPasswordController.clear();
+              _pendingName = null;
+              _pendingEmail = null;
+              _pendingMobile = null;
             }),
             child: const Text(
               'Use a different account',
