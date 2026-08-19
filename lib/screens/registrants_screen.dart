@@ -410,7 +410,7 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (ctx, idx) {
                       final s = filtered[idx];
                       return _buildAttendeeTile(context, s, accent);

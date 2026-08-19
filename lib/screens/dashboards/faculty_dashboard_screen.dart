@@ -115,8 +115,6 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen>
                   (p.authorName.trim().toLowerCase() == uName ||
                       p.authorName.toLowerCase().contains(uName))),
         )
-        .toList()
-        .reversed
         .toList();
     final myEvents = myPosts.where((p) => p.isEvent).toList();
     final myNotices = myPosts

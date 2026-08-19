@@ -118,7 +118,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF3B82F6).withOpacity(0.3),
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -431,7 +431,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF3B82F6).withOpacity(0.35),
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.35),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),

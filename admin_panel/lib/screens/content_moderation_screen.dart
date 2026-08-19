@@ -23,7 +23,7 @@ class ContentModerationScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AdminTheme.statusDanger.withOpacity(0.15),
+                  color: AdminTheme.statusDanger.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.gavel_rounded, color: AdminTheme.statusDanger, size: 28),

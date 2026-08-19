@@ -488,8 +488,8 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
-        splashColor: badgeGradient.first.withOpacity(0.08),
-        highlightColor: badgeGradient.first.withOpacity(0.04),
+        splashColor: badgeGradient.first.withValues(alpha: 0.08),
+        highlightColor: badgeGradient.first.withValues(alpha: 0.04),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
@@ -512,7 +512,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: badgeGradient.first.withOpacity(0.28),
+                      color: badgeGradient.first.withValues(alpha: 0.28),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),

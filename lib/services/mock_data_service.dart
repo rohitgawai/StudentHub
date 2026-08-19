@@ -2307,7 +2307,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           : await _localStore.readLocalBlob(url);
       if (bytes == null || bytes.isEmpty) return url;
       final ext = _extFromDataUri(url);
-      final path = 'avatars/${authorId}.$ext';
+      final path = 'avatars/$authorId.$ext';
       final ok = await _uploadBinaryWithRetry(
         client,
         path,

@@ -51,7 +51,7 @@ class _UserDirectoryScreenState extends State<UserDirectoryScreen> {
               Text('User: ${user.fullName} (${user.email})', style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 13)),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: ['student', 'host', 'faculty'].contains(selectedRole) ? selectedRole : 'student',
+                initialValue: ['student', 'host', 'faculty'].contains(selectedRole) ? selectedRole : 'student',
                 dropdownColor: AdminTheme.surfaceDark,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
@@ -400,15 +400,14 @@ class _UserDirectoryScreenState extends State<UserDirectoryScreen> {
             icon: const Icon(Icons.lock_open_rounded, size: 14),
             label: const Text('Unban', style: TextStyle(fontSize: 11)),
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
               await service.toggleBanUser(user.id, false);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Student has been unbanned successfully!'),
-                    backgroundColor: AdminTheme.statusOnline,
-                  ),
-                );
-              }
+              messenger.showSnackBar(
+                const SnackBar(
+                  content: Text('Student has been unbanned successfully!'),
+                  backgroundColor: AdminTheme.statusOnline,
+                ),
+              );
             },
           )
         else
@@ -422,15 +421,14 @@ class _UserDirectoryScreenState extends State<UserDirectoryScreen> {
             icon: const Icon(Icons.block_rounded, size: 14),
             label: const Text('Ban', style: TextStyle(fontSize: 11)),
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
               await service.toggleBanUser(user.id, true);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Student has been banned.'),
-                    backgroundColor: AdminTheme.statusDanger,
-                  ),
-                );
-              }
+              messenger.showSnackBar(
+                const SnackBar(
+                  content: Text('Student has been banned.'),
+                  backgroundColor: AdminTheme.statusDanger,
+                ),
+              );
             },
           ),
         IconButton(
