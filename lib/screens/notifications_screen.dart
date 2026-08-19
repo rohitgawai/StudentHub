@@ -20,12 +20,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       dataService.markNotificationRead(n.id);
     }
 
-    if (n.relatedPostId != null && n.relatedPostId!.isNotEmpty) {
+    // Role decisions carry the role-request id in relatedPostId — NOT a post
+    // id — so they must never deep-link into a post detail modal.
+    if (n.relatedPostId != null &&
+        n.relatedPostId!.isNotEmpty &&
+        !_isRoleNotif(n)) {
       // Direct deep link to post / event / gallery detail modal!
       PostDetailModal.show(context, n.relatedPostId!);
     } else {
       _showNotificationDetail(context, n);
     }
+  }
+
+  /// True for role-related notifications (approved / rejected / removed /
+  /// expired): their relatedPostId holds a role-request id ('req_...'), not a
+  /// post id, so they must not render a "view post" hint or deep-link.
+  bool _isRoleNotif(NotificationModel n) {
+    final ref = n.relatedPostId ?? '';
+    if (ref.startsWith('req_')) return true;
+    return n.title.toLowerCase().contains('role');
   }
 
   void _showNotificationDetail(BuildContext context, NotificationModel n) {
@@ -46,7 +59,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   CircleAvatar(
                     radius: 20,
                     backgroundColor: catColor.withValues(alpha: 0.15),
-                    child: Icon(_getCatIcon(n.category), color: catColor, size: 20),
+                    child: Icon(_getNotificationIcon(n), color: catColor, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -321,7 +334,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     radius: 22,
                                     backgroundColor: catColor.withValues(alpha: 0.12),
                                     child: Icon(
-                                      _getCatIcon(n.category),
+                                      _getNotificationIcon(n),
                                       color: catColor,
                                       size: 22,
                                     ),
@@ -399,7 +412,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                       ),
                                     ),
                                     if (n.relatedPostId != null &&
-                                        n.relatedPostId!.isNotEmpty) ...[
+                                        n.relatedPostId!.isNotEmpty &&
+                                        !_isRoleNotif(n)) ...[
                                       const SizedBox(height: 6),
                                       Row(
                                         children: [
@@ -448,8 +462,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  IconData _getCatIcon(NotificationCategory cat) {
-    switch (cat) {
+  IconData _getNotificationIcon(NotificationModel n) {
+    if (_isRoleNotif(n)) {
+      final t = n.title.toLowerCase();
+      if (t.contains('rejected') || t.contains('removed')) {
+        return Icons.gpp_bad_rounded; // Shield with X — denial
+      }
+      if (t.contains('approved') || t.contains('granted')) {
+        return Icons.workspace_premium_rounded; // Medal — granted role
+      }
+      return Icons.shield_rounded; // Generic role/account alert
+    }
+    switch (n.category) {
       case NotificationCategory.academic:
         return Icons.school_rounded;
       case NotificationCategory.events:
