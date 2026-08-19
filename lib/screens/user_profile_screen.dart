@@ -60,6 +60,13 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
+    // Pull the authoritative appreciation count from the server so it is
+    // correct even if the live broadcast was missed while offline/closed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<MockDataService>().refreshProfileLikesFor(widget.authorId);
+      }
+    });
     _likeScaleAnim = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween<double>(begin: 1.0, end: 1.25)

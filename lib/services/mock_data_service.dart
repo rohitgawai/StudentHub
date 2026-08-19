@@ -1509,6 +1509,22 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
               }
             }
           }
+          final appreciatedBy =
+              ((row['appreciated_by_user_ids'] as List?) ?? const [])
+                  .whereType<String>()
+                  .toList();
+          if (_profileLikes[uid] != appreciatedBy.length) {
+            _profileLikes[uid] = appreciatedBy.length;
+            changed = true;
+          }
+          final meInList = appreciatedBy.contains(currentUser.id);
+          if (meInList && !_likedProfileAuthorIds.contains(uid)) {
+            _likedProfileAuthorIds.add(uid);
+            changed = true;
+          } else if (!meInList && _likedProfileAuthorIds.contains(uid)) {
+            _likedProfileAuthorIds.remove(uid);
+            changed = true;
+          }
         }
       }
       if (changed) {
@@ -1687,7 +1703,6 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
                 final likerId = payload['liker_id']?.toString() ?? '';
                 final likerName = payload['liker_name']?.toString() ?? 'Someone';
                 if (targetAuthorId.isNotEmpty) {
-                  _profileLikes[targetAuthorId] = (_profileLikes[targetAuthorId] ?? 0) + 1;
                   // If this is the creator's device and not the liker, show notification
                   if (targetAuthorId == currentUser.id && likerId != currentUser.id) {
                     _notifications.insert(
@@ -1700,10 +1715,13 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
                         timestamp: DateTime.now().toUtc(),
                       ),
                     );
+                    _invalidateDataCaches();
+                    notifyListeners();
+                    _scheduleLocalSave();
                   }
-                  _invalidateDataCaches();
-                  notifyListeners();
-                  _scheduleLocalSave();
+                  // Reconcile the authoritative count from the server instead of
+                  // blind-incrementing (counts are server-persisted now).
+                  unawaited(refreshProfileLikesFor(targetAuthorId));
                 }
               } catch (_) {}
             },
@@ -2092,7 +2110,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     final currentDeviceId = await LocalStoreService.instance.getDeviceId();
     final rows = await client
         .from('profiles')
-        .select('user_id, roles, is_verified, active_device_id, has_password, has_completed_progressive_form')
+        .select('user_id, roles, is_verified, active_device_id, has_password, has_completed_progressive_form, appreciated_by_user_ids')
         .eq('user_id', currentUser.id)
         .limit(1)
         .timeout(const Duration(seconds: 12));
@@ -2172,7 +2190,21 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     final rolesChanged =
         localSet.length != serverSet.length || !localSet.containsAll(serverSet);
 
-    if (!rolesChanged && serverHasCompleted == currentUser.hasCompletedProgressiveForm) {
+    // Reconcile the authoritative appreciation count from the server (the
+    // device-local count can drift when live broadcasts are missed).
+    final ownAppreciatedBy =
+        ((row['appreciated_by_user_ids'] as List?) ?? const [])
+            .whereType<String>()
+            .toList();
+    final appreciationChanged =
+        _profileLikes[currentUser.id] != ownAppreciatedBy.length;
+    if (appreciationChanged) {
+      _profileLikes[currentUser.id] = ownAppreciatedBy.length;
+    }
+
+    if (!rolesChanged &&
+        serverHasCompleted == currentUser.hasCompletedProgressiveForm &&
+        !appreciationChanged) {
       return false;
     }
 
@@ -3460,7 +3492,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     return _likedProfileAuthorIds.contains(authorId);
   }
 
-  void toggleLikeProfile(String authorId, String authorName) {
+  Future<void> toggleLikeProfile(String authorId, String authorName) async {
     if (authorId.isEmpty) return;
     if (authorId == currentUser.id ||
         (authorName.trim().isNotEmpty &&
@@ -3469,18 +3501,40 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     final isLiked = _likedProfileAuthorIds.contains(authorId);
-    final currentLikes = _profileLikes[authorId] ?? 0;
 
+    // Optimistic local toggle so the UI responds instantly.
     if (isLiked) {
       _likedProfileAuthorIds.remove(authorId);
-      _profileLikes[authorId] = math.max(0, currentLikes - 1);
+      _profileLikes[authorId] = math.max(0, (_profileLikes[authorId] ?? 0) - 1);
     } else {
       _likedProfileAuthorIds.add(authorId);
-      _profileLikes[authorId] = currentLikes + 1;
+      _profileLikes[authorId] = (_profileLikes[authorId] ?? 0) + 1;
+    }
+    _invalidateDataCaches();
+    notifyListeners();
+    _scheduleLocalSave();
 
-      // Broadcast appreciation to creator's device and other connected users
-      final client = _client;
-      if (client != null && authorId != currentUser.id) {
+    final client = _client;
+    if (client == null) return;
+
+    try {
+      // Persist on the target profile server-side so every device (including
+      // the creator's) converges on the same authoritative count.
+      final count = await client.rpc(
+        'toggle_profile_appreciation',
+        params: {
+          'p_target_user_id': authorId,
+          'p_liker_user_id': currentUser.id,
+        },
+      );
+      final serverCount = count is num
+          ? count.toInt()
+          : int.tryParse(count?.toString() ?? '') ?? 0;
+      _profileLikes[authorId] = math.max(0, serverCount);
+
+      // Broadcast appreciation to the creator's device for a live notification
+      // (best-effort; counts are now reconciled from the server on next sync).
+      if (!isLiked && authorId != currentUser.id) {
         try {
           client.channel('public:posts').sendBroadcastMessage(
             event: 'profile_appreciated',
@@ -3492,12 +3546,55 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           );
         } catch (_) {}
       }
+      _invalidateDataCaches();
+      notifyListeners();
+      _scheduleLocalSave();
+    } catch (_) {
+      // Server unreachable: the optimistic local toggle already applied and
+      // the next sync/poll reconciles the count from the server.
     }
+  }
 
-    _invalidateDataCaches();
-    notifyListeners();
-    _scheduleLocalSave();
-    unawaited(_persistProfile());
+  /// Fetches one profile's authoritative appreciation data from the server and
+  /// hydrates the local count + "did I appreciate this?" state. Used when a
+  /// creator profile is opened so the count is correct even if the live
+  /// broadcast was missed (creator offline / app closed at that moment).
+  Future<void> refreshProfileLikesFor(String authorId) async {
+    final client = _client;
+    if (client == null || authorId.isEmpty) return;
+    try {
+      final rows = await client
+          .from('profiles')
+          .select('user_id, appreciated_by_user_ids')
+          .eq('user_id', authorId)
+          .limit(1)
+          .timeout(const Duration(seconds: 8));
+      if (rows.isEmpty) return;
+      final appreciatedBy = ((rows.first['appreciated_by_user_ids'] as List?) ??
+              const [])
+          .whereType<String>()
+          .toList();
+      var changed = false;
+      if (_profileLikes[authorId] != appreciatedBy.length) {
+        _profileLikes[authorId] = appreciatedBy.length;
+        changed = true;
+      }
+      final meInList = appreciatedBy.contains(currentUser.id);
+      if (meInList && !_likedProfileAuthorIds.contains(authorId)) {
+        _likedProfileAuthorIds.add(authorId);
+        changed = true;
+      } else if (!meInList && _likedProfileAuthorIds.contains(authorId)) {
+        _likedProfileAuthorIds.remove(authorId);
+        changed = true;
+      }
+      if (changed) {
+        _invalidateDataCaches();
+        notifyListeners();
+        _scheduleLocalSave();
+      }
+    } catch (_) {
+      // Best-effort: the local state remains and the periodic sync retries.
+    }
   }
 
   void toggleEventRegistration(String postId) {
