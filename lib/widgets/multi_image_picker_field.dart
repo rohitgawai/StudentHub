@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/device_file_service.dart';
 import 'app_image.dart';
+import 'post_image_zoom_modal.dart';
 
 /// Multi-image upload field for gallery posts: collects 3-6 images from the
 /// device picker, shows thumbnails with per-image remove, and reports the
@@ -94,9 +95,16 @@ class _MultiImagePickerFieldState extends State<MultiImagePickerField> {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: AppImage(
-                        source: _images[index],
-                        fit: BoxFit.cover,
+                      child: GestureDetector(
+                        onTap: () => showPostImageZoomModal(
+                          context,
+                          imageUrl: _images[index],
+                          title: 'Gallery Image ${index + 1}',
+                        ),
+                        child: AppImage(
+                          source: _images[index],
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                     Positioned(

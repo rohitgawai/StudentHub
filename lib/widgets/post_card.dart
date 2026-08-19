@@ -14,6 +14,7 @@ import 'role_badge.dart';
 import 'pdf_viewer_modal.dart';
 import 'app_image.dart';
 import 'gallery_viewer_modal.dart';
+import 'post_image_zoom_modal.dart';
 import '../screens/user_profile_screen.dart';
 
 /// A post card that stays decoupled from the data service, owning the
@@ -342,19 +343,67 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const SizedBox(height: 12),
-                                  AspectRatio(
-                                    aspectRatio: 1.15,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(16),
-                                        color: const Color(0xFFF1F5F9),
-                                      ),
-                                      clipBehavior: Clip.antiAlias,
-                                      child: AppImage(
-                                        source: post.imageUrl!,
-                                        height: double.infinity,
-                                        width: double.infinity,
-                                        fit: BoxFit.cover,
+                                  GestureDetector(
+                                    onTap: () => showPostImageZoomModal(
+                                      context,
+                                      imageUrl: post.imageUrl!,
+                                      title: post.title,
+                                      category: post.category,
+                                      authorName: post.authorName,
+                                      department: post.department,
+                                    ),
+                                    child: AspectRatio(
+                                      aspectRatio: 1.15,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(16),
+                                          color: const Color(0xFFF1F5F9),
+                                        ),
+                                        clipBehavior: Clip.antiAlias,
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            AppImage(
+                                              source: post.imageUrl!,
+                                              height: double.infinity,
+                                              width: double.infinity,
+                                              fit: BoxFit.cover,
+                                            ),
+                                            Positioned(
+                                              right: 10,
+                                              bottom: 10,
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withValues(alpha: 0.55),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: const [
+                                                    Icon(
+                                                      Icons.zoom_in_rounded,
+                                                      size: 13,
+                                                      color: Colors.white,
+                                                    ),
+                                                    SizedBox(width: 4),
+                                                    Text(
+                                                      'Zoom',
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 10.5,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),

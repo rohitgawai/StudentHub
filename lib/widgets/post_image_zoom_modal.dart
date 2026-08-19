@@ -1,78 +1,116 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../models/post_model.dart';
 import 'app_image.dart';
 
-/// Opens the framed gallery viewer with swipeable slides, double-tap zoom
-/// (pinch disabled), bi-directional slide up / down dismissal, and top close option.
-void showGalleryViewer(
+/// Opens a dedicated social-media style image zoom-in modal.
+/// Presents the image in a framed card size (matching post card dimensions)
+/// with a blurred dark backdrop, interactive pinch & double-tap zoom,
+/// bi-directional slide up / slide down dismissal, and a top close button.
+void showPostImageZoomModal(
   BuildContext context, {
-  required List<String> images,
-  int initialIndex = 0,
+  required String imageUrl,
   String? title,
+  PostCategory? category,
+  String? authorName,
+  String? department,
+  String? heroTag,
 }) {
-  if (images.isEmpty) return;
+  if (imageUrl.trim().isEmpty) return;
+
   Navigator.of(context).push(
     PageRouteBuilder(
       opaque: false,
       barrierDismissible: true,
       barrierColor: Colors.transparent,
-      pageBuilder: (ctx, animation, secondary) => GalleryViewerModal(
-        images: images,
-        initialIndex: initialIndex.clamp(0, images.length - 1),
+      pageBuilder: (ctx, animation, secondaryAnimation) => PostImageZoomModal(
+        imageUrl: imageUrl,
         title: title,
+        category: category,
+        authorName: authorName,
+        department: department,
+        heroTag: heroTag,
       ),
-      transitionsBuilder: (ctx, animation, secondary, child) => FadeTransition(
-        opacity: CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        ),
-        child: child,
-      ),
+      transitionsBuilder: (ctx, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+          ),
+          child: child,
+        );
+      },
       transitionDuration: const Duration(milliseconds: 220),
       reverseTransitionDuration: const Duration(milliseconds: 180),
     ),
   );
 }
 
-class GalleryViewerModal extends StatefulWidget {
-  final List<String> images;
-  final int initialIndex;
+class PostImageZoomModal extends StatefulWidget {
+  final String imageUrl;
   final String? title;
+  final PostCategory? category;
+  final String? authorName;
+  final String? department;
+  final String? heroTag;
 
-  const GalleryViewerModal({
+  const PostImageZoomModal({
     super.key,
-    required this.images,
-    this.initialIndex = 0,
+    required this.imageUrl,
     this.title,
+    this.category,
+    this.authorName,
+    this.department,
+    this.heroTag,
   });
 
   @override
-  State<GalleryViewerModal> createState() => _GalleryViewerModalState();
+  State<PostImageZoomModal> createState() => _PostImageZoomModalState();
 }
 
-class _GalleryViewerModalState extends State<GalleryViewerModal>
-    with SingleTickerProviderStateMixin {
-  late final PageController _pageController = PageController(
-    initialPage: widget.initialIndex,
-  );
-  late int _current = widget.initialIndex;
+class _PostImageZoomModalState extends State<PostImageZoomModal>
+    with TickerProviderStateMixin {
+  final TransformationController _transformCtrl = TransformationController();
+  late final AnimationController _releaseCtrl;
+  late final AnimationController _doubleTapZoomCtrl;
+  Animation<Matrix4>? _doubleTapAnimation;
 
-  // Bi-directional swipe-to-dismiss (slide UP and slide DOWN)
-  late final AnimationController _releaseCtrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 220),
-  );
   double _downY = 0;
   double _dragDy = 0;
-  bool _zoomed = false;
+  bool _isZoomed = false;
   bool _dismissing = false;
   double _releaseStart = 0;
   double _releaseTarget = 0;
 
   @override
+  void initState() {
+    super.initState();
+    _releaseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+    _doubleTapZoomCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+
+    _transformCtrl.addListener(_onTransformationChanged);
+  }
+
+  void _onTransformationChanged() {
+    final scale = _transformCtrl.value.getMaxScaleOnAxis();
+    final zoomed = scale > 1.05;
+    if (zoomed != _isZoomed) {
+      setState(() => _isZoomed = zoomed);
+    }
+  }
+
+  @override
   void dispose() {
-    _pageController.dispose();
+    _transformCtrl.removeListener(_onTransformationChanged);
+    _transformCtrl.dispose();
     _releaseCtrl.dispose();
+    _doubleTapZoomCtrl.dispose();
     super.dispose();
   }
 
@@ -96,13 +134,13 @@ class _GalleryViewerModalState extends State<GalleryViewerModal>
   }
 
   void _onPointerMove(PointerMoveEvent e) {
-    if (_dismissing || _zoomed) return;
+    if (_dismissing || _isZoomed) return;
     final dy = e.position.dy - _downY;
     setState(() => _dragDy = dy);
   }
 
   void _onPointerEnd(PointerEvent e) {
-    if (_dismissing || _zoomed) return;
+    if (_dismissing || _isZoomed) return;
     final screenH = MediaQuery.sizeOf(context).height;
     const threshold = 90.0;
 
@@ -135,14 +173,118 @@ class _GalleryViewerModalState extends State<GalleryViewerModal>
     }
   }
 
+  void _handleDoubleTap(TapDownDetails details) {
+    final currentScale = _transformCtrl.value.getMaxScaleOnAxis();
+    final begin = _transformCtrl.value;
+    Matrix4 end;
+
+    if (currentScale > 1.2) {
+      // Reset back to normal 1.0x
+      end = Matrix4.identity();
+    } else {
+      // Zoom into tapped point at 2.5x
+      final position = details.localPosition;
+      final x = -position.dx * (2.5 - 1.0);
+      final y = -position.dy * (2.5 - 1.0);
+      end = Matrix4.identity()
+        ..storage[0] = 2.5
+        ..storage[5] = 2.5
+        ..storage[12] = x
+        ..storage[13] = y;
+    }
+
+    _doubleTapAnimation = Matrix4Tween(begin: begin, end: end).animate(
+      CurvedAnimation(parent: _doubleTapZoomCtrl, curve: Curves.easeOutCubic),
+    )..addListener(() {
+        _transformCtrl.value = _doubleTapAnimation!.value;
+      });
+
+    _doubleTapZoomCtrl.forward(from: 0);
+  }
+
+  Widget _buildCategoryBadge() {
+    if (widget.category == null) return const SizedBox.shrink();
+
+    String label;
+    IconData icon;
+    Color color;
+
+    switch (widget.category!) {
+      case PostCategory.event:
+        label = 'Event Banner';
+        icon = Icons.event_rounded;
+        color = const Color(0xFF6366F1);
+        break;
+      case PostCategory.workshop:
+        label = 'Workshop Cover';
+        icon = Icons.psychology_alt_rounded;
+        color = const Color(0xFF818CF8);
+        break;
+      case PostCategory.achievement:
+        label = 'Achievement';
+        icon = Icons.emoji_events_rounded;
+        color = const Color(0xFFF59E0B);
+        break;
+      case PostCategory.placement:
+        label = 'Placement';
+        icon = Icons.work_rounded;
+        color = const Color(0xFF10B981);
+        break;
+      case PostCategory.gallery:
+        label = 'Gallery Photo';
+        icon = Icons.photo_library_rounded;
+        color = const Color(0xFF0284C7);
+        break;
+      case PostCategory.academic:
+        label = 'Academic';
+        icon = Icons.school_rounded;
+        color = const Color(0xFF3B82F6);
+        break;
+      case PostCategory.urgent:
+        label = 'Urgent Notice';
+        icon = Icons.warning_rounded;
+        color = const Color(0xFFEF4444);
+        break;
+      case PostCategory.announcement:
+        label = 'Post Image';
+        icon = Icons.campaign_rounded;
+        color = const Color(0xFF64748B);
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.45), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 13),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final screenSize = mediaQuery.size;
     final padding = mediaQuery.padding;
-    final images = widget.images;
 
-    // Framed card dimensions matching post image preview
+    // Dedicated framed sizing: looks like the post image on mobile/tablet/desktop
     final maxCardWidth = (screenSize.width - 32).clamp(280.0, 540.0);
     final maxCardHeight = screenSize.height * 0.68;
 
@@ -154,7 +296,7 @@ class _GalleryViewerModalState extends State<GalleryViewerModal>
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Blurred Dark Backdrop (Tap to close)
+          // Blurred Dark Backdrop (Tap to Close)
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -208,26 +350,32 @@ class _GalleryViewerModalState extends State<GalleryViewerModal>
                           ],
                         ),
                         clipBehavior: Clip.antiAlias,
-                        child: PageView.builder(
-                          controller: _pageController,
-                          physics: _zoomed
-                              ? const NeverScrollableScrollPhysics()
-                              : const BouncingScrollPhysics(),
-                          itemCount: images.length,
-                          onPageChanged: (i) {
-                            setState(() {
-                              _current = i;
-                              _zoomed = false;
-                              _dragDy = 0;
-                            });
-                          },
-                          itemBuilder: (context, index) => _DoubleTapZoomableImage(
-                            source: images[index],
-                            onZoomChanged: (zoomed) {
-                              if (_zoomed != zoomed) {
-                                setState(() => _zoomed = zoomed);
-                              }
-                            },
+                        child: GestureDetector(
+                          onDoubleTapDown: _handleDoubleTap,
+                          onDoubleTap: () {}, // Handled in onDoubleTapDown
+                          child: InteractiveViewer(
+                            transformationController: _transformCtrl,
+                            minScale: 1.0,
+                            maxScale: 4.5,
+                            panEnabled: true,
+                            scaleEnabled: false,
+                            clipBehavior: Clip.hardEdge,
+                            child: widget.heroTag != null
+                                ? Hero(
+                                    tag: widget.heroTag!,
+                                    child: AppImage(
+                                      source: widget.imageUrl,
+                                      fit: BoxFit.contain,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                    ),
+                                  )
+                                : AppImage(
+                                    source: widget.imageUrl,
+                                    fit: BoxFit.contain,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                  ),
                           ),
                         ),
                       ),
@@ -238,7 +386,7 @@ class _GalleryViewerModalState extends State<GalleryViewerModal>
             ),
           ),
 
-          // Top Header Bar
+          // Top Header Bar (Social Media light-box header with Close X)
           Positioned(
             top: padding.top + 8,
             left: 16,
@@ -248,36 +396,11 @@ class _GalleryViewerModalState extends State<GalleryViewerModal>
               opacity: backdropOpacity,
               child: Row(
                 children: [
-                  // Gallery Badge & Counter
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0284C7).withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFF0284C7).withValues(alpha: 0.45),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.photo_library_rounded, color: Colors.white, size: 13),
-                        const SizedBox(width: 5),
-                        Text(
-                          'Gallery ${_current + 1}/${images.length}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(width: 10),
+                  // Category badge or Post Title
+                  if (widget.category != null) ...[
+                    _buildCategoryBadge(),
+                    const SizedBox(width: 10),
+                  ],
                   if (widget.title != null && widget.title!.isNotEmpty)
                     Expanded(
                       child: Text(
@@ -329,42 +452,14 @@ class _GalleryViewerModalState extends State<GalleryViewerModal>
             ),
           ),
 
-          // Slideshow position indicator dots
-          if (images.length > 1)
-            Positioned(
-              bottom: padding.bottom + 52,
-              left: 0,
-              right: 0,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 100),
-                opacity: (_zoomed || backdropOpacity < 0.8) ? 0.0 : 1.0,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(images.length, (i) {
-                    final active = i == _current;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      width: active ? 18 : 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: active ? Colors.white : Colors.white38,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    );
-                  }),
-                ),
-              ),
-            ),
-
-          // Bottom Quick Hint Pill
+          // Bottom Quick Hint Pill (Subtle micro-interaction guide)
           Positioned(
             bottom: padding.bottom + 18,
             left: 0,
             right: 0,
             child: AnimatedOpacity(
               duration: const Duration(milliseconds: 100),
-              opacity: (_zoomed || backdropOpacity < 0.8) ? 0.0 : 1.0,
+              opacity: (_isZoomed || backdropOpacity < 0.8) ? 0.0 : 1.0,
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -396,102 +491,6 @@ class _GalleryViewerModalState extends State<GalleryViewerModal>
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// A single viewer slide with Double Tap Zoom Only (Pinch zoom disabled).
-class _DoubleTapZoomableImage extends StatefulWidget {
-  final String source;
-  final ValueChanged<bool> onZoomChanged;
-
-  const _DoubleTapZoomableImage({
-    required this.source,
-    required this.onZoomChanged,
-  });
-
-  @override
-  State<_DoubleTapZoomableImage> createState() => _DoubleTapZoomableImageState();
-}
-
-class _DoubleTapZoomableImageState extends State<_DoubleTapZoomableImage>
-    with SingleTickerProviderStateMixin {
-  final TransformationController _controller = TransformationController();
-  late final AnimationController _zoomCtrl;
-  Animation<Matrix4>? _zoomAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _zoomCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-    );
-    _controller.addListener(_reportZoom);
-  }
-
-  void _reportZoom() {
-    widget.onZoomChanged(_controller.value.getMaxScaleOnAxis() > 1.05);
-  }
-
-  @override
-  void dispose() {
-    _controller.removeListener(_reportZoom);
-    _controller.dispose();
-    _zoomCtrl.dispose();
-    super.dispose();
-  }
-
-  void _handleDoubleTap(TapDownDetails details) {
-    final currentScale = _controller.value.getMaxScaleOnAxis();
-    final begin = _controller.value;
-    Matrix4 end;
-
-    if (currentScale > 1.2) {
-      // Reset back to 1.0x
-      end = Matrix4.identity();
-    } else {
-      // Zoom into tapped location at 2.5x
-      final position = details.localPosition;
-      final x = -position.dx * (2.5 - 1.0);
-      final y = -position.dy * (2.5 - 1.0);
-      end = Matrix4.identity()
-        ..storage[0] = 2.5
-        ..storage[5] = 2.5
-        ..storage[12] = x
-        ..storage[13] = y;
-    }
-
-    _zoomAnimation = Matrix4Tween(begin: begin, end: end).animate(
-      CurvedAnimation(parent: _zoomCtrl, curve: Curves.easeOutCubic),
-    )..addListener(() {
-        _controller.value = _zoomAnimation!.value;
-      });
-
-    _zoomCtrl.forward(from: 0);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onDoubleTapDown: _handleDoubleTap,
-      onDoubleTap: () {},
-      child: InteractiveViewer(
-        transformationController: _controller,
-        minScale: 1.0,
-        maxScale: 4.5,
-        panEnabled: true,
-        scaleEnabled: false, // Pinch zoom disabled: double tap only
-        clipBehavior: Clip.hardEdge,
-        child: Center(
-          child: AppImage(
-            source: widget.source,
-            fit: BoxFit.contain,
-            width: double.infinity,
-            height: double.infinity,
-          ),
-        ),
       ),
     );
   }

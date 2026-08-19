@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/device_file_service.dart';
 import 'app_image.dart';
+import 'post_image_zoom_modal.dart';
 
 class ImagePickerField extends StatefulWidget {
   final String? initialUrl;
@@ -110,11 +111,18 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
               borderRadius: BorderRadius.circular(10),
               child: Stack(
                 children: [
-                  AppImage(
-                    source: selectedUrl,
-                    height: 140,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
+                  GestureDetector(
+                    onTap: () => showPostImageZoomModal(
+                      context,
+                      imageUrl: selectedUrl!,
+                      title: selectedFileName ?? 'Attached Photo',
+                    ),
+                    child: AppImage(
+                      source: selectedUrl,
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                   Positioned(
                     left: 8,
