@@ -50,6 +50,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             Uri.parse(SupabaseConfig.verifyAdminFunctionUrl),
             headers: {
               'Content-Type': 'application/json',
+              'apikey': SupabaseConfig.anonKey,
+              'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
               if (SupabaseConfig.pushSecret.isNotEmpty)
                 'X-Push-Secret': SupabaseConfig.pushSecret,
             },

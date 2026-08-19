@@ -21,6 +21,9 @@ class AdminSupabaseService extends ChangeNotifier {
   List<AdminUserModel> _allUsers = [];
   List<AdminUserModel> get allUsers => _allUsers;
 
+  List<AdminUserModel> _admins = [];
+  List<AdminUserModel> get admins => _admins;
+
   List<AdminUserModel> _onlineUsers = [];
   List<AdminUserModel> get onlineUsers => _onlineUsers;
 
@@ -55,6 +58,8 @@ class AdminSupabaseService extends ChangeNotifier {
           Uri.parse(url),
           headers: {
             'Content-Type': 'application/json',
+            'apikey': SupabaseConfig.anonKey,
+            'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
             if (SupabaseConfig.pushSecret.isNotEmpty)
               'X-Push-Secret': SupabaseConfig.pushSecret,
           },
@@ -125,12 +130,40 @@ class AdminSupabaseService extends ChangeNotifier {
 
       _allUsers = data
           .map((json) => AdminUserModel.fromMap(json))
-          .where((u) => !_deletedUserIds.contains(u.id) && !u.isDeleted && u.role != 'deleted')
+          .where((u) =>
+              !_deletedUserIds.contains(u.id) &&
+              !u.isDeleted &&
+              u.role != 'deleted' &&
+              !u.roles.contains('admin'))
           .toList();
     } catch (e) {
       debugPrint('Fetch users error: $e');
     } finally {
       _setLoading(false);
+    }
+  }
+
+  /// Admin accounts (profiles carrying the `admin` role) — shown in the
+  /// dedicated Admins tab instead of the user directory.
+  Future<void> fetchAdmins() async {
+    try {
+      final response = await _client
+          .from('profiles')
+          .select()
+          .contains('roles', ['admin'])
+          .order('updated_at', ascending: false)
+          .timeout(const Duration(seconds: 12));
+
+      final List<dynamic> data = response as List<dynamic>;
+      _admins = data
+          .map((json) => AdminUserModel.fromMap(json))
+          .where((u) => !_deletedUserIds.contains(u.id) && !u.isDeleted)
+          .toList();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Fetch admins error: $e');
+      _admins = [];
+      notifyListeners();
     }
   }
 
@@ -217,6 +250,8 @@ class AdminSupabaseService extends ChangeNotifier {
           Uri.parse(SupabaseConfig.pushFunctionUrl),
           headers: {
             'Content-Type': 'application/json',
+            'apikey': SupabaseConfig.anonKey,
+            'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
             if (SupabaseConfig.pushSecret.isNotEmpty)
               'X-Push-Secret': SupabaseConfig.pushSecret,
           },

@@ -12,6 +12,7 @@ class AdminUserModel {
   final bool isVerifiedStudent;
   final bool isBanned;
   final bool isDeleted;
+  final String? activeDeviceId;
   final DateTime? lastSeen;
   final DateTime? createdAt;
 
@@ -29,6 +30,7 @@ class AdminUserModel {
     this.isVerifiedStudent = false,
     this.isBanned = false,
     this.isDeleted = false,
+    this.activeDeviceId,
     this.lastSeen,
     this.createdAt,
   });
@@ -83,6 +85,7 @@ class AdminUserModel {
       isVerifiedStudent: map['is_verified'] == true || map['is_verified_student'] == true,
       isBanned: banned,
       isDeleted: deleted,
+      activeDeviceId: map['active_device_id']?.toString(),
       lastSeen: updatedAt,
       createdAt: createdAt,
     );
@@ -102,6 +105,7 @@ class AdminUserModel {
       'is_verified': isVerifiedStudent,
       'is_banned': isBanned,
       'is_deleted': isDeleted,
+      'active_device_id': activeDeviceId,
       'updated_at': lastSeen?.toIso8601String(),
     };
   }

@@ -33,10 +33,31 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 call vercel --prod --yes --scope akai11
+if %ERRORLEVEL% NEQ 0 (
+    echo ❌ Production deploy FAILED with error code %ERRORLEVEL%.
+    echo    The update was NOT published. No alias change was made.
+    pause
+    exit /b %ERRORLEVEL%
+)
+
+echo.
+echo 🔗 Applying custom domain alias...
+call vercel alias set web-pearl-one-86.vercel.app studenthub-admin-panel.vercel.app --scope akai11
+if %ERRORLEVEL% NEQ 0 (
+    echo ⚠️ WARNING: Custom domain alias could not be applied (error %ERRORLEVEL%).
+    echo    The deployment is still live at the fallback URL below.
+    echo    Common causes: temporary network issue or a domain-claim conflict.
+)
 
 echo.
 echo ========================================================
-echo 🎉 DEPLOYMENT COMPLETE! Your update is live on Vercel.
+echo 🎉 DEPLOYMENT COMPLETE!
+echo.
+echo   ✅ Custom domain: https://studenthub-admin-panel.vercel.app
+echo   🔗 Fallback URL:  https://web-pearl-one-86.vercel.app
 echo ========================================================
 echo.
 pause
+
+
+

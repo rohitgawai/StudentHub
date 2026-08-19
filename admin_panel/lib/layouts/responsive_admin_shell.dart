@@ -8,6 +8,7 @@ import '../screens/online_users_screen.dart';
 import '../screens/role_requests_screen.dart';
 import '../screens/student_lookup_screen.dart';
 import '../screens/user_directory_screen.dart';
+import '../screens/admins_screen.dart';
 import '../screens/role_removals_screen.dart';
 import '../screens/content_moderation_screen.dart';
 import '../screens/broadcast_screen.dart';
@@ -19,6 +20,7 @@ enum AdminTab {
   roleRequests,
   studentLookup,
   userDirectory,
+  admins,
   roleRemovals,
   contentModeration,
   broadcast,
@@ -49,6 +51,7 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
       final service = Provider.of<AdminSupabaseService>(context, listen: false);
       service.adminUserId = widget.adminUserId;
       service.fetchUsers();
+      service.fetchAdmins();
       service.fetchRoleRequests();
       service.fetchReportedContent();
     });
@@ -75,6 +78,8 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
         return const StudentLookupScreen();
       case AdminTab.userDirectory:
         return const UserDirectoryScreen();
+      case AdminTab.admins:
+        return const AdminsScreen();
       case AdminTab.roleRemovals:
         return const RoleRemovalsScreen();
       case AdminTab.contentModeration:
@@ -96,6 +101,8 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
         return 'Student College Lookup';
       case AdminTab.userDirectory:
         return 'User & Privilege Directory';
+      case AdminTab.admins:
+        return 'Admin Accounts';
       case AdminTab.roleRemovals:
         return 'Role Removals Management';
       case AdminTab.contentModeration:
@@ -207,6 +214,7 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
             onPressed: () {
               service.refreshOnlinePresence();
               service.fetchUsers();
+              service.fetchAdmins();
               service.fetchRoleRequests();
               service.fetchReportedContent();
             },
@@ -306,6 +314,12 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                   AdminTab.userDirectory,
                   Icons.people_alt_rounded,
                   'User Directory',
+                ),
+                _sidebarNavItem(
+                  AdminTab.admins,
+                  Icons.admin_panel_settings_rounded,
+                  'Admins',
+                  badgeCount: service.admins.length,
                 ),
                 _sidebarNavItem(
                   AdminTab.roleRemovals,
@@ -508,6 +522,7 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                 _sidebarNavItem(AdminTab.roleRequests, Icons.verified_user_rounded, 'Role Applications'),
                 _sidebarNavItem(AdminTab.studentLookup, Icons.badge_rounded, 'Student Lookup'),
                 _sidebarNavItem(AdminTab.userDirectory, Icons.people_alt_rounded, 'User Directory'),
+                _sidebarNavItem(AdminTab.admins, Icons.admin_panel_settings_rounded, 'Admins', badgeCount: service.admins.length),
                 _sidebarNavItem(AdminTab.roleRemovals, Icons.remove_moderator_rounded, 'Role Removals'),
                 _sidebarNavItem(AdminTab.contentModeration, Icons.gavel_rounded, 'Content Moderation'),
                 _sidebarNavItem(AdminTab.broadcast, Icons.campaign_rounded, 'Broadcast Alert'),
