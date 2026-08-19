@@ -34,10 +34,12 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Foreground pushes and FCM notifications land in this channel. -->
+        <!-- Foreground pushes and FCM notifications land in this channel.
+             The app pre-creates this channel at startup (see PushService),
+             so native FCM rendering always finds it on Android 8+. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="high_importance" />
+            android:value="campus_updates" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

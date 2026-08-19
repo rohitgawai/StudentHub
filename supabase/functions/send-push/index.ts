@@ -232,6 +232,18 @@ Deno.serve(async (req) => {
   const isAdminBroadcast = type === 'announcement' && author_id === 'admin_official'
   const pushTitle = isAdminBroadcast ? `📢 ${title}` : title
   const pushBody = `${(body ?? title).slice(0, 200)}${isAdminBroadcast ? '\n\nBy Admin' : ''}`
+  // Mirror the app's channel mapping (PushService) so native FCM rendering in
+  // background/terminated finds a channel that actually exists on Android 8+.
+  // Without a channel_id the system falls back to the manifest default, which
+  // older Android versions may silently suppress.
+  const channelId = (() => {
+    const t = String(type ?? '').toLowerCase()
+    if (t.includes('like') || t.includes('appreciat')) return 'social_activity'
+    if (t.includes('ban') || t.includes('role') || t.includes('security')) return 'account_security'
+    const c = String(category ?? '').toLowerCase()
+    if (c === 'event' || c === 'workshop') return 'events_workshops'
+    return 'campus_updates'
+  })()
   for (const token of targets) {
     const message = {
       message: {
@@ -244,7 +256,10 @@ Deno.serve(async (req) => {
           author_id: author_id ?? '',
           registrant_name: registrant_name ?? '',
         },
-        android: { priority: 'HIGH' },
+        android: {
+          priority: 'HIGH',
+          notification: { channel_id: channelId },
+        },
       },
     }
     const res = await fetch(fcmUrl, {

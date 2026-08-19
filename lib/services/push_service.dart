@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -70,6 +70,7 @@ class PushService {
 
     await Firebase.initializeApp();
     _configureAndroidNotifications();
+    await _ensureChannelsCreated();
 
     FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
@@ -111,6 +112,56 @@ class PushService {
         }
       },
     );
+  }
+
+  /// Pre-creates every channel the app uses so that native FCM rendering
+  /// (background / terminated pushes) finds a real channel on Android 8+.
+  /// Without this, the manifest default channel (`high_importance` /
+  /// `campus_updates`) does not exist yet and older Android versions silently
+  /// suppress the system notification while newer ones happen to show it.
+  Future<void> _ensureChannelsCreated() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    final impl = _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    if (impl == null) return;
+    const channels = [
+      AndroidNotificationChannel(
+        'campus_updates',
+        'Campus Updates & Announcements',
+        description: 'Official updates, notifications and campus events',
+        importance: Importance.max,
+        showBadge: true,
+      ),
+      AndroidNotificationChannel(
+        'social_activity',
+        'Likes & Appreciations',
+        description: 'Social interactions from students and faculty',
+        importance: Importance.max,
+        showBadge: true,
+      ),
+      AndroidNotificationChannel(
+        'account_security',
+        'Account & Role Alerts',
+        description: 'Security alerts and official role status updates',
+        importance: Importance.max,
+        showBadge: true,
+      ),
+      AndroidNotificationChannel(
+        'events_workshops',
+        'Events & Workshops',
+        description: 'Live campus events, workshops and registrations',
+        importance: Importance.max,
+        showBadge: true,
+      ),
+    ];
+    for (final channel in channels) {
+      try {
+        await impl.createNotificationChannel(channel);
+      } catch (e) {
+        debugPrint('StudentHub: channel create failed: $e');
+      }
+    }
   }
 
   Future<void> _registerToken() async {

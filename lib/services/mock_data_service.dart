@@ -2470,7 +2470,8 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
   /// Grants a server-approved role to the device user and emits the in-app
   /// "Role Approved" notification. Returns whether anything changed.
   bool _grantRoleFromRemote(RoleRequestModel req) {
-    if (!currentUser.roles.contains(req.requestedRole)) {
+    final wasGranted = !currentUser.roles.contains(req.requestedRole);
+    if (wasGranted) {
       final updatedRoles = List<UserRole>.from(currentUser.roles)
         ..add(req.requestedRole);
       final updatedExpirations = Map<UserRole, DateTime>.from(
@@ -2487,7 +2488,12 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         roleExpirations: updatedExpirations,
       );
     }
-    if (_notifications.any((n) => n.relatedPostId == req.id)) return false;
+    final alreadyShown = _notifications.any((n) => n.relatedPostId == req.id);
+    final clearedBefore =
+        _notificationsCleared &&
+        _notificationsClearedAt != null &&
+        req.submittedAt.isBefore(_notificationsClearedAt!);
+    if (alreadyShown || clearedBefore) return wasGranted;
     final hasNote =
         req.adminNotes != null && req.adminNotes!.trim().isNotEmpty;
     _notifications.insert(
@@ -4526,6 +4532,11 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     for (final role in expiredRoles) {
+      if (_notificationsCleared &&
+          _notificationsClearedAt != null &&
+          expirations[role]!.isBefore(_notificationsClearedAt!)) {
+        continue;
+      }
       _notifications.insert(
         0,
         NotificationModel(
