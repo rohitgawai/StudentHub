@@ -97,11 +97,12 @@ class _CreatePostModalState extends State<CreatePostModal> {
             c != PostCategory.workshop)
         .toList();
     final yearOptions = ['All Academic Years', ...cfg.academicYears];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 1,
         title: Row(
@@ -127,12 +128,12 @@ class _CreatePostModalState extends State<CreatePostModal> {
               child: const Icon(Icons.campaign_rounded, color: Colors.white, size: 19),
             ),
             const SizedBox(width: 10),
-            const Text(
+            Text(
               'Campus Post',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 17.5,
-                color: Color(0xFF0F172A),
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 letterSpacing: -0.2,
               ),
             ),
@@ -140,7 +141,7 @@ class _CreatePostModalState extends State<CreatePostModal> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+            icon: Icon(Icons.close_rounded, color: isDark ? Colors.grey.shade400 : const Color(0xFF64748B)),
             tooltip: 'Close',
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -157,11 +158,14 @@ class _CreatePostModalState extends State<CreatePostModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -170,12 +174,12 @@ class _CreatePostModalState extends State<CreatePostModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Post Information',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -201,14 +205,18 @@ class _CreatePostModalState extends State<CreatePostModal> {
                       hintText: 'e.g. Revised Mid-Semester Examination Schedule',
                       prefixIcon: Icon(Icons.title_rounded, color: cfg.primaryColor),
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                     ),
                     validator: (v) =>
@@ -221,19 +229,25 @@ class _CreatePostModalState extends State<CreatePostModal> {
                     controller: descController,
                     maxLines: 4,
                     decoration: InputDecoration(
-                      labelText: 'Detailed Description',
-                      hintText: 'Write all details, instructions or timetable info...',
-                      prefixIcon: Icon(Icons.description_outlined, color: cfg.primaryColor),
-                      alignLabelWithHint: true,
+                      labelText: 'Post Details & Description',
+                      hintText: 'Provide full announcement context or instructions...',
+                      prefixIcon: const Padding(
+                        padding: EdgeInsets.only(bottom: 56),
+                        child: Icon(Icons.notes_rounded),
+                      ),
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                     ),
                     validator: (v) =>
@@ -248,11 +262,14 @@ class _CreatePostModalState extends State<CreatePostModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -261,12 +278,12 @@ class _CreatePostModalState extends State<CreatePostModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Target Audience',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -306,11 +323,14 @@ class _CreatePostModalState extends State<CreatePostModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -319,12 +339,12 @@ class _CreatePostModalState extends State<CreatePostModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Post Media',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -343,11 +363,14 @@ class _CreatePostModalState extends State<CreatePostModal> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -399,11 +422,14 @@ class _CreatePostModalState extends State<CreatePostModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),

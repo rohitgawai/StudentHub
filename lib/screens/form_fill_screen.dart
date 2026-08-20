@@ -587,7 +587,7 @@ class _FormFillScreenState extends State<FormFillScreen> {
                           : 'Submit Response',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            onPressed: (_submitting || submitted || post.authorId == _service.currentUser.id || _service.currentUser.hasRole(UserRole.faculty))
+                  onPressed: (_submitting || submitted || post.authorId == _service.currentUser.id || _service.currentUser.hasRole(UserRole.faculty))
                 ? null
                 : _submit,
           ),
@@ -597,6 +597,8 @@ class _FormFillScreenState extends State<FormFillScreen> {
   }
 
   Widget _fieldWidget(FormFieldSpec f, Color accent) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (f.isHeader) {
       return Padding(
         padding: const EdgeInsets.only(top: 8),
@@ -634,10 +636,10 @@ class _FormFillScreenState extends State<FormFillScreen> {
         Flexible(
           child: Text(
             f.label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13.5,
               fontWeight: FontWeight.w700,
-              color: Colors.black87,
+              color: isDark ? Colors.white : Colors.black87,
             ),
           ),
         ),
@@ -670,14 +672,18 @@ class _FormFillScreenState extends State<FormFillScreen> {
               decoration: InputDecoration(
                 hintText: f.hint.isEmpty ? null : f.hint,
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
+                  borderSide: BorderSide(
+                    color: isDark ? const Color(0xFF334155) : Colors.grey.shade300,
+                  ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
+                  borderSide: BorderSide(
+                    color: isDark ? const Color(0xFF334155) : Colors.grey.shade300,
+                  ),
                 ),
               ),
               validator: (_) => _validate(f),
@@ -696,9 +702,11 @@ class _FormFillScreenState extends State<FormFillScreen> {
             const SizedBox(height: 7),
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF1E293B) : Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF334155) : Colors.grey.shade300,
+                ),
               ),
               child: Column(
                 children: [
@@ -799,9 +807,11 @@ class _FormFillScreenState extends State<FormFillScreen> {
                   vertical: 13,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF334155) : Colors.grey.shade300,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -814,7 +824,7 @@ class _FormFillScreenState extends State<FormFillScreen> {
                           fontSize: 14,
                           color: (_dropdownSelections[f.id] ?? '').isEmpty
                               ? Colors.grey.shade500
-                              : Colors.black87,
+                              : (isDark ? Colors.white : Colors.black87),
                         ),
                       ),
                     ),
@@ -851,9 +861,6 @@ class _FormFillScreenState extends State<FormFillScreen> {
                 final maxDate =
                     todayDate.add(const Duration(days: 365));
                 var initial = _dateSelections[f.id] ?? todayDate.add(const Duration(days: 1));
-                // Clamp into the picker's allowed range: a previously picked
-                // date can be before today (or past the 1-year horizon), which
-                // would crash showDatePicker with an assertion.
                 if (initial.isBefore(todayDate)) {
                   initial = todayDate.add(const Duration(days: 1));
                 } else if (initial.isAfter(maxDate)) {
@@ -875,9 +882,11 @@ class _FormFillScreenState extends State<FormFillScreen> {
                   vertical: 13,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF334155) : Colors.grey.shade300,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -892,7 +901,7 @@ class _FormFillScreenState extends State<FormFillScreen> {
                         fontSize: 14,
                         color: _dateSelections[f.id] == null
                             ? Colors.grey.shade500
-                            : Colors.black87,
+                            : (isDark ? Colors.white : Colors.black87),
                       ),
                     ),
                   ],
@@ -912,25 +921,23 @@ class _FormFillScreenState extends State<FormFillScreen> {
             Container(
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF1E293B) : Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF334155) : Colors.grey.shade300,
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  for (var star = 1; star <= 5; star++)
+                  for (var i = 1; i <= 5; i++)
                     IconButton(
-                      iconSize: 34,
-                      visualDensity: VisualDensity.compact,
                       icon: Icon(
-                        star <= rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                        color: star <= rating
-                            ? Colors.amber
-                            : Colors.grey.shade400,
+                        i <= rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                        color: Colors.amber,
+                        size: 28,
                       ),
-                      onPressed: () =>
-                          setState(() => _ratings[f.id] = star),
+                      onPressed: () => setState(() => _ratings[f.id] = i),
                     ),
                 ],
               ),
@@ -961,19 +968,12 @@ class _ChoiceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return InkWell(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: selected ? accent.withValues(alpha: 0.08) : Colors.transparent,
-          border: Border(
-            top: BorderSide(
-              color: Colors.grey.shade200,
-              width: 0.5,
-            ),
-          ),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
             Icon(
@@ -981,9 +981,9 @@ class _ChoiceTile extends StatelessWidget {
                   ? (selected
                         ? Icons.check_box_rounded
                         : Icons.check_box_outline_blank_rounded)
-                      : (selected
-                            ? Icons.radio_button_checked
-                            : Icons.radio_button_unchecked),
+                  : (selected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked),
               color: selected ? accent : Colors.grey.shade500,
               size: 21,
             ),
@@ -994,7 +994,9 @@ class _ChoiceTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  color: selected ? Colors.black87 : Colors.black54,
+                  color: selected
+                      ? (isDark ? Colors.white : Colors.black87)
+                      : (isDark ? Colors.grey.shade400 : Colors.black54),
                 ),
               ),
             ),
@@ -1018,6 +1020,7 @@ class _SubmissionSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final byId = {for (final f in form.fields) f.id: f};
     final rows = <Widget>[];
     submission.answers.forEach((key, value) {
@@ -1037,11 +1040,17 @@ class _SubmissionSummaryCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: Colors.grey.shade600,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 ),
               ),
               const SizedBox(height: 2),
-              Text(text, style: const TextStyle(fontSize: 13)),
+              Text(
+                text,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
             ],
           ),
         ),
@@ -1050,9 +1059,11 @@ class _SubmissionSummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1062,9 +1073,13 @@ class _SubmissionSummaryCard extends StatelessWidget {
               const Icon(Icons.description_outlined,
                   size: 18, color: Colors.green),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Your submitted details',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
               ),
             ],
           ),

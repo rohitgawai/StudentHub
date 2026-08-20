@@ -69,12 +69,15 @@ class StudentHubApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cfg = context.select((MockDataService s) => s.config);
+    final themeMode = context.select((MockDataService s) => s.themeMode);
     return MaterialApp(
       title: cfg.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme(cfg),
       darkTheme: AppTheme.darkTheme(cfg),
-      themeMode: ThemeMode.light,
+      themeMode: themeMode,
+      themeAnimationDuration: const Duration(milliseconds: 350),
+      themeAnimationCurve: Curves.easeInOut,
       builder: (context, child) {
         return MediaQuery.withClampedTextScaling(
           minScaleFactor: 0.95,
@@ -242,6 +245,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     // Create button (switch roles in Profile to publish).
     final canCreate = activeRole != UserRole.student;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
@@ -270,10 +274,10 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
             ),
             const SizedBox(width: 10),
             RichText(
-              text: const TextSpan(
+              text: TextSpan(
                 style: TextStyle(
                   fontSize: 20,
-                  color: Color(0xFF0F172A),
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
                   letterSpacing: -0.3,
                   height: 1.1,
                 ),
@@ -282,14 +286,14 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                     text: 'Student',
                     style: TextStyle(
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFF0F172A),
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                   ),
                   TextSpan(
                     text: 'Hub',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0038D8),
+                      color: isDark ? const Color(0xFF2979FF) : const Color(0xFF0038D8),
                     ),
                   ),
                 ],
@@ -375,20 +379,22 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     BuildContext context, {
     required MockDataService dataService,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF121212) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: [
               BoxShadow(
-                color: Color(0x1A000000),
+                color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.1),
                 blurRadius: 24,
-                offset: Offset(0, -4),
+                offset: const Offset(0, -4),
               ),
             ],
           ),
@@ -406,7 +412,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                       width: 40,
                       height: 4.5,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE2E8F0),
+                        color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
@@ -419,30 +425,34 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
                             'What would you like to publish?',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF0F172A),
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
                               letterSpacing: -0.3,
                             ),
                           ),
-                          SizedBox(height: 3),
+                          const SizedBox(height: 3),
                           Text(
                             'Share updates, organize campus events, or photos',
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w400,
-                              color: Color(0xFF64748B),
+                              color: isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B),
                             ),
                           ),
                         ],
                       ),
                       IconButton(
                         visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF94A3B8)),
+                        icon: Icon(
+                          Icons.close_rounded,
+                          size: 20,
+                          color: isDark ? const Color(0xFFA1A1AA) : const Color(0xFF94A3B8),
+                        ),
                         onPressed: () => Navigator.of(ctx).pop(),
                       ),
                     ],
@@ -455,6 +465,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                     subtitle: 'Host competitions, hackathons & sessions with registrations',
                     badgeGradient: const [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
                     icon: Icons.celebration_rounded,
+                    isDark: isDark,
                     onTap: () {
                       Navigator.of(ctx).pop();
                       showDialog(
@@ -471,6 +482,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                     subtitle: 'Post announcements, achievements, notes & academic updates',
                     badgeGradient: const [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
                     icon: Icons.campaign_rounded,
+                    isDark: isDark,
                     onTap: () {
                       Navigator.of(ctx).pop();
                       showDialog(
@@ -487,6 +499,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                     subtitle: 'Publish campus event highlights & photo albums',
                     badgeGradient: const [Color(0xFF10B981), Color(0xFF047857)],
                     icon: Icons.collections_rounded,
+                    isDark: isDark,
                     onTap: () {
                       Navigator.of(ctx).pop();
                       showDialog(
@@ -509,6 +522,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     required String subtitle,
     required List<Color> badgeGradient,
     required IconData icon,
+    required bool isDark,
     required VoidCallback onTap,
   }) {
     return Material(
@@ -521,9 +535,12 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
+            color: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+            border: Border.all(
+              color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+              width: 1.2,
+            ),
           ),
           child: Row(
             children: [
@@ -557,20 +574,20 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
                         letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w400,
-                        color: Color(0xFF64748B),
+                        color: isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B),
                         height: 1.25,
                       ),
                     ),
@@ -584,14 +601,16 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? const Color(0xFF262626) : Colors.white,
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF333333) : const Color(0xFFE2E8F0),
+                  ),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.arrow_forward_ios_rounded,
                   size: 12,
-                  color: Color(0xFF64748B),
+                  color: isDark ? Colors.white70 : const Color(0xFF64748B),
                 ),
               ),
             ],
@@ -648,9 +667,20 @@ class _PillNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).cardColor,
-      elevation: 8,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final effectiveActiveColor = isDark ? const Color(0xFF60A5FA) : activeColor;
+    final unselectedColor = isDark ? Colors.white : Colors.grey.shade600;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF000000) : Theme.of(context).cardColor,
+        border: Border(
+          top: BorderSide(
+            color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+            width: 0.8,
+          ),
+        ),
+      ),
       child: SafeArea(
         top: false,
         child: Padding(
@@ -669,7 +699,7 @@ class _PillNavigationBar extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     decoration: BoxDecoration(
                       color: selected
-                          ? activeColor.withValues(alpha: 0.14)
+                          ? effectiveActiveColor.withValues(alpha: isDark ? 0.18 : 0.14)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -683,21 +713,21 @@ class _PillNavigationBar extends StatelessWidget {
                             key: ValueKey(selected),
                             size: 22,
                             color: selected
-                                ? activeColor
-                                : Colors.grey.shade500,
+                                ? effectiveActiveColor
+                                : unselectedColor,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           item.label,
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 10.5,
                             fontWeight: selected
-                                ? FontWeight.bold
+                                ? FontWeight.w700
                                 : FontWeight.w500,
                             color: selected
-                                ? activeColor
-                                : Colors.grey.shade600,
+                                ? effectiveActiveColor
+                                : unselectedColor,
                           ),
                         ),
                       ],

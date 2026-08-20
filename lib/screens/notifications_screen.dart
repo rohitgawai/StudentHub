@@ -43,11 +43,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   void _showNotificationDetail(BuildContext context, NotificationModel n) {
     final catColor = _getCatColor(n.category);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: isDark ? const Color(0xFF262626) : Colors.transparent,
+          ),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
@@ -58,7 +65,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 children: [
                   CircleAvatar(
                     radius: 20,
-                    backgroundColor: catColor.withValues(alpha: 0.15),
+                    backgroundColor: catColor.withValues(alpha: isDark ? 0.25 : 0.15),
                     child: Icon(_getNotificationIcon(n), color: catColor, size: 20),
                   ),
                   const SizedBox(width: 12),
@@ -77,27 +84,34 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ),
                         Text(
                           _formatFullDateTime(n.timestamp),
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? const Color(0xFF71717A) : Colors.grey,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 20),
+                    icon: Icon(
+                      Icons.close,
+                      size: 20,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
                     onPressed: () => Navigator.of(ctx).pop(),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              const Divider(height: 1),
+              Divider(height: 1, color: isDark ? const Color(0xFF262626) : Colors.grey.shade200),
               const SizedBox(height: 16),
 
               SelectableText(
                 n.title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
                 ),
               ),
               const SizedBox(height: 12),
@@ -106,16 +120,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                  ),
                 ),
                 child: SelectableText(
                   n.body,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     height: 1.5,
-                    color: Color(0xFF334155),
+                    color: isDark ? const Color(0xFFE4E4E7) : const Color(0xFF334155),
                   ),
                 ),
               ),
@@ -148,6 +164,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget build(BuildContext context) {
     final dataService = context.read<MockDataService>();
     final notifs = context.select((MockDataService s) => s.notifications);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final filtered = selectedCat == 'All'
         ? notifs
@@ -160,17 +177,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             .toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF000000) : Colors.white,
+        foregroundColor: isDark ? Colors.white : const Color(0xFF0F172A),
         elevation: 0,
         scrolledUnderElevation: 1,
-        title: const Text(
+        title: Text(
           'Notifications',
           style: TextStyle(
             fontWeight: FontWeight.w900,
             fontSize: 20,
-            color: Color(0xFF0F172A),
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
           ),
         ),
         actions: [
@@ -199,12 +217,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     showDialog(
                       context: context,
                       builder: (ctx) => AlertDialog(
+                        backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color: isDark ? const Color(0xFF262626) : Colors.transparent,
+                          ),
                         ),
-                        title: const Text('Clear All Notifications?'),
-                        content: const Text(
+                        title: Text(
+                          'Clear All Notifications?',
+                          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                        ),
+                        content: Text(
                           'Are you sure you want to clear all campus notifications?',
+                          style: TextStyle(color: isDark ? const Color(0xFFCBD5E1) : Colors.black54),
                         ),
                         actions: [
                           TextButton(
@@ -240,7 +266,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         children: [
           // Sleek Minimal Filter Pills
           Container(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF121212) : Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -254,10 +280,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         child: ChoiceChip(
                           label: Text(cat),
                           selected: isSelected,
-                          selectedColor: const Color(0xFF0F172A),
-                          backgroundColor: const Color(0xFFF1F5F9),
+                          selectedColor: isDark ? const Color(0xFF3B82F6) : const Color(0xFF0F172A),
+                          backgroundColor: isDark ? const Color(0xFF1E1E24) : const Color(0xFFF1F5F9),
                           labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : const Color(0xFF475569),
+                            color: isSelected
+                                ? Colors.white
+                                : (isDark ? const Color(0xFFA1A1AA) : const Color(0xFF475569)),
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                             fontSize: 12.5,
                           ),
@@ -273,7 +301,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          Divider(height: 1, color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0)),
 
           // Dynamic Modern Social Feed List
           Expanded(
@@ -285,13 +313,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         Icon(
                           Icons.notifications_none_rounded,
                           size: 64,
-                          color: Colors.grey.shade400,
+                          color: isDark ? const Color(0xFF52525B) : Colors.grey.shade400,
                         ),
                         const SizedBox(height: 12),
                         Text(
                           'No notifications in $selectedCat',
                           style: TextStyle(
-                            color: Colors.grey.shade600,
+                            color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -302,11 +330,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: filtered.length,
-                    separatorBuilder: (context, index) => const Divider(
+                    separatorBuilder: (context, index) => Divider(
                       height: 1,
                       indent: 72,
                       endIndent: 16,
-                      color: Color(0xFFF1F5F9),
+                      color: isDark ? const Color(0xFF262626) : const Color(0xFFF1F5F9),
                     ),
                     itemBuilder: (context, index) {
                       final n = filtered[index];
@@ -317,7 +345,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         onTap: () => _handleNotificationTap(context, n),
                         child: Container(
                           color: isUnread
-                              ? const Color(0xFFF0F9FF) // Subtle light-blue tint for unread
+                              ? (isDark ? const Color(0xFF1E1E28) : const Color(0xFFF0F9FF))
                               : Colors.transparent,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -332,7 +360,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 children: [
                                   CircleAvatar(
                                     radius: 22,
-                                    backgroundColor: catColor.withValues(alpha: 0.12),
+                                    backgroundColor: catColor.withValues(alpha: isDark ? 0.25 : 0.12),
                                     child: Icon(
                                       _getNotificationIcon(n),
                                       color: catColor,
@@ -350,7 +378,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           color: const Color(0xFF2563EB),
                                           shape: BoxShape.circle,
                                           border: Border.all(
-                                            color: Colors.white,
+                                            color: isDark ? const Color(0xFF121212) : Colors.white,
                                             width: 1.5,
                                           ),
                                         ),
@@ -376,7 +404,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                   ? FontWeight.w800
                                                   : FontWeight.w600,
                                               fontSize: 14,
-                                              color: const Color(0xFF0F172A),
+                                              color: isDark ? Colors.white : const Color(0xFF0F172A),
                                             ),
                                           ),
                                         ),
@@ -386,8 +414,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           style: TextStyle(
                                             fontSize: 11,
                                             color: isUnread
-                                                ? const Color(0xFF2563EB)
-                                                : Colors.grey.shade500,
+                                                ? const Color(0xFF3B82F6)
+                                                : (isDark ? const Color(0xFF71717A) : Colors.grey.shade500),
                                             fontWeight: isUnread
                                                 ? FontWeight.w700
                                                 : FontWeight.w500,
@@ -404,8 +432,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                         fontSize: 13,
                                         height: 1.35,
                                         color: isUnread
-                                            ? const Color(0xFF1E293B)
-                                            : const Color(0xFF64748B),
+                                            ? (isDark ? const Color(0xFFE4E4E7) : const Color(0xFF1E293B))
+                                            : (isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B)),
                                         fontWeight: isUnread
                                             ? FontWeight.w500
                                             : FontWeight.normal,

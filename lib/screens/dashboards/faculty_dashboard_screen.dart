@@ -132,18 +132,15 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen>
       },
     );
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: const Text(
           'Faculty Dashboard',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: false,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
-        elevation: 0,
-        scrolledUnderElevation: 1,
       ),
       body: Column(
         children: [
@@ -271,12 +268,12 @@ class _FacultyDashboardScreenState extends State<FacultyDashboardScreen>
 
           // Tabs
           Container(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
             child: TabBar(
               controller: _tabController,
-              labelColor: _accent,
-              unselectedLabelColor: Colors.grey.shade600,
-              indicatorColor: _accent,
+              labelColor: isDark ? const Color(0xFF818CF8) : _accent,
+              unselectedLabelColor: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+              indicatorColor: isDark ? const Color(0xFF818CF8) : _accent,
               indicatorWeight: 3,
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),

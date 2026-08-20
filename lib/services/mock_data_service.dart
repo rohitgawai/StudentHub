@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_config.dart';
@@ -145,6 +145,21 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
   List<NotificationModel> get notifications => _cacheNotifications;
   List<FormSubmission> get formSubmissions => _cacheSubmissions;
 
+  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode get themeMode => _themeMode;
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    if (_themeMode == mode) return;
+    _themeMode = mode;
+    final modeStr = mode == ThemeMode.light
+        ? 'light'
+        : mode == ThemeMode.dark
+            ? 'dark'
+            : 'system';
+    await LocalStoreService.instance.setThemeMode(modeStr);
+    notifyListeners();
+  }
+
   MockDataService({AppConfig? initialConfig}) {
     config = initialConfig ?? AppConfig.defaultConfig();
     _seedDefaults();
@@ -252,6 +267,15 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     _syncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       unawaited(_periodicSync());
     });
+
+    final savedTheme = await LocalStoreService.instance.getThemeMode();
+    if (savedTheme == 'light') {
+      _themeMode = ThemeMode.light;
+    } else if (savedTheme == 'dark') {
+      _themeMode = ThemeMode.dark;
+    } else {
+      _themeMode = ThemeMode.system;
+    }
 
     _isLoading = false;
     _invalidateDataCaches();

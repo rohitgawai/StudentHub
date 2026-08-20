@@ -118,24 +118,25 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
       return matchesQuery && matchesDept;
     }).toList();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
+        backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 1,
         title: Text(
           isEvent ? 'Event Registrations' : 'Form Responses',
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w800,
             fontSize: 17,
-            color: Color(0xFF0F172A),
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.send_rounded, color: Color(0xFF4F46E5), size: 20),
+            icon: const Icon(Icons.send_rounded, color: Color(0xFF818CF8), size: 20),
             tooltip: 'Message All Registrants',
             onPressed: () async {
               final sent = await Navigator.of(context).push<bool>(
@@ -159,12 +160,15 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF312E81)],
+                colors: [Color(0xFF0A0A0A), Color(0xFF1E1B4B), Color(0xFF312E81)],
               ),
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark ? const Color(0xFF262626) : Colors.transparent,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF1E1B4B).withValues(alpha: 0.25),
+                  color: const Color(0xFF1E1B4B).withValues(alpha: isDark ? 0.4 : 0.25),
                   blurRadius: 14,
                   offset: const Offset(0, 5),
                 ),
@@ -178,57 +182,78 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Text(
-                        post.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: -0.2,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            post.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              height: 1.25,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            isEvent
+                                ? (post.eventDate != null
+                                    ? formatEventDateTime(post.eventDate!)
+                                    : 'Campus Event')
+                                : 'Active Campus Form',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: post.isRegistrationFull
-                            ? Colors.red.withValues(alpha: 0.2)
-                            : const Color(0xFF059669).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: post.isRegistrationFull
-                              ? Colors.redAccent.withValues(alpha: 0.6)
-                              : const Color(0xFF34D399),
-                          width: 0.8,
-                        ),
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                       ),
-                      child: Text(
-                        post.isRegistrationFull ? 'FULL' : 'ACTIVE',
-                        style: TextStyle(
-                          color: post.isRegistrationFull ? Colors.redAccent : const Color(0xFF34D399),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isEvent ? Icons.event_rounded : Icons.assignment_turned_in_rounded,
+                            color: Colors.white,
+                            size: 13,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isEvent ? 'LIVE EVENT' : 'FORM',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
 
-                // Metrics Grid
+                // Metrics Row
                 Row(
                   children: [
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,13 +262,13 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                               '$count',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 20,
+                                fontSize: 18,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
-                            const Text(
-                              'Total Attendees',
-                              style: TextStyle(color: Colors.white70, fontSize: 11),
+                            Text(
+                              isEvent ? 'Registered' : 'Responses',
+                              style: const TextStyle(color: Colors.white70, fontSize: 11),
                             ),
                           ],
                         ),
@@ -252,26 +277,25 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              maxSeats != null ? '$count / $maxSeats' : 'Unlimited',
+                              maxSeats != null ? '${(capacityPercent * 100).toInt()}%' : 'N/A',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 16,
+                                fontSize: 18,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
-                            Text(
-                              maxSeats != null ? '${(capacityPercent * 100).toInt()}% Capacity' : 'Seat Limit',
-                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            const Text(
+                              'Capacity',
+                              style: TextStyle(color: Colors.white70, fontSize: 11),
                             ),
                           ],
                         ),
@@ -334,22 +358,26 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
               onChanged: (v) => setState(() => _query = v),
               decoration: InputDecoration(
                 hintText: 'Search by name, MIT ID, or department...',
-                hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF64748B)),
+                hintStyle: TextStyle(fontSize: 13, color: isDark ? const Color(0xFF71717A) : Colors.grey.shade500),
+                prefixIcon: Icon(Icons.search_rounded, size: 20, color: isDark ? const Color(0xFF71717A) : const Color(0xFF64748B)),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: isDark ? const Color(0xFF121212) : Colors.white,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
+                  borderSide: BorderSide(
+                    color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                  ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
+                  borderSide: BorderSide(
+                    color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+                  borderSide: const BorderSide(color: Color(0xFF818CF8), width: 1.5),
                 ),
               ),
             ),
@@ -372,13 +400,15 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                       labelStyle: TextStyle(
                         fontSize: 11.5,
                         fontWeight: active ? FontWeight.bold : FontWeight.w500,
-                        color: active ? Colors.white : const Color(0xFF334155),
+                        color: active ? Colors.white : (isDark ? Colors.grey.shade300 : const Color(0xFF334155)),
                       ),
-                      backgroundColor: Colors.white,
+                      backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
                       selectedColor: const Color(0xFF4F46E5),
                       showCheckmark: false,
                       side: BorderSide(
-                        color: active ? const Color(0xFF4F46E5) : Colors.grey.shade300,
+                        color: active
+                            ? const Color(0xFF4F46E5)
+                            : (isDark ? const Color(0xFF262626) : Colors.grey.shade300),
                       ),
                       onSelected: (_) => setState(() => _selectedDept = d),
                     ),
@@ -396,13 +426,21 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.people_outline_rounded, size: 54, color: Colors.grey.shade300),
+                        Icon(
+                          Icons.people_outline_rounded,
+                          size: 54,
+                          color: isDark ? const Color(0xFF52525B) : Colors.grey.shade300,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           _query.isEmpty && _selectedDept == 'All'
                               ? 'No registrations recorded yet.'
                               : 'No matching attendees found.',
-                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -423,18 +461,21 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
   }
 
   Widget _buildAttendeeTile(BuildContext context, FormSubmission s, Color accent) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final displayName = s.name.isEmpty ? 'Anonymous Student' : s.name;
     final displayId = s.studentOrEmployeeId.isEmpty ? 'No ID' : s.studentOrEmployeeId;
     final displayYear = s.year.isEmpty ? 'Student' : s.year;
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF121212) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -461,12 +502,14 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
               children: [
                 CircleAvatar(
                   radius: 22,
-                  backgroundColor: const Color(0xFFEEF2FF),
+                  backgroundColor: isDark
+                      ? const Color(0xFF312E81).withValues(alpha: 0.5)
+                      : const Color(0xFFEEF2FF),
                   child: Text(
                     displayName.isNotEmpty ? displayName.substring(0, 1).toUpperCase() : '?',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF4F46E5),
+                      color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
                       fontSize: 16,
                     ),
                   ),
@@ -483,10 +526,10 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                               displayName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14.5,
                                 fontWeight: FontWeight.w800,
-                                color: Color(0xFF0F172A),
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
                               ),
                             ),
                           ),
@@ -494,15 +537,17 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
+                              color: isDark
+                                  ? const Color(0xFF18181B)
+                                  : const Color(0xFFF1F5F9),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               displayYear,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF475569),
+                                color: isDark ? Colors.grey.shade300 : const Color(0xFF475569),
                               ),
                             ),
                           ),
@@ -515,7 +560,7 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: Colors.grey.shade600,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -524,7 +569,7 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                         '$displayId • ${formatEventDateTime(s.submittedAt)}',
                         style: TextStyle(
                           fontSize: 10.5,
-                          color: Colors.grey.shade400,
+                          color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -536,7 +581,7 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                     icon: Icon(
                       Icons.phone_rounded,
                       size: 18,
-                      color: Colors.green.shade700,
+                      color: isDark ? Colors.green.shade400 : Colors.green.shade700,
                     ),
                     tooltip: 'Contact: ${s.mobileNumber}',
                     onPressed: () {
@@ -548,7 +593,11 @@ class _RegistrantsScreenState extends State<RegistrantsScreen> {
                       );
                     },
                   ),
-                const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8), size: 20),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: isDark ? Colors.grey.shade600 : const Color(0xFF94A3B8),
+                  size: 20,
+                ),
               ],
             ),
           ),

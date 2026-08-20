@@ -156,8 +156,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
     final dataService = Provider.of<MockDataService>(context);
     final cfg = dataService.config;
 
-return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+    return Scaffold(
       appBar: AppBar(
         title: const Text('Academic Setup'),
         automaticallyImplyLeading: false,

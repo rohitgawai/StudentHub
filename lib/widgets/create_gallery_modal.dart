@@ -93,10 +93,12 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
     final cfg = dataService.config;
     final yearOptions = ['All Academic Years', ...cfg.academicYears];
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 1,
         title: Row(
@@ -122,12 +124,12 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
               child: const Icon(Icons.collections_rounded, color: Colors.white, size: 19),
             ),
             const SizedBox(width: 10),
-            const Text(
+            Text(
               'Photo Gallery',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 17.5,
-                color: Color(0xFF0F172A),
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 letterSpacing: -0.2,
               ),
             ),
@@ -135,7 +137,7 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+            icon: Icon(Icons.close_rounded, color: isDark ? Colors.grey.shade400 : const Color(0xFF64748B)),
             tooltip: 'Close',
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -152,22 +154,26 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.green.shade50, Colors.teal.shade50],
-                ),
+                color: isDark
+                    ? Colors.green.shade900.withValues(alpha: 0.25)
+                    : Colors.green.shade50,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.green.shade200, width: 0.8),
+                border: Border.all(
+                  color: isDark ? Colors.green.shade700 : Colors.green.shade200,
+                  width: 0.8,
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, color: Colors.green, size: 20),
+                  Icon(Icons.info_outline,
+                      color: isDark ? Colors.green.shade300 : Colors.green, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Upload 3 to 6 photos from campus events, fests, sports and workshops to showcase on feed.',
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: Colors.green.shade900,
+                        color: isDark ? Colors.green.shade200 : Colors.green.shade900,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -181,11 +187,14 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -194,12 +203,12 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Gallery Details',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -211,14 +220,18 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
                       hintText: 'e.g. Annual Tech Symposium Highlights 2026',
                       prefixIcon: const Icon(Icons.title_rounded, color: Colors.green),
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                     ),
                     validator: (v) =>
@@ -235,14 +248,18 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
                       prefixIcon: const Icon(Icons.description_outlined, color: Colors.green),
                       alignLabelWithHint: true,
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                     ),
                   ),
@@ -255,11 +272,14 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -268,12 +288,12 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Target Audience',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -313,11 +333,14 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -326,12 +349,12 @@ class _CreateGalleryModalState extends State<CreateGalleryModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Gallery Photos',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
                   const SizedBox(height: 14),

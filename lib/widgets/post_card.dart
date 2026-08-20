@@ -111,6 +111,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
   Widget build(BuildContext context) {
     final post = widget.post;
     final categoryColor = _categoryColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return RepaintBoundary(
       child: Listener(
@@ -138,20 +139,28 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                           : (_isGallery
                               ? const Color(0xFF0284C7).withValues(alpha: 0.14)
                               : Colors.black.withValues(
-                                  alpha: _pressed ? 0.08 : 0.035,
+                                  alpha: _pressed ? (isDark ? 0.3 : 0.08) : (isDark ? 0.2 : 0.035),
                                 ))),
                   blurRadius: post.isUrgent ? 16 : (_pressed ? 16 : 12),
                   offset: const Offset(0, 3),
                 ),
               ],
               border: Border.all(
-                color: _isAchievement
-                    ? const Color(0xFFFDE68A)
-                    : (_isGallery
-                        ? const Color(0xFFBAE6FD)
-                        : (_isWorkshop
-                            ? const Color(0xFFE0E7FF)
-                            : Colors.grey.shade200)),
+                color: isDark
+                    ? (_isAchievement
+                        ? const Color(0xFFF59E0B).withValues(alpha: 0.5)
+                        : (_isGallery
+                            ? const Color(0xFF0284C7).withValues(alpha: 0.5)
+                            : (_isWorkshop
+                                ? const Color(0xFF6366F1).withValues(alpha: 0.5)
+                                : const Color(0xFF334155))))
+                    : (_isAchievement
+                        ? const Color(0xFFFDE68A)
+                        : (_isGallery
+                            ? const Color(0xFFBAE6FD)
+                            : (_isWorkshop
+                                ? const Color(0xFFE0E7FF)
+                                : Colors.grey.shade200))),
                 width: (_isAchievement || _isGallery) ? 1.5 : 1,
               ),
             ),
@@ -190,7 +199,9 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                               },
                               child: CircleAvatar(
                                 radius: 19,
-                                backgroundColor: const Color(0xFFF1F5F9),
+                                backgroundColor: isDark
+                                    ? const Color(0xFF334155)
+                                    : const Color(0xFFF1F5F9),
                                 child: ClipOval(
                                   child: Builder(
                                     builder: (context) {
@@ -209,9 +220,9 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                             post.authorName.isNotEmpty
                                                 ? post.authorName.substring(0, 1).toUpperCase()
                                                 : '?',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontWeight: FontWeight.w700,
-                                              color: Color(0xFF334155),
+                                              color: isDark ? Colors.white : const Color(0xFF334155),
                                               fontSize: 13,
                                             ),
                                           ),
@@ -221,9 +232,9 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                         post.authorName.isNotEmpty
                                             ? post.authorName.substring(0, 1).toUpperCase()
                                             : '?',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w700,
-                                          color: Color(0xFF334155),
+                                          color: isDark ? Colors.white : const Color(0xFF334155),
                                           fontSize: 13,
                                         ),
                                       );
@@ -258,10 +269,10 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                         Flexible(
                                           child: Text(
                                             post.authorName,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontWeight: FontWeight.w500,
                                               fontSize: 13.5,
-                                              color: Color(0xFF0F172A),
+                                              color: isDark ? Colors.white : const Color(0xFF0F172A),
                                               height: 1.2,
                                             ),
                                             overflow: TextOverflow.ellipsis,
@@ -279,9 +290,9 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                     const SizedBox(height: 2),
                                     Text(
                                       '${post.department} • ${_formatTimestamp(post.timestamp)}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 11.5,
-                                        color: Color(0xFF64748B),
+                                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                                         fontWeight: FontWeight.w400,
                                         height: 1.2,
                                       ),
@@ -299,10 +310,10 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                         if (post.title.isNotEmpty) ...[
                           Text(
                             post.title,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14.0,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF0F172A),
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
                               height: 1.25,
                             ),
                           ),
@@ -417,7 +428,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                         // Event & Workshop Details Box
                         if (post.isEvent) ...[
                           const SizedBox(height: 12),
-                          _buildEventDetailsBox(post, categoryColor),
+                          _buildEventDetailsBox(post, categoryColor, isDark),
                         ],
 
                         // Modern PDF Attachment Tile
@@ -440,10 +451,14 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                 ),
                                 margin: const EdgeInsets.only(bottom: 6),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF1F5F9),
+                                  color: isDark
+                                      ? const Color(0xFF0A0A0A)
+                                      : const Color(0xFFF1F5F9),
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
-                                    color: const Color(0xFFE2E8F0),
+                                    color: isDark
+                                        ? const Color(0xFF262626)
+                                        : const Color(0xFFE2E8F0),
                                   ),
                                 ),
                                 child: Row(
@@ -451,7 +466,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                     Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: Colors.red.shade50,
+                                        color: Colors.red.shade900.withValues(alpha: isDark ? 0.3 : 0.1),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: const Icon(
@@ -468,10 +483,10 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                         children: [
                                           Text(
                                             att.title,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 12.5,
                                               fontWeight: FontWeight.bold,
-                                              color: Color(0xFF0F172A),
+                                              color: isDark ? Colors.white : const Color(0xFF0F172A),
                                             ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
@@ -480,7 +495,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                             'Tap to view • ${att.fileSize}',
                                             style: TextStyle(
                                               fontSize: 10.5,
-                                              color: Colors.grey.shade600,
+                                              color: isDark ? const Color(0xFF71717A) : Colors.grey.shade600,
                                             ),
                                           ),
                                         ],
@@ -489,7 +504,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF1E1B4B),
+                                        color: isDark ? const Color(0xFF312E81) : const Color(0xFF1E1B4B),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: const Text(
@@ -538,7 +553,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                     ),
                                   ),
                                   backgroundColor: categoryColor.withValues(
-                                    alpha: 0.08,
+                                    alpha: isDark ? 0.15 : 0.08,
                                   ),
                                   labelStyle: TextStyle(
                                     color: categoryColor,
@@ -563,10 +578,14 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                 vertical: 12,
                               ),
                               decoration: BoxDecoration(
-                                color: categoryColor.withValues(alpha: 0.08),
+                                color: isDark
+                                    ? const Color(0xFF0A0A0A)
+                                    : categoryColor.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: categoryColor.withValues(alpha: 0.3),
+                                  color: isDark
+                                      ? const Color(0xFF262626)
+                                      : categoryColor.withValues(alpha: 0.3),
                                 ),
                               ),
                               child: Row(
@@ -574,7 +593,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: categoryColor.withValues(alpha: 0.15),
+                                      color: categoryColor.withValues(alpha: isDark ? 0.25 : 0.15),
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
@@ -603,7 +622,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                           'Tap to open response form',
                                           style: TextStyle(
                                             fontSize: 11,
-                                            color: Colors.grey.shade700,
+                                            color: isDark ? const Color(0xFF71717A) : Colors.grey.shade700,
                                           ),
                                         ),
                                       ],
@@ -724,7 +743,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
     return const SizedBox.shrink();
   }
 
-  Widget _buildEventDetailsBox(PostModel post, Color categoryColor) {
+  Widget _buildEventDetailsBox(PostModel post, Color categoryColor, [bool isDark = false]) {
     final eventDate = post.eventDate;
     final maxSeats = post.maxParticipants;
     final count = post.currentRegistrations;
@@ -732,9 +751,11 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -744,12 +765,14 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF18181B) : Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 4,
                   ),
                 ],
@@ -759,19 +782,19 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                 children: [
                   Text(
                     _monthShort(eventDate),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF4F46E5),
+                      color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
                       letterSpacing: 0.5,
                     ),
                   ),
                   Text(
                     '${eventDate.day}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                   ),
                 ],
@@ -787,17 +810,21 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.location_on_rounded, size: 14, color: Color(0xFF4F46E5)),
+                    Icon(
+                      Icons.location_on_rounded,
+                      size: 14,
+                      color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
+                    ),
                     const SizedBox(width: 5),
                     Expanded(
                       child: Text(
                         post.venue ?? 'Campus Auditorium',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
                       ),
                     ),
@@ -807,13 +834,17 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.access_time_filled_rounded, size: 14, color: Color(0xFF64748B)),
+                      Icon(
+                        Icons.access_time_filled_rounded,
+                        size: 14,
+                        color: isDark ? const Color(0xFF71717A) : const Color(0xFF64748B),
+                      ),
                       const SizedBox(width: 5),
                       Text(
                         _formatEventDate(eventDate),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF64748B),
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -824,14 +855,20 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.event_seat_rounded, size: 14, color: Color(0xFF64748B)),
+                      Icon(
+                        Icons.event_seat_rounded,
+                        size: 14,
+                        color: isDark ? const Color(0xFF71717A) : const Color(0xFF64748B),
+                      ),
                       const SizedBox(width: 5),
                       Text(
                         '$count / $maxSeats Seats Available',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: post.isRegistrationFull ? Colors.red : const Color(0xFF059669),
+                          color: post.isRegistrationFull
+                              ? Colors.redAccent
+                              : (isDark ? const Color(0xFF34D399) : const Color(0xFF059669)),
                         ),
                       ),
                     ],
@@ -852,6 +889,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
 
   Widget _buildSmartActionBar(BuildContext context) {
     final post = widget.post;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUserId = widget.currentUserId;
     final isOwnPost = currentUserId != null &&
         (post.authorId == currentUserId ||
@@ -915,7 +953,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
           active: widget.isSaved,
           label: widget.isSaved ? 'Saved' : 'Save',
           count: '${post.saveCount}',
-          color: const Color(0xFF4F46E5),
+          color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
           burstOnActivate: true,
           burstIcon: Icons.bookmark_added_rounded,
           onTap: () {
@@ -937,7 +975,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
         activeIcon: Icons.ios_share_rounded,
         active: true,
         label: 'Share',
-        color: const Color(0xFF64748B),
+        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
         onTap: () => _sharePostDynamic(context),
       ),
     );
@@ -960,10 +998,12 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                  color: isDark
+                      ? const Color(0xFF4F46E5).withValues(alpha: 0.2)
+                      : const Color(0xFF4F46E5).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: const Color(0xFF4F46E5).withValues(alpha: 0.3),
+                    color: const Color(0xFF4F46E5).withValues(alpha: 0.4),
                   ),
                 ),
                 child: Row(
@@ -972,7 +1012,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                     const Icon(
                       Icons.people_alt_rounded,
                       size: 15,
-                      color: Color(0xFF4F46E5),
+                      color: Color(0xFF818CF8),
                     ),
                     const SizedBox(width: 5),
                     Text(
@@ -980,7 +1020,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF4F46E5),
+                        color: Color(0xFF818CF8),
                       ),
                     ),
                     if (widget.onViewRegistrants != null) ...[
@@ -988,7 +1028,7 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                       const Icon(
                         Icons.chevron_right_rounded,
                         size: 14,
-                        color: Color(0xFF4F46E5),
+                        color: Color(0xFF818CF8),
                       ),
                     ],
                   ],
@@ -1123,6 +1163,7 @@ class _ExpandableDescriptionState extends State<_ExpandableDescription> {
     if (widget.text.isEmpty) return const SizedBox.shrink();
 
     final isLong = widget.text.length > 140;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1136,18 +1177,18 @@ class _ExpandableDescriptionState extends State<_ExpandableDescription> {
             widget.text,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13.0,
-              color: Color(0xFF334155),
+              color: isDark ? const Color(0xFFE4E4E7) : const Color(0xFF334155),
               fontWeight: FontWeight.w400,
               height: 1.35,
             ),
           ),
           secondChild: Text(
             widget.text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13.0,
-              color: Color(0xFF334155),
+              color: isDark ? const Color(0xFFE4E4E7) : const Color(0xFF334155),
               fontWeight: FontWeight.w400,
               height: 1.35,
             ),
@@ -1160,10 +1201,10 @@ class _ExpandableDescriptionState extends State<_ExpandableDescription> {
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 _expanded ? 'Show less' : 'Read more',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF4F46E5),
+                  color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
                 ),
               ),
             ),
@@ -1392,7 +1433,10 @@ class _SmartActionState extends State<_SmartAction>
   @override
   Widget build(BuildContext context) {
     final active = widget.active;
-    final color = active ? widget.color : const Color(0xFF64748B);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = active
+        ? widget.color
+        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B));
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -1488,7 +1532,7 @@ class _SmartActionState extends State<_SmartAction>
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: active ? widget.color : Colors.grey.shade600,
+                      color: active ? widget.color : (isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600),
                     ),
                   ),
                 ],
@@ -1517,15 +1561,20 @@ class _RegisterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (isRegistered) {
       return Material(
         color: Colors.transparent,
         child: Ink(
           height: 36,
           decoration: BoxDecoration(
-            color: const Color(0xFFECFDF5),
+            color: isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFA7F3D0), width: 1.2),
+            border: Border.all(
+              color: isDark ? const Color(0xFF059669) : const Color(0xFFA7F3D0),
+              width: 1.2,
+            ),
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(20),
@@ -1534,13 +1583,17 @@ class _RegisterButton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF059669)),
-                  SizedBox(width: 5),
+                children: [
+                  Icon(
+                    Icons.check_circle_rounded,
+                    size: 16,
+                    color: isDark ? const Color(0xFF34D399) : const Color(0xFF059669),
+                  ),
+                  const SizedBox(width: 5),
                   Text(
                     'Registered',
                     style: TextStyle(
-                      color: Color(0xFF059669),
+                      color: isDark ? const Color(0xFF34D399) : const Color(0xFF059669),
                       fontWeight: FontWeight.w800,
                       fontSize: 12,
                     ),
@@ -1563,7 +1616,7 @@ class _RegisterButton extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-        color: isFull ? Colors.grey.shade300 : null,
+        color: isFull ? (isDark ? const Color(0xFF27272A) : Colors.grey.shade300) : null,
         borderRadius: BorderRadius.circular(20),
         boxShadow: isFull
             ? null
@@ -1588,13 +1641,13 @@ class _RegisterButton extends StatelessWidget {
                 Icon(
                   isFull ? Icons.lock_clock_outlined : Icons.how_to_reg_rounded,
                   size: 16,
-                  color: isFull ? Colors.grey.shade600 : Colors.white,
+                  color: isFull ? (isDark ? const Color(0xFF71717A) : Colors.grey.shade600) : Colors.white,
                 ),
                 const SizedBox(width: 5),
                 Text(
                   isFull ? 'Seats Full' : 'Register Now',
                   style: TextStyle(
-                    color: isFull ? Colors.grey.shade700 : Colors.white,
+                    color: isFull ? (isDark ? const Color(0xFF71717A) : Colors.grey.shade700) : Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 12,
                   ),

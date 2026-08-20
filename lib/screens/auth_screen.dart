@@ -341,29 +341,34 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      RichText(
-                        textAlign: TextAlign.center,
-                        text: TextSpan(
-                          style: const TextStyle(
-                            fontSize: 30,
-                            color: Color(0xFF0F172A),
-                            letterSpacing: -0.5,
-                            height: 1.1,
-                          ),
-                          children: [
-                            const TextSpan(
-                              text: 'Student',
-                              style: TextStyle(fontWeight: FontWeight.w500),
-                            ),
-                            const TextSpan(
-                              text: 'Hub',
+                      Builder(
+                        builder: (context) {
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          return RichText(
+                            textAlign: TextAlign.center,
+                            text: TextSpan(
                               style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF0038D8),
+                                fontSize: 30,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                letterSpacing: -0.5,
+                                height: 1.1,
                               ),
+                              children: [
+                                const TextSpan(
+                                  text: 'Student',
+                                  style: TextStyle(fontWeight: FontWeight.w500),
+                                ),
+                                TextSpan(
+                                  text: 'Hub',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: isDark ? const Color(0xFF2979FF) : const Color(0xFF0038D8),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 4),
                       Text(

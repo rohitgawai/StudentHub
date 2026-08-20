@@ -351,20 +351,17 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         .where((p) => dataService.currentUser.likedPostIds.contains(p.id))
         .toList();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 1,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
           'Creator Profile',
           style: TextStyle(
-            color: Color(0xFF0F172A),
             fontWeight: FontWeight.w800,
             fontSize: 18,
           ),
@@ -374,21 +371,28 @@ class _UserProfileScreenState extends State<UserProfileScreen>
             margin: const EdgeInsets.only(right: 12),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.green.shade50,
+              color: isDark
+                  ? Colors.green.shade900.withValues(alpha: 0.3)
+                  : Colors.green.shade50,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.green.shade200, width: 0.8),
+              border: Border.all(
+                color: isDark ? Colors.green.shade700 : Colors.green.shade200,
+                width: 0.8,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.lock_outline_rounded, size: 14, color: Colors.green.shade700),
+                Icon(Icons.lock_outline_rounded,
+                    size: 14,
+                    color: isDark ? Colors.green.shade300 : Colors.green.shade700),
                 const SizedBox(width: 4),
                 Text(
                   'Protected',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: Colors.green.shade700,
+                    color: isDark ? Colors.green.shade300 : Colors.green.shade700,
                   ),
                 ),
               ],
@@ -404,11 +408,14 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF121212) : Colors.white,
               borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
+                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
                   blurRadius: 14,
                   offset: const Offset(0, 3),
                 ),
@@ -435,7 +442,9 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                         ),
                         child: CircleAvatar(
                           radius: 46,
-                          backgroundColor: const Color(0xFFF1F5F9),
+                          backgroundColor: isDark
+                              ? const Color(0xFF18181B)
+                              : const Color(0xFFF1F5F9),
                           child: ClipOval(
                             child: avatar.isNotEmpty
                                 ? AppImage(
@@ -447,10 +456,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                                       widget.authorName.isNotEmpty
                                           ? widget.authorName.substring(0, 1).toUpperCase()
                                           : '?',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 34,
                                         fontWeight: FontWeight.w900,
-                                        color: Color(0xFF334155),
+                                        color: isDark ? Colors.white70 : const Color(0xFF334155),
                                       ),
                                     ),
                                   )
@@ -458,10 +467,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                                     widget.authorName.isNotEmpty
                                         ? widget.authorName.substring(0, 1).toUpperCase()
                                         : '?',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 34,
                                       fontWeight: FontWeight.w900,
-                                      color: Color(0xFF334155),
+                                      color: isDark ? Colors.white70 : const Color(0xFF334155),
                                     ),
                                   ),
                           ),
@@ -476,7 +485,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                         decoration: BoxDecoration(
                           color: const Color(0xFF2563EB),
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF121212) : Colors.white,
+                            width: 2,
+                          ),
                         ),
                         child: const Icon(
                           Icons.verified_rounded,
@@ -493,10 +505,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                 Text(
                   widget.authorName,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -515,21 +527,26 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
+                        color: isDark ? const Color(0xFF18181B) : const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                          width: 0.8,
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.school_rounded, size: 14, color: Color(0xFF475569)),
+                          Icon(Icons.school_rounded,
+                              size: 14,
+                              color: isDark ? const Color(0xFFA1A1AA) : const Color(0xFF475569)),
                           const SizedBox(width: 6),
                           Text(
                             dept,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF334155),
+                              color: isDark ? const Color(0xFFE4E4E7) : const Color(0xFF334155),
                             ),
                           ),
                         ],
@@ -543,21 +560,26 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
+                          color: isDark ? const Color(0xFF18181B) : const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                            width: 0.8,
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.calendar_month_outlined, size: 14, color: Color(0xFF475569)),
+                            Icon(Icons.calendar_month_outlined,
+                                size: 14,
+                                color: isDark ? Colors.grey.shade400 : const Color(0xFF475569)),
                             const SizedBox(width: 6),
                             Text(
                               academicYear,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF334155),
+                                color: isDark ? Colors.grey.shade300 : const Color(0xFF334155),
                               ),
                             ),
                           ],
@@ -573,7 +595,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade600,
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                       letterSpacing: 0.3,
                     ),
                   ),
@@ -585,7 +607,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                     email,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade500,
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
                     ),
                   ),
                 ],
@@ -600,9 +622,16 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                     constraints: const BoxConstraints(maxWidth: 320),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF1F2),
+                      color: isDark
+                          ? const Color(0xFFE11D48).withValues(alpha: 0.15)
+                          : const Color(0xFFFFF1F2),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFFDA4AF), width: 1.5),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFFE11D48).withValues(alpha: 0.4)
+                            : const Color(0xFFFDA4AF),
+                        width: 1.5,
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -639,11 +668,20 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                          backgroundColor: isLiked ? const Color(0xFFFFF1F2) : cfg.primaryColor,
+                          backgroundColor: isLiked
+                              ? (isDark
+                                  ? const Color(0xFFE11D48).withValues(alpha: 0.2)
+                                  : const Color(0xFFFFF1F2))
+                              : cfg.primaryColor,
                           foregroundColor: isLiked ? const Color(0xFFE11D48) : Colors.white,
                           elevation: isLiked ? 0 : 2,
                           side: isLiked
-                              ? const BorderSide(color: Color(0xFFFDA4AF), width: 1.5)
+                              ? BorderSide(
+                                  color: isDark
+                                      ? const Color(0xFFE11D48).withValues(alpha: 0.5)
+                                      : const Color(0xFFFDA4AF),
+                                  width: 1.5,
+                                )
                               : BorderSide.none,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -678,11 +716,14 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           // Tab Bar for Liked Posts & Saved Posts
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? const Color(0xFF334155) : Colors.transparent,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -693,12 +734,15 @@ class _UserProfileScreenState extends State<UserProfileScreen>
               indicatorSize: TabBarIndicatorSize.tab,
               dividerColor: Colors.transparent,
               indicator: BoxDecoration(
-                color: cfg.primaryColor.withValues(alpha: 0.1),
+                color: cfg.primaryColor.withValues(alpha: isDark ? 0.2 : 0.1),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: cfg.primaryColor.withValues(alpha: 0.25), width: 1),
+                border: Border.all(
+                  color: cfg.primaryColor.withValues(alpha: isDark ? 0.5 : 0.25),
+                  width: 1,
+                ),
               ),
               labelColor: cfg.primaryColor,
-              unselectedLabelColor: const Color(0xFF64748B),
+              unselectedLabelColor: isDark ? Colors.grey.shade400 : const Color(0xFF64748B),
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               tabs: [

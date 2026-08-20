@@ -43,9 +43,16 @@ class _EditProfileModalState extends State<EditProfileModal> {
     final dataService = Provider.of<MockDataService>(context);
     final user = dataService.currentUser;
     final cfg = dataService.config;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isDark ? const Color(0xFF262626) : Colors.transparent,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Form(
@@ -58,12 +65,19 @@ class _EditProfileModalState extends State<EditProfileModal> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       '✏️ Edit Profile Details',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close),
+                      icon: Icon(
+                        Icons.close,
+                        color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700,
+                      ),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
@@ -156,7 +170,7 @@ class _EditProfileModalState extends State<EditProfileModal> {
                         'Shown to event hosts when you register for their events',
                     helperStyle: TextStyle(
                       fontSize: 10,
-                      color: Colors.grey.shade600,
+                      color: isDark ? const Color(0xFF71717A) : Colors.grey.shade600,
                     ),
                   ),
                   validator: (v) {

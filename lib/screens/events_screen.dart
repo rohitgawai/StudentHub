@@ -84,16 +84,18 @@ class _EventsScreenState extends State<EventsScreen>
     final congratulatedIds = user.congratulatedPostIds.toSet();
     final likedIds = user.likedPostIds.toSet();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text(
           'Events & Workshops',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: false,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
+        backgroundColor: isDark ? const Color(0xFF000000) : Colors.white,
+        foregroundColor: isDark ? Colors.white : const Color(0xFF0F172A),
         elevation: 0,
         scrolledUnderElevation: 1,
         bottom: PreferredSize(
@@ -101,26 +103,32 @@ class _EventsScreenState extends State<EventsScreen>
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: isDark ? const Color(0xFF121212) : Colors.grey.shade100,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? const Color(0xFF262626) : Colors.transparent,
+              ),
             ),
             child: TabBar(
               controller: tabController,
               indicatorSize: TabBarIndicatorSize.tab,
               dividerColor: Colors.transparent,
               indicator: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF1E1E24) : Colors.white,
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF333333) : Colors.transparent,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              labelColor: const Color(0xFF0F172A),
-              unselectedLabelColor: Colors.grey.shade600,
+              labelColor: isDark ? Colors.white : const Color(0xFF0F172A),
+              unselectedLabelColor: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
               tabs: [

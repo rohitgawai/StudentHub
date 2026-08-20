@@ -78,8 +78,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       excludeEvents: true,
     );
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
           // Search Bar
@@ -88,13 +90,29 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             child: TextField(
               controller: searchController,
               onChanged: (val) => setState(() => searchQuery = val),
+              style: TextStyle(
+                fontSize: 13.5,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
               decoration: InputDecoration(
-                hintText: 'Search posts, events, faculty...',
-                hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+                hintText: '🔍 Search posts, events, faculty...',
+                hintStyle: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                  fontWeight: FontWeight.w400,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 18,
+                  color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                ),
                 suffixIcon: searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
+                        icon: Icon(
+                          Icons.clear,
+                          size: 18,
+                          color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                        ),
                         onPressed: () {
                           searchController.clear();
                           setState(() => searchQuery = '');
@@ -106,19 +124,26 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   horizontal: 14,
                 ),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: isDark ? const Color(0xFF121212) : Colors.white,
                 isDense: true,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
+                  borderSide: BorderSide(
+                    color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                  ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
+                  borderSide: BorderSide(
+                    color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: cfg.primaryColor),
+                  borderSide: BorderSide(
+                    color: isDark ? const Color(0xFF818CF8) : cfg.primaryColor,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),

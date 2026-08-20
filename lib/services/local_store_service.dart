@@ -37,6 +37,26 @@ class LocalStoreService {
     }
   }
 
+  static const String _themeModeKey = 'studenthub.theme_mode.v1';
+
+  Future<String> getThemeMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_themeModeKey) ?? 'system';
+    } catch (_) {
+      return 'system';
+    }
+  }
+
+  Future<void> setThemeMode(String mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_themeModeKey, mode);
+    } catch (_) {
+      // Best-effort.
+    }
+  }
+
   Future<void> markSplashSeen() async {
     try {
       final prefs = await SharedPreferences.getInstance();

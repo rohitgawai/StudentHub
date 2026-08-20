@@ -153,10 +153,12 @@ class _CreateEventModalState extends State<CreateEventModal> {
     final cfg = dataService.config;
     final yearOptions = ['All Academic Years', ...cfg.academicYears];
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
         scrolledUnderElevation: 1,
         title: Row(
@@ -182,12 +184,12 @@ class _CreateEventModalState extends State<CreateEventModal> {
               child: const Icon(Icons.celebration_rounded, color: Colors.white, size: 19),
             ),
             const SizedBox(width: 10),
-            const Text(
+            Text(
               'Event & Workshop',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 17.5,
-                color: Color(0xFF0F172A),
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
                 letterSpacing: -0.2,
               ),
             ),
@@ -195,7 +197,7 @@ class _CreateEventModalState extends State<CreateEventModal> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: Color(0xFF64748B)),
+            icon: Icon(Icons.close_rounded, color: isDark ? Colors.grey.shade400 : const Color(0xFF64748B)),
             tooltip: 'Close',
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -233,11 +235,14 @@ class _CreateEventModalState extends State<CreateEventModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -246,12 +251,12 @@ class _CreateEventModalState extends State<CreateEventModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Event Details',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -263,14 +268,18 @@ class _CreateEventModalState extends State<CreateEventModal> {
                       hintText: 'e.g. HackCampus 2026 24-Hour Hackathon',
                       prefixIcon: const Icon(Icons.event_note_rounded, color: Colors.orange),
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                     ),
                     validator: (v) => v == null || v.trim().isEmpty ? 'Enter event title' : null,
@@ -286,14 +295,18 @@ class _CreateEventModalState extends State<CreateEventModal> {
                       prefixIcon: const Icon(Icons.description_outlined, color: Colors.orange),
                       alignLabelWithHint: true,
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                     ),
                     validator: (v) => v == null || v.trim().isEmpty ? 'Enter event details' : null,
@@ -307,14 +320,18 @@ class _CreateEventModalState extends State<CreateEventModal> {
                       hintText: 'e.g. Main Auditorium / Lab 302',
                       prefixIcon: const Icon(Icons.location_on_outlined, color: Colors.orange),
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                        ),
                       ),
                     ),
                     validator: (v) => v == null || v.trim().isEmpty ? 'Enter venue' : null,
@@ -331,14 +348,18 @@ class _CreateEventModalState extends State<CreateEventModal> {
                             labelText: 'Max Capacity',
                             prefixIcon: const Icon(Icons.groups_outlined, color: Colors.orange),
                             filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
+                            fillColor: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(color: Colors.grey.shade300),
+                              borderSide: BorderSide(
+                                color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(color: Colors.grey.shade300),
+                              borderSide: BorderSide(
+                                color: isDark ? const Color(0xFF262626) : Colors.grey.shade300,
+                              ),
                             ),
                           ),
                         ),
@@ -347,7 +368,8 @@ class _CreateEventModalState extends State<CreateEventModal> {
                       Expanded(
                         child: CustomDropdownField<String>(
                           value: department,
-                          labelText: 'Host Dept',
+                          labelText: 'Department',
+                          prefixIcon: Icons.school_outlined,
                           items: cfg.departments,
                           itemLabel: (d) => d,
                           onChanged: (val) {
@@ -357,49 +379,37 @@ class _CreateEventModalState extends State<CreateEventModal> {
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Target Academic Year Card (No "(Optional)")
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
+                  const SizedBox(height: 12),
+                  // Target Academic Year Dropdown
+                  CustomDropdownField<String>(
+                    value: targetYear ?? 'All Academic Years',
+                    labelText: 'Target Academic Year',
+                    prefixIcon: Icons.calendar_month_outlined,
+                    items: yearOptions,
+                    itemLabel: (y) => y,
+                    onChanged: (val) {
+                      setState(() {
+                        targetYear = (val == 'All Academic Years') ? null : val;
+                      });
+                    },
                   ),
                 ],
               ),
-              child: CustomDropdownField<String>(
-                value: targetYear ?? 'All Academic Years',
-                labelText: 'Target Academic Year',
-                prefixIcon: Icons.calendar_month_outlined,
-                items: yearOptions,
-                itemLabel: (y) => y,
-                onChanged: (val) {
-                  setState(() {
-                    targetYear = (val == 'All Academic Years') ? null : val;
-                  });
-                },
-              ),
             ),
             const SizedBox(height: 14),
 
-            // Required Cover Image Card
+            // Event Poster Card
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -408,12 +418,12 @@ class _CreateEventModalState extends State<CreateEventModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Event Cover Poster',
+                  Text(
+                    'Event Poster Image',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -432,11 +442,14 @@ class _CreateEventModalState extends State<CreateEventModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -445,12 +458,12 @@ class _CreateEventModalState extends State<CreateEventModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Date & Schedule',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -458,13 +471,15 @@ class _CreateEventModalState extends State<CreateEventModal> {
                   ListTile(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
-                      side: BorderSide(color: Colors.grey.shade200),
+                      side: BorderSide(
+                        color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                      ),
                     ),
-                    tileColor: const Color(0xFFF8FAFC),
+                    tileColor: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
+                        color: Colors.orange.shade500.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.event_rounded, color: Colors.orange, size: 20),
@@ -491,13 +506,15 @@ class _CreateEventModalState extends State<CreateEventModal> {
                   ListTile(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
-                      side: BorderSide(color: Colors.grey.shade200),
+                      side: BorderSide(
+                        color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                      ),
                     ),
-                    tileColor: const Color(0xFFF8FAFC),
+                    tileColor: isDark ? const Color(0xFF18181B) : const Color(0xFFF8FAFC),
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.red.shade50,
+                        color: Colors.red.shade500.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.timer_outlined, color: Colors.red, size: 20),
@@ -528,11 +545,14 @@ class _CreateEventModalState extends State<CreateEventModal> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? const Color(0xFF121212) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),

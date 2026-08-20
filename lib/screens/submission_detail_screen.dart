@@ -101,30 +101,42 @@ class SubmissionDetailScreen extends StatelessWidget {
       });
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: isDark ? const Color(0xFF000000) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: accent,
-        foregroundColor: Colors.white,
-        title: const Text('Student Details'),
-        centerTitle: false,
+        backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+        foregroundColor: isDark ? Colors.white : const Color(0xFF0F172A),
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        title: Text(
+          displayName,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 17,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+          ),
+        ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
         children: [
-          // Student header card
+          // Profile header card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF121212) : Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
+              border: Border.all(
+                color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+              ),
             ),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 28,
-                  backgroundColor: accent.withValues(alpha: 0.14),
+                  backgroundColor: accent.withValues(alpha: isDark ? 0.25 : 0.14),
                   child: Text(
                     displayName.isEmpty ? '?' : displayName.substring(0, 1).toUpperCase(),
                     style: TextStyle(
@@ -141,9 +153,10 @@ class SubmissionDetailScreen extends StatelessWidget {
                     children: [
                       Text(
                         displayName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -151,7 +164,7 @@ class SubmissionDetailScreen extends StatelessWidget {
                         displayId,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade600,
+                          color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
                         ),
                       ),
                     ],
@@ -166,9 +179,11 @@ class SubmissionDetailScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF121212) : Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
+              border: Border.all(
+                color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,9 +204,10 @@ class SubmissionDetailScreen extends StatelessWidget {
                           : hasForm
                               ? 'Form responses (${post!.form!.title})'
                               : 'Form responses',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
                       ),
                     ),
                     const Spacer(),
@@ -199,7 +215,7 @@ class SubmissionDetailScreen extends StatelessWidget {
                       _formatDate(s.submittedAt),
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey.shade500,
+                        color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade500,
                       ),
                     ),
                   ],
@@ -214,15 +230,15 @@ class SubmissionDetailScreen extends StatelessWidget {
                     'Quick registration (no form attached).',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade600,
+                      color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
                     ),
                   )
                 else if (answerRows.isEmpty)
                   Text(
-                    'Registered for form event: "${post?.form?.title ?? 'Form'}"',
+                    'No answers recorded.',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade600,
+                      color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
                     ),
                   )
                 else
@@ -232,46 +248,52 @@ class SubmissionDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Profile info section
+          // Profile snapshot (academic info)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF121212) : Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
+              border: Border.all(
+                color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(Icons.person_outline, size: 17, color: accent),
+                    Icon(
+                      Icons.school_outlined,
+                      size: 17,
+                      color: accent,
+                    ),
                     const SizedBox(width: 7),
-                    const Text(
-                      'Profile information',
+                    Text(
+                      'Profile details',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
                       ),
                     ),
                   ],
                 ),
                 const Divider(height: 18),
                 _InfoRow(label: 'Department', value: displayDept),
-                _InfoRow(label: 'Academic year', value: displayYear),
+                _InfoRow(label: 'Year of study', value: displayYear),
                 _InfoRow(label: 'Mobile number', value: displayMobile),
               ],
             ),
           ),
-          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime dt) {
-    String pad(int v) => v.toString().padLeft(2, '0');
-    return '${pad(dt.day)}/${pad(dt.month)}/${dt.year}';
+  static String _formatDate(DateTime dt) {
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 }
 
@@ -283,6 +305,7 @@ class _LinkRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final label =
         link.label.isEmpty ? 'Registration link' : link.label;
     return Padding(
@@ -293,7 +316,7 @@ class _LinkRow extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.08),
+            color: accent.withValues(alpha: isDark ? 0.2 : 0.08),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: accent.withValues(alpha: 0.35)),
           ),
@@ -318,7 +341,7 @@ class _LinkRow extends StatelessWidget {
                       link.url,
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: Colors.grey.shade700,
+                        color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -342,6 +365,8 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
@@ -352,13 +377,17 @@ class _InfoRow extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: Colors.grey.shade600,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             value,
-            style: const TextStyle(fontSize: 13, height: 1.35),
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.35,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
           ),
         ],
       ),

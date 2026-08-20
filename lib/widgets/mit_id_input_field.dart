@@ -117,14 +117,19 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).primaryColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? const Color(0xFF818CF8) : Theme.of(context).primaryColor;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'MIT Unique Identification Number:',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+          ),
         ),
         const SizedBox(height: 8),
 
@@ -133,14 +138,18 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: primaryColor.withValues(alpha: 0.08),
+            color: primaryColor.withValues(alpha: isDark ? 0.15 : 0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
+            border: Border.all(color: primaryColor.withValues(alpha: isDark ? 0.4 : 0.3)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.badge_outlined, size: 18, color: Colors.blueGrey),
+              Icon(
+                Icons.badge_outlined,
+                size: 18,
+                color: isDark ? const Color(0xFFA1A1AA) : Colors.blueGrey,
+              ),
               const SizedBox(width: 8),
               SelectableText(
                 'MIT${yearCtrl.text}-${sectionCtrl.text.toUpperCase()}-${groupCtrl.text}-$selectedLevel-$deptCode-${rollCtrl.text}',
@@ -163,7 +172,7 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
           child: Row(
             children: [
               // Segment 1: MIT Prefix Badge (Fixed)
-              _buildBadgeBox('MIT', primaryColor),
+              _buildBadgeBox('MIT', primaryColor, isDark),
 
               // Segment 2: Year Code (2 Digits Inputable)
               _buildInputBox(
@@ -172,6 +181,7 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
                 maxLength: 2,
                 hint: '21',
                 keyboardType: TextInputType.number,
+                isDark: isDark,
               ),
               _buildHyphen(),
 
@@ -182,6 +192,7 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
                 maxLength: 1,
                 hint: 'B',
                 textCapitalization: TextCapitalization.characters,
+                isDark: isDark,
               ),
               _buildHyphen(),
 
@@ -192,6 +203,7 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
                 maxLength: 2,
                 hint: '01',
                 keyboardType: TextInputType.number,
+                isDark: isDark,
               ),
               _buildHyphen(),
 
@@ -200,14 +212,22 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
                 height: 48,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? const Color(0xFF18181B) : Colors.white,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey.shade400),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF262626) : Colors.grey.shade400,
+                  ),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: selectedLevel,
-                    items: const [
+                    dropdownColor: isDark ? const Color(0xFF1E1E24) : Colors.white,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                    items: [
                       DropdownMenuItem(
                         value: 'UG',
                         child: Text(
@@ -215,6 +235,7 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
+                            color: isDark ? Colors.white : Colors.black,
                           ),
                         ),
                       ),
@@ -225,6 +246,7 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
+                            color: isDark ? Colors.white : Colors.black,
                           ),
                         ),
                       ),
@@ -241,7 +263,11 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
               _buildHyphen(),
 
               // Segment 6: Dept Code Badge (Fixed from Department selection)
-              _buildBadgeBox(deptCode, Colors.blueGrey.shade700),
+              _buildBadgeBox(
+                deptCode,
+                isDark ? const Color(0xFF60A5FA) : Colors.blueGrey.shade700,
+                isDark,
+              ),
               _buildHyphen(),
 
               // Segment 7: Roll Number (5 Digits OTP Box)
@@ -251,6 +277,7 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
                 maxLength: 5,
                 hint: '12345',
                 keyboardType: TextInputType.number,
+                isDark: isDark,
               ),
             ],
           ),
@@ -258,21 +285,24 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
         const SizedBox(height: 8),
         Text(
           'Format auto-generates (e.g. MIT21-B-01-UG-ECE-12345)',
-          style: const TextStyle(fontSize: 11, color: Colors.grey),
+          style: TextStyle(
+            fontSize: 11,
+            color: isDark ? const Color(0xFF71717A) : Colors.grey,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildBadgeBox(String label, Color color) {
+  Widget _buildBadgeBox(String label, Color color, bool isDark) {
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: isDark ? 0.18 : 0.12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        border: Border.all(color: color.withValues(alpha: isDark ? 0.5 : 0.4)),
       ),
       child: Text(
         label,
@@ -307,6 +337,7 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
     required String hint,
     TextInputType keyboardType = TextInputType.text,
     TextCapitalization textCapitalization = TextCapitalization.none,
+    bool isDark = false,
   }) {
     return SizedBox(
       width: width,
@@ -317,20 +348,33 @@ class _MitIdInputFieldState extends State<MitIdInputField> {
         keyboardType: keyboardType,
         textCapitalization: textCapitalization,
         textAlign: TextAlign.center,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.bold,
           fontSize: 14,
           fontFamily: 'monospace',
+          color: isDark ? Colors.white : const Color(0xFF0F172A),
         ),
         decoration: InputDecoration(
           counterText: '',
           hintText: hint,
+          hintStyle: TextStyle(
+            color: isDark ? const Color(0xFF71717A) : Colors.grey.shade400,
+          ),
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(
+              color: isDark ? const Color(0xFF262626) : Colors.grey.shade400,
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(
+              color: isDark ? const Color(0xFF262626) : Colors.grey.shade400,
+            ),
           ),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: isDark ? const Color(0xFF18181B) : Colors.white,
         ),
         onChanged: (_) => _notifyCombined(),
       ),

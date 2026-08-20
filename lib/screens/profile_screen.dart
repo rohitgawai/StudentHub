@@ -88,27 +88,27 @@ class _ProfileScreenState extends State<ProfileScreen>
       (n) => n.title.contains('Access Expired'),
     );
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
         title: const Text(
           'My Profile',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Color(0xFF0F172A),
           ),
         ),
         actions: [
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Color(0xFF0F172A)),
+            icon: const Icon(Icons.more_vert),
             tooltip: 'Profile Options',
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             elevation: 4,
             surfaceTintColor: Colors.transparent,
             onSelected: (val) {
-              if (val == 'edit') {
+              if (val == 'theme') {
+                _showThemeDialog(context, dataService);
+              } else if (val == 'edit') {
                 showDialog(
                   context: context,
                   builder: (ctx) => const EditProfileModal(),
@@ -150,17 +150,37 @@ class _ProfileScreenState extends State<ProfileScreen>
                   hasHostRole || hasFacultyRole || user.hasRole(UserRole.admin);
               return [
                 PopupMenuItem(
+                  value: 'theme',
+                  child: Row(
+                    children: [
+                      Icon(Icons.palette_outlined, size: 18, color: cfg.primaryColor),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Theme & Appearance',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
                   value: 'edit',
                   child: Row(
-                    children: const [
-                      Icon(Icons.edit_outlined, size: 18, color: Color(0xFF312E81)),
-                      SizedBox(width: 10),
-                      Text(
+                    children: [
+                      Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
                         'Edit Profile Details',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF0F172A),
                         ),
                       ),
                     ],
@@ -172,7 +192,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                     value: 'feed_scope',
                     child: Row(
                       children: [
-                        const Icon(Icons.tune_rounded, size: 18, color: Color(0xFF312E81)),
+                        Icon(
+                          Icons.tune_rounded,
+                          size: 18,
+                          color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA),
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -184,7 +208,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF0F172A),
                                 ),
                               ),
                               Text(
@@ -193,7 +216,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     : 'My Year (${user.year.isNotEmpty ? user.year : "Default"})',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: Colors.grey.shade600,
+                                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                                 ),
                               ),
                             ],
@@ -207,15 +230,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                 PopupMenuItem(
                   value: 'reset_password',
                   child: Row(
-                    children: const [
-                      Icon(Icons.lock_reset_rounded, size: 18, color: Color(0xFF312E81)),
-                      SizedBox(width: 10),
-                      Text(
+                    children: [
+                      Icon(
+                        Icons.lock_reset_rounded,
+                        size: 18,
+                        color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
                         'Reset Password',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF0F172A),
                         ),
                       ),
                     ],
@@ -259,16 +285,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                 margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? const Color(0xFF121212) : Colors.white,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
+                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
                       blurRadius: 16,
                       offset: const Offset(0, 4),
                     ),
                   ],
-                  border: Border.all(color: Colors.grey.shade200),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -282,10 +310,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
+                          color: isDark ? const Color(0xFF18181B) : const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: const Color(0xFFE2E8F0),
+                            color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
                           ),
                         ),
                         child: Row(
@@ -294,7 +322,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             Icon(
                               Icons.swap_horiz_rounded,
                               size: 16,
-                              color: Colors.grey.shade700,
+                              color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700,
                             ),
                             const SizedBox(width: 6),
                             Text(
@@ -302,7 +330,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade700,
+                                color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700,
                               ),
                             ),
                             DropdownButtonHideUnderline(
@@ -314,12 +342,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 isDense: true,
                                 borderRadius: BorderRadius.circular(16),
                                 elevation: 4,
-                                dropdownColor: Colors.white,
+                                dropdownColor: isDark ? const Color(0xFF18181B) : Colors.white,
                                 menuMaxHeight: 220,
                                 icon: Icon(
                                   Icons.keyboard_arrow_down_rounded,
                                   size: 18,
-                                  color: Colors.grey.shade700,
+                                  color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700,
                                 ),
                                 onChanged: (UserRole? newRole) {
                                   if (newRole != null) {
@@ -351,16 +379,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                                                 ? FontWeight.w700
                                                 : FontWeight.w500,
                                             color: isCurrent
-                                                ? const Color(0xFF312E81)
-                                                : const Color(0xFF1E293B),
+                                                ? (isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81))
+                                                : (isDark ? Colors.white : const Color(0xFF1E293B)),
                                           ),
                                         ),
                                         if (isCurrent) ...[
                                           const SizedBox(width: 6),
-                                          const Icon(
+                                          Icon(
                                             Icons.check,
                                             size: 14,
-                                            color: Color(0xFF312E81),
+                                            color: isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81),
                                           ),
                                         ],
                                       ],
@@ -412,8 +440,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                               right: 2,
                               child: Container(
                                 padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF121212) : Colors.white,
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
@@ -433,10 +461,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                     Text(
                       user.name,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
                       ),
                     ),
 
@@ -448,7 +476,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -461,7 +489,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: cfg.primaryColor,
+                        color: isDark ? const Color(0xFF60A5FA) : cfg.primaryColor,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -471,13 +499,17 @@ class _ProfileScreenState extends State<ProfileScreen>
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.phone_outlined, size: 13, color: Colors.grey.shade500),
+                          Icon(
+                            Icons.phone_outlined,
+                            size: 13,
+                            color: isDark ? const Color(0xFF71717A) : Colors.grey.shade500,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             user.mobileNumber,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade600,
+                              color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -830,13 +862,9 @@ class _ProfileScreenState extends State<ProfileScreen>
           key: ValueKey(post.id),
           post: post,
           config: dataService.config,
-          isSaved:
-              dataService.currentUser.savedPostIds.contains(post.id),
-          isRegistered:
-              dataService.currentUser.registeredEventIds.contains(post.id),
-          isCongratulated: dataService.currentUser.congratulatedPostIds.contains(
-            post.id,
-          ),
+          isSaved: dataService.currentUser.savedPostIds.contains(post.id),
+          isRegistered: dataService.currentUser.registeredEventIds.contains(post.id),
+          isCongratulated: dataService.currentUser.congratulatedPostIds.contains(post.id),
           isLiked: dataService.currentUser.likedPostIds.contains(post.id),
           currentUserId: dataService.currentUser.id,
           onToggleSave: () => dataService.toggleSavePost(post.id),
@@ -851,7 +879,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     MockDataService dataService,
     String email,
   ) {
-final newPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
     final confirmController = TextEditingController();
     String errorText = '';
     bool isResetting = false;
@@ -860,15 +888,18 @@ final newPasswordController = TextEditingController();
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          final accent = isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA);
+
           return AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
             title: Row(
-              children: const [
-                Icon(Icons.lock_reset_rounded, color: Color(0xFF312E81), size: 22),
-                SizedBox(width: 10),
-                Text(
+              children: [
+                Icon(Icons.lock_reset_rounded, color: accent, size: 22),
+                const SizedBox(width: 10),
+                const Text(
                   'Reset Password',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
@@ -880,12 +911,18 @@ final newPasswordController = TextEditingController();
               children: [
                 Text(
                   'Account: $email',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Reset is only allowed from the device where the password was originally set.',
-                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: isDark ? const Color(0xFF71717A) : Colors.grey.shade500,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -929,7 +966,8 @@ final newPasswordController = TextEditingController();
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF312E81),
+                  backgroundColor: accent,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -1007,6 +1045,7 @@ final newPasswordController = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return StatefulBuilder(
           builder: (dialogCtx, setDialogState) {
             final showAll = dataService.showAllYearsFeed;
@@ -1018,10 +1057,10 @@ final newPasswordController = TextEditingController();
                 borderRadius: BorderRadius.circular(20),
               ),
               title: Row(
-                children: const [
-                  Icon(Icons.tune_rounded, color: Color(0xFF312E81), size: 22),
-                  SizedBox(width: 10),
-                  Text(
+                children: [
+                  Icon(Icons.tune_rounded, color: isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81), size: 22),
+                  const SizedBox(width: 10),
+                  const Text(
                     'Feed Scope',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
@@ -1035,7 +1074,7 @@ final newPasswordController = TextEditingController();
                     'As a creator/faculty, choose which posts appear in your campus feed:',
                     style: TextStyle(
                       fontSize: 12.5,
-                      color: Colors.grey.shade700,
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -1060,13 +1099,13 @@ final newPasswordController = TextEditingController();
                       ),
                       decoration: BoxDecoration(
                         color: !showAll
-                            ? const Color(0xFF312E81).withValues(alpha: 0.08)
+                            ? const Color(0xFF312E81).withValues(alpha: isDark ? 0.25 : 0.08)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: !showAll
-                              ? const Color(0xFF312E81)
-                              : Colors.grey.shade300,
+                              ? (isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81))
+                              : (isDark ? const Color(0xFF334155) : Colors.grey.shade300),
                           width: !showAll ? 1.5 : 1,
                         ),
                       ),
@@ -1077,7 +1116,7 @@ final newPasswordController = TextEditingController();
                                 ? Icons.radio_button_checked
                                 : Icons.radio_button_off,
                             color: !showAll
-                                ? const Color(0xFF312E81)
+                                ? (isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81))
                                 : Colors.grey.shade500,
                             size: 20,
                           ),
@@ -1092,8 +1131,8 @@ final newPasswordController = TextEditingController();
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.bold,
                                     color: !showAll
-                                        ? const Color(0xFF312E81)
-                                        : const Color(0xFF0F172A),
+                                        ? (isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81))
+                                        : (isDark ? Colors.white : const Color(0xFF0F172A)),
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -1101,7 +1140,7 @@ final newPasswordController = TextEditingController();
                                   'Only view posts targeted to your year and all years',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Colors.grey.shade600,
+                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                                   ),
                                 ),
                               ],
@@ -1133,13 +1172,13 @@ final newPasswordController = TextEditingController();
                       ),
                       decoration: BoxDecoration(
                         color: showAll
-                            ? const Color(0xFF312E81).withValues(alpha: 0.08)
+                            ? const Color(0xFF312E81).withValues(alpha: isDark ? 0.25 : 0.08)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: showAll
-                              ? const Color(0xFF312E81)
-                              : Colors.grey.shade300,
+                              ? (isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81))
+                              : (isDark ? const Color(0xFF334155) : Colors.grey.shade300),
                           width: showAll ? 1.5 : 1,
                         ),
                       ),
@@ -1150,7 +1189,7 @@ final newPasswordController = TextEditingController();
                                 ? Icons.radio_button_checked
                                 : Icons.radio_button_off,
                             color: showAll
-                                ? const Color(0xFF312E81)
+                                ? (isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81))
                                 : Colors.grey.shade500,
                             size: 20,
                           ),
@@ -1165,8 +1204,8 @@ final newPasswordController = TextEditingController();
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.bold,
                                     color: showAll
-                                        ? const Color(0xFF312E81)
-                                        : const Color(0xFF0F172A),
+                                        ? (isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81))
+                                        : (isDark ? Colors.white : const Color(0xFF0F172A)),
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -1174,7 +1213,7 @@ final newPasswordController = TextEditingController();
                                   'View posts across 1st, 2nd, 3rd, and Final years',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Colors.grey.shade600,
+                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                                   ),
                                 ),
                               ],
@@ -1196,6 +1235,171 @@ final newPasswordController = TextEditingController();
           },
         );
       },
+    );
+  }
+
+  void _showThemeDialog(BuildContext context, MockDataService dataService) {
+    final currentMode = dataService.themeMode;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF334155) : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Theme & Appearance',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Choose your preferred visual theme for StudentHub.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _themeOptionTile(
+                  ctx,
+                  dataService,
+                  title: 'System Default',
+                  subtitle: 'Automatically adapts to your device theme',
+                  icon: Icons.brightness_auto_rounded,
+                  mode: ThemeMode.system,
+                  isSelected: currentMode == ThemeMode.system,
+                ),
+                const SizedBox(height: 8),
+                _themeOptionTile(
+                  ctx,
+                  dataService,
+                  title: 'Light Mode',
+                  subtitle: 'Always bright and clean',
+                  icon: Icons.light_mode_rounded,
+                  mode: ThemeMode.light,
+                  isSelected: currentMode == ThemeMode.light,
+                ),
+                const SizedBox(height: 8),
+                _themeOptionTile(
+                  ctx,
+                  dataService,
+                  title: 'Dark Mode',
+                  subtitle: 'Comfortable on eyes in dark environments',
+                  icon: Icons.dark_mode_rounded,
+                  mode: ThemeMode.dark,
+                  isSelected: currentMode == ThemeMode.dark,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _themeOptionTile(
+    BuildContext ctx,
+    MockDataService dataService, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required ThemeMode mode,
+    required bool isSelected,
+  }) {
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
+    final primary = dataService.config.primaryColor;
+    return InkWell(
+      onTap: () {
+        dataService.setThemeMode(mode);
+        Navigator.pop(ctx);
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? primary.withValues(alpha: isDark ? 0.2 : 0.08)
+              : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? primary
+                : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? primary.withValues(alpha: 0.15)
+                    : (isDark ? const Color(0xFF1E293B) : Colors.white),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: isSelected
+                    ? primary
+                    : (isDark ? Colors.grey.shade300 : const Color(0xFF334155)),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: isSelected ? primary : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(Icons.check_circle_rounded, color: primary, size: 22)
+            else
+              Icon(Icons.circle_outlined,
+                  color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                  size: 22),
+          ],
+        ),
+      ),
     );
   }
 }

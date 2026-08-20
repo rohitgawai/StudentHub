@@ -170,53 +170,81 @@ class _LinkFormEditorState extends State<LinkFormEditor> {
         ],
 
         // 1-Row Compact Action Buttons
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: widget.accent,
-                  side: BorderSide(color: widget.accent.withValues(alpha: 0.4)),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+        Builder(
+          builder: (context) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final linkColor = isDark ? const Color(0xFF60A5FA) : widget.accent;
+            final formColor = _form != null
+                ? (isDark ? const Color(0xFF34D399) : Colors.green)
+                : (isDark ? const Color(0xFFA78BFA) : widget.accent);
+
+            return Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: linkColor,
+                      backgroundColor: isDark
+                          ? const Color(0xFF60A5FA).withValues(alpha: 0.12)
+                          : widget.accent.withValues(alpha: 0.04),
+                      side: BorderSide(
+                        color: isDark
+                            ? const Color(0xFF60A5FA).withValues(alpha: 0.5)
+                            : widget.accent.withValues(alpha: 0.4),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: _addLink,
+                    icon: const Icon(Icons.add_link, size: 16),
+                    label: const Text(
+                      '+ Link 🔗',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
-                onPressed: _addLink,
-                icon: const Icon(Icons.add_link, size: 16),
-                label: const Text(
-                  '+ Link 🔗',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _form != null ? Colors.green : widget.accent,
-                  side: BorderSide(
-                    color: _form != null
-                        ? Colors.green
-                        : widget.accent.withValues(alpha: 0.4),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: formColor,
+                      backgroundColor: isDark
+                          ? (_form != null
+                              ? const Color(0xFF34D399).withValues(alpha: 0.14)
+                              : const Color(0xFFA78BFA).withValues(alpha: 0.12))
+                          : (_form != null
+                              ? Colors.green.withValues(alpha: 0.06)
+                              : widget.accent.withValues(alpha: 0.04)),
+                      side: BorderSide(
+                        color: isDark
+                            ? (_form != null
+                                ? const Color(0xFF34D399).withValues(alpha: 0.6)
+                                : const Color(0xFFA78BFA).withValues(alpha: 0.5))
+                            : (_form != null
+                                ? Colors.green
+                                : widget.accent.withValues(alpha: 0.4)),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: _createOrEditForm,
+                    icon: Icon(
+                      _form == null ? Icons.post_add_outlined : Icons.check_circle_outline,
+                      size: 16,
+                    ),
+                    label: Text(
+                      _form == null ? '+ Form 📝' : 'Form Added ✓',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
                 ),
-                onPressed: _createOrEditForm,
-                icon: Icon(
-                  _form == null ? Icons.post_add_outlined : Icons.check_circle_outline,
-                  size: 16,
-                ),
-                label: Text(
-                  _form == null ? '+ Form 📝' : 'Form Added ✓',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ],
     );

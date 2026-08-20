@@ -124,17 +124,18 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
         .where((p) => p.isEvent && (p.eventDate == null || p.eventDate!.isAfter(now)))
         .length;
     final pastCount = allRows.length - upcomingCount;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: const Text(
           'Registration Analytics',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: false,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF0F172A),
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        foregroundColor: isDark ? Colors.white : const Color(0xFF0F172A),
         elevation: 0,
         scrolledUnderElevation: 1,
         actions: [
@@ -160,24 +161,38 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E1B4B).withValues(alpha: 0.08),
+                  color: isDark
+                      ? const Color(0xFF818CF8).withValues(alpha: 0.2)
+                      : const Color(0xFF1E1B4B).withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF1E1B4B).withValues(alpha: 0.2)),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF818CF8).withValues(alpha: 0.4)
+                        : const Color(0xFF1E1B4B).withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.download_rounded, size: 16, color: Color(0xFF1E1B4B)),
-                    SizedBox(width: 4),
+                  children: [
+                    Icon(
+                      Icons.download_rounded,
+                      size: 16,
+                      color: isDark ? const Color(0xFF818CF8) : const Color(0xFF1E1B4B),
+                    ),
+                    const SizedBox(width: 4),
                     Text(
                       'Export',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E1B4B),
+                        color: isDark ? const Color(0xFF818CF8) : const Color(0xFF1E1B4B),
                       ),
                     ),
-                    Icon(Icons.arrow_drop_down, size: 16, color: Color(0xFF1E1B4B)),
+                    Icon(
+                      Icons.arrow_drop_down,
+                      size: 16,
+                      color: isDark ? const Color(0xFF818CF8) : const Color(0xFF1E1B4B),
+                    ),
                   ],
                 ),
               ),
@@ -217,12 +232,12 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
                     color: Colors.grey.shade400,
                   ),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'No registrations yet',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -231,7 +246,7 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade600,
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                       height: 1.5,
                     ),
                   ),
@@ -245,12 +260,14 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
                   margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? const Color(0xFF121212) : Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade200),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
+                        color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -267,10 +284,10 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
                             children: [
                               Text(
                                 '$totalRegistrations Total Registrations',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900,
-                                  color: Color(0xFF0F172A),
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -278,8 +295,7 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
                                 '${allRows.length} Total Events & Forms',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                  fontWeight: FontWeight.w500,
+                                  color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
                                 ),
                               ),
                             ],
@@ -287,79 +303,83 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1E1B4B).withValues(alpha: 0.08),
+                              color: const Color(0xFF1E1B4B).withValues(alpha: isDark ? 0.4 : 0.08),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
-                              Icons.insights_rounded,
-                              color: Color(0xFF1E1B4B),
+                              Icons.analytics_rounded,
+                              color: Color(0xFF818CF8),
                               size: 22,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.green.shade200),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.green,
-                                    shape: BoxShape.circle,
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.green.shade900.withValues(alpha: 0.25)
+                                    : Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.green,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '$upcomingCount Upcoming',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green.shade800,
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '$upcomingCount Upcoming',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.green.shade300 : Colors.green.shade800,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.grey.shade300),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade600,
-                                    shape: BoxShape.circle,
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xFF18181B)
+                                    : Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF71717A) : Colors.grey.shade500,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '$pastCount Completed',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade700,
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '$pastCount Completed',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -375,23 +395,27 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
                     onChanged: (val) => setState(() => _searchQuery = val),
                     decoration: InputDecoration(
                       hintText: 'Search your events or forms...',
-                      hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                      prefixIcon: const Icon(Icons.search, size: 18, color: Colors.grey),
+                      hintStyle: TextStyle(fontSize: 13, color: isDark ? const Color(0xFF71717A) : Colors.grey.shade500),
+                      prefixIcon: Icon(Icons.search, size: 18, color: isDark ? const Color(0xFF71717A) : Colors.grey),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: isDark ? const Color(0xFF121212) : Colors.white,
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade200),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade200),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF1E1B4B)),
+                        borderSide: const BorderSide(color: Color(0xFF818CF8)),
                       ),
                     ),
                   ),
@@ -403,7 +427,7 @@ class _RegistrationStatsScreenState extends State<RegistrationStatsScreen> {
                       ? Center(
                           child: Text(
                             'No matching events found.',
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                            style: TextStyle(color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600, fontSize: 13),
                           ),
                         )
                       : ListView.builder(
@@ -446,6 +470,7 @@ class _EventAnalyticsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isEvent = post.isEvent;
     final maxCapacity = post.maxParticipants ?? 100;
     final double fillPercentage = maxCapacity > 0
@@ -459,12 +484,14 @@ class _EventAnalyticsCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF121212) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.02),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -487,12 +514,14 @@ class _EventAnalyticsCard extends StatelessWidget {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: (isEvent ? const Color(0xFF312E81) : Colors.blue)
-                            .withValues(alpha: 0.1),
+                            .withValues(alpha: isDark ? 0.25 : 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
                         isEvent ? Icons.event_available : Icons.description_outlined,
-                        color: isEvent ? const Color(0xFF312E81) : Colors.blue.shade700,
+                        color: isEvent
+                            ? (isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81))
+                            : (isDark ? Colors.blue.shade300 : Colors.blue.shade700),
                         size: 20,
                       ),
                     ),
@@ -508,10 +537,10 @@ class _EventAnalyticsCard extends StatelessWidget {
                                   post.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14.5,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F172A),
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
                                   ),
                                 ),
                               ),
@@ -523,13 +552,17 @@ class _EventAnalyticsCard extends StatelessWidget {
                                   ),
                                   decoration: BoxDecoration(
                                     color: isUpcoming
-                                        ? Colors.green.shade50
-                                        : Colors.grey.shade100,
+                                        ? (isDark
+                                            ? Colors.green.shade900.withValues(alpha: 0.3)
+                                            : Colors.green.shade50)
+                                        : (isDark
+                                            ? const Color(0xFF0F172A)
+                                            : Colors.grey.shade100),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: isUpcoming
-                                          ? Colors.green.shade200
-                                          : Colors.grey.shade300,
+                                          ? (isDark ? Colors.green.shade700 : Colors.green.shade200)
+                                          : (isDark ? const Color(0xFF334155) : Colors.grey.shade300),
                                     ),
                                   ),
                                   child: Text(
@@ -538,8 +571,8 @@ class _EventAnalyticsCard extends StatelessWidget {
                                       fontSize: 9.5,
                                       fontWeight: FontWeight.bold,
                                       color: isUpcoming
-                                          ? Colors.green.shade800
-                                          : Colors.grey.shade600,
+                                          ? (isDark ? Colors.green.shade300 : Colors.green.shade800)
+                                          : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                                     ),
                                   ),
                                 ),
@@ -558,7 +591,7 @@ class _EventAnalyticsCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11.5,
-                              color: Colors.grey.shade600,
+                              color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
                             ),
                           ),
                         ],
@@ -577,15 +610,15 @@ class _EventAnalyticsCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
+                        color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700,
                       ),
                     ),
                     Text(
                       '$percentInt% filled',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF312E81),
+                        color: isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81),
                       ),
                     ),
                   ],
@@ -596,13 +629,13 @@ class _EventAnalyticsCard extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: fillPercentage,
                     minHeight: 6,
-                    backgroundColor: Colors.grey.shade200,
+                    backgroundColor: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
                     valueColor: AlwaysStoppedAnimation<Color>(
                       percentInt >= 90
                           ? Colors.redAccent
                           : percentInt >= 50
                               ? Colors.orange
-                              : const Color(0xFF312E81),
+                              : (isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81)),
                     ),
                   ),
                 ),
@@ -612,28 +645,35 @@ class _EventAnalyticsCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.people_outline, size: 16, color: Color(0xFF312E81)),
+                      Icon(
+                        Icons.people_outline,
+                        size: 16,
+                        color: isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81),
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         '$count ${count == 1 ? 'Registrant' : 'Registrants'}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF312E81),
+                          color: isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81),
                         ),
                       ),
                       const Spacer(),
-                      const Text(
+                      Text(
                         'View Attendees →',
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF312E81),
+                          color: isDark ? const Color(0xFF818CF8) : const Color(0xFF312E81),
                         ),
                       ),
                     ],

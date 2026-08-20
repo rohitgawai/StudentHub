@@ -22,27 +22,31 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 650),
+      duration: const Duration(milliseconds: 750),
     );
 
     _fadeAnim = CurvedAnimation(
       parent: _animController,
-      curve: Curves.easeOut,
+      curve: Curves.easeOutCubic,
     );
 
-    _scaleAnim = Tween<double>(begin: 0.88, end: 1.0).animate(
+    _scaleAnim = Tween<double>(begin: 0.86, end: 1.0).animate(
       CurvedAnimation(
         parent: _animController,
         curve: Curves.easeOutCubic,
       ),
     );
 
-    // Start animation immediately
-    _animController.forward();
+    // Start animation once the first frame is painted on screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _animController.forward();
+      }
+    });
 
-    // Auto-advance after exactly 1 second (1000ms)
+    // Auto-advance after 1800ms so animation is beautifully visible on all Android versions
     _autoNavigateTimer = Timer(
-      const Duration(milliseconds: 1000),
+      const Duration(milliseconds: 1800),
       widget.onGetStarted,
     );
   }
@@ -95,7 +99,7 @@ class _SplashScreenState extends State<SplashScreen>
                       text: 'Hub',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF60A5FA), // Accent Soft Blue
+                        color: Color(0xFF2979FF), // Vibrant Electric Blue
                       ),
                     ),
                   ],

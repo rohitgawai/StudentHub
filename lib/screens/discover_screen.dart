@@ -427,44 +427,50 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.article_outlined,
-                            size: 13,
-                            color: Colors.grey.shade500,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${stats.posts} Posts',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Icon(
-                            Icons.badge_outlined,
-                            size: 13,
-                            color: Colors.grey.shade500,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${stats.faculty} Faculty',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(
-                            Icons.chevron_right,
-                            size: 16,
-                            color: accent,
-                          ),
-                        ],
+                      Builder(
+                        builder: (context) {
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          final metaColor = isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700;
+                          return Row(
+                            children: [
+                              Icon(
+                                Icons.article_outlined,
+                                size: 13,
+                                color: isDark ? const Color(0xFF71717A) : Colors.grey.shade500,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${stats.posts} Posts',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: metaColor,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Icon(
+                                Icons.badge_outlined,
+                                size: 13,
+                                color: isDark ? const Color(0xFF71717A) : Colors.grey.shade500,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${stats.faculty} Faculty',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: metaColor,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                Icons.chevron_right,
+                                size: 16,
+                                color: accent,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -685,18 +691,25 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
+          color: isDark ? const Color(0xFF121212) : Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(
+            color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 14, color: Colors.grey.shade600),
+            Icon(
+              icon,
+              size: 14,
+              color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+            ),
             const SizedBox(width: 5),
             Flexible(
               child: Text(
@@ -706,7 +719,7 @@ class _StatChip extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade800,
+                  color: isDark ? Colors.white : Colors.grey.shade800,
                 ),
               ),
             ),

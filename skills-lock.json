@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "flutter-apply-architecture-best-practices": {
+      "source": "flutter/agent-plugins",
+      "sourceType": "github",
+      "skillPath": "skills/flutter-apply-architecture-best-practices/SKILL.md",
+      "computedHash": "baeb208b1cab90c559677626dbd101b96ba93f803cbed85122abdadeb3283a8b"
+    }
+  }
+}
