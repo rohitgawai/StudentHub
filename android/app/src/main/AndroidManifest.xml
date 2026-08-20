@@ -4,7 +4,7 @@
     <!-- Scoped storage (Android 10+) covers all exports; the legacy
          WRITE_EXTERNAL_STORAGE path is removed because minSdk is 29. -->
     <application
-        android:label="student_hub"
+        android:label="StudentHub"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

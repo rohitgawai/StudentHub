@@ -38,6 +38,14 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    applicationVariants.all {
+        outputs.all {
+            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            val vName = versionName ?: "1.0.0"
+            output?.outputFileName = "StudentHub-v${vName}-${name}.apk"
+        }
+    }
 }
 
 kotlin {
