@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../config/supabase_config.dart';
+import '../services/admin_session.dart';
 import '../theme/admin_theme.dart';
 import '../layouts/responsive_admin_shell.dart';
 
@@ -17,13 +18,36 @@ class AdminLoginScreen extends StatefulWidget {
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final _adminIdController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
   bool _isLoading = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-restore a valid 1-day session so refresh / browser reopen skips
+    // the login screen entirely.
+    final session = AdminSession.read();
+    if (session != null && (session['userId'] ?? '').isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ResponsiveAdminShell(
+              adminUserId: session['userId']!,
+              adminName: session['name'] ?? 'Admin',
+            ),
+          ),
+        );
+      });
+    }
+  }
 
   @override
   void dispose() {
     _adminIdController.dispose();
     _passwordController.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -61,12 +85,15 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+        final adminId = decoded['user_id']?.toString() ?? '';
+        final adminName = decoded['name']?.toString() ?? 'Admin';
+        AdminSession.save(userId: adminId, name: adminName);
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => ResponsiveAdminShell(
-                adminUserId: decoded['user_id']?.toString() ?? '',
-                adminName: decoded['name']?.toString() ?? 'Admin',
+                adminUserId: adminId,
+                adminName: adminName,
               ),
             ),
           );
@@ -157,11 +184,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   children: const [
                     TextSpan(
                       text: 'Student',
-                      style: TextStyle(fontWeight: FontWeight.w400),
+                      style: TextStyle(fontWeight: FontWeight.w400, color: Colors.white),
                     ),
                     TextSpan(
                       text: 'Hub',
-                      style: TextStyle(fontWeight: FontWeight.w900),
+                      style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF60A5FA)),
                     ),
                     TextSpan(
                       text: ' Admin',
@@ -194,33 +221,60 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 const SizedBox(height: 16),
               ],
 
-              TextField(
-                controller: _adminIdController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Admin Email',
-                  hintText: 'admin@example.com',
-                  labelStyle: GoogleFonts.inter(color: AdminTheme.textMuted),
-                  hintStyle: GoogleFonts.inter(color: AdminTheme.textMuted.withValues(alpha: 0.5)),
-                  prefixIcon: const Icon(Icons.badge_outlined, color: AdminTheme.textMuted),
-                  filled: true,
-                  fillColor: AdminTheme.surfaceCard,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  labelStyle: GoogleFonts.inter(color: AdminTheme.textMuted),
-                  prefixIcon: const Icon(Icons.lock_outline_rounded, color: AdminTheme.textMuted),
-                  filled: true,
-                  fillColor: AdminTheme.surfaceCard,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              AutofillGroup(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: _adminIdController,
+                      style: const TextStyle(color: Colors.white),
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [
+                        AutofillHints.username,
+                        AutofillHints.email,
+                      ],
+                      onSubmitted: (_) => _passwordFocusNode.requestFocus(),
+                      decoration: InputDecoration(
+                        labelText: 'Admin Email',
+                        hintText: 'admin@example.com',
+                        labelStyle:
+                            GoogleFonts.inter(color: AdminTheme.textMuted),
+                        hintStyle: GoogleFonts.inter(
+                            color: AdminTheme.textMuted.withValues(alpha: 0.5)),
+                        prefixIcon: const Icon(Icons.badge_outlined,
+                            color: AdminTheme.textMuted),
+                        filled: true,
+                        fillColor: AdminTheme.surfaceCard,
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _passwordController,
+                      focusNode: _passwordFocusNode,
+                      obscureText: true,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.password],
+                      onSubmitted: (_) {
+                        if (!_isLoading) _login();
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        labelStyle:
+                            GoogleFonts.inter(color: AdminTheme.textMuted),
+                        prefixIcon: const Icon(Icons.lock_outline_rounded,
+                            color: AdminTheme.textMuted),
+                        filled: true,
+                        fillColor: AdminTheme.surfaceCard,
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),

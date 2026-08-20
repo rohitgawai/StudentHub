@@ -14,6 +14,7 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
+  late Animation<double> _scaleAnim;
   Timer? _autoNavigateTimer;
 
   @override
@@ -21,17 +22,27 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 650),
     );
-    _fadeAnim = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeIn));
+
+    _fadeAnim = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOut,
+    );
+
+    _scaleAnim = Tween<double>(begin: 0.88, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    // Start animation immediately
     _animController.forward();
 
-    // Fast auto-advance to home tab (350ms) for an instant 1-3s total entry.
+    // Auto-advance after exactly 1 second (1000ms)
     _autoNavigateTimer = Timer(
-      const Duration(milliseconds: 350),
+      const Duration(milliseconds: 1000),
       widget.onGetStarted,
     );
   }
@@ -46,39 +57,54 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      body: Center(
-        child: FadeTransition(
-          opacity: _fadeAnim,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Bare-minimum centered brand mark (LinkedIn / Tumblr style)
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF00157A), // Deep Brand Blue (matching logo background)
+              Color(0xFF0028B8), // Royal Blue
+              Color(0xFF0038D8), // Vibrant Accent Blue
+            ],
+          ),
+        ),
+        child: Center(
+          child: FadeTransition(
+            opacity: _fadeAnim,
+            child: ScaleTransition(
+              scale: _scaleAnim,
+              child: RichText(
+                text: const TextSpan(
+                  style: TextStyle(
+                    fontSize: 38,
+                    letterSpacing: -0.6,
+                    height: 1.1,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: 'Student',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w400,
+                        color: Colors.white,
+                      ),
+                    ),
+                    TextSpan(
+                      text: 'Hub',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF60A5FA), // Accent Soft Blue
+                      ),
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.school_rounded,
-                  size: 36,
-                  color: Colors.white,
-                ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 }
-

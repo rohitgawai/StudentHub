@@ -10,6 +10,7 @@ import 'services/mock_data_service.dart';
 import 'services/local_store_service.dart';
 import 'services/push_service.dart';
 import 'theme/app_theme.dart';
+import 'screens/splash_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/progressive_form_screen.dart';
 import 'screens/home_feed_screen.dart';
@@ -81,8 +82,33 @@ class StudentHubApp extends StatelessWidget {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      home: const MainNavigationContainer(),
+      home: const AppRoot(),
     );
+  }
+}
+
+class AppRoot extends StatefulWidget {
+  const AppRoot({super.key});
+
+  @override
+  State<AppRoot> createState() => _AppRootState();
+}
+
+class _AppRootState extends State<AppRoot> {
+  bool _showSplash = true;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_showSplash) {
+      return SplashScreen(
+        onGetStarted: () {
+          if (mounted) {
+            setState(() => _showSplash = false);
+          }
+        },
+      );
+    }
+    return const MainNavigationContainer();
   }
 }
 
@@ -226,7 +252,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                 borderRadius: BorderRadius.circular(9),
                 boxShadow: [
                   BoxShadow(
-                    color: cfg.primaryColor.withValues(alpha: 0.2),
+                    color: const Color(0xFF0038D8).withValues(alpha: 0.2),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -236,51 +262,38 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                 borderRadius: BorderRadius.circular(9),
                 child: Image.asset(
                   'assets/images/app_logo.png',
-                  width: 32,
-                  height: 32,
+                  width: 30,
+                  height: 30,
                   fit: BoxFit.cover,
                 ),
               ),
             ),
             const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                RichText(
-                  text: TextSpan(
-                    style: const TextStyle(
-                      fontSize: 19.5,
+            RichText(
+              text: const TextSpan(
+                style: TextStyle(
+                  fontSize: 20,
+                  color: Color(0xFF0F172A),
+                  letterSpacing: -0.3,
+                  height: 1.1,
+                ),
+                children: [
+                  TextSpan(
+                    text: 'Student',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
                       color: Color(0xFF0F172A),
-                      letterSpacing: -0.3,
-                      height: 1.1,
                     ),
-                    children: [
-                      const TextSpan(
-                        text: 'Student',
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      TextSpan(
-                        text: 'Hub',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          color: cfg.primaryColor,
-                        ),
-                      ),
-                    ],
                   ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  cfg.collegeShortCode,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFF64748B),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
+                  TextSpan(
+                    text: 'Hub',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0038D8),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),

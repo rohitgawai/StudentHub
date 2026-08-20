@@ -355,11 +355,11 @@ class _AuthScreenState extends State<AuthScreen> {
                               text: 'Student',
                               style: TextStyle(fontWeight: FontWeight.w500),
                             ),
-                            TextSpan(
+                            const TextSpan(
                               text: 'Hub',
                               style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                color: cfg.primaryColor,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0038D8),
                               ),
                             ),
                           ],

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../theme/admin_theme.dart';
 import '../services/admin_supabase_service.dart';
+import '../services/admin_session.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/online_users_screen.dart';
 import '../screens/role_requests_screen.dart';
@@ -57,9 +58,10 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
     });
   }
 
-  /// Returns to the login screen. Nothing is persisted, so the next launch
-  /// requires a fresh server-verified login.
+  /// Returns to the login screen and clears the persisted 1-day session, so
+  /// the next launch requires a fresh server-verified login.
   void _logout() {
+    AdminSession.clear();
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
       (route) => false,
@@ -267,11 +269,11 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                         children: const [
                           TextSpan(
                             text: 'Student',
-                            style: TextStyle(fontWeight: FontWeight.w400),
+                            style: TextStyle(fontWeight: FontWeight.w400, color: Colors.white),
                           ),
                           TextSpan(
                             text: 'Hub',
-                            style: TextStyle(fontWeight: FontWeight.w900),
+                            style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF60A5FA)),
                           ),
                         ],
                       ),
@@ -516,11 +518,11 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                         children: const [
                           TextSpan(
                             text: 'Student',
-                            style: TextStyle(fontWeight: FontWeight.w400),
+                            style: TextStyle(fontWeight: FontWeight.w400, color: Colors.white),
                           ),
                           TextSpan(
                             text: 'Hub',
-                            style: TextStyle(fontWeight: FontWeight.w900),
+                            style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF60A5FA)),
                           ),
                         ],
                       ),
