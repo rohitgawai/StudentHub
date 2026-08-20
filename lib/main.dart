@@ -222,47 +222,62 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [cfg.primaryColor, cfg.primaryColor.withBlue(220)],
-                ),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(9),
                 boxShadow: [
                   BoxShadow(
-                    color: cfg.primaryColor.withValues(alpha: 0.3),
+                    color: cfg.primaryColor.withValues(alpha: 0.2),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.school_rounded,
-                size: 20,
-                color: Colors.white,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(9),
+                child: Image.asset(
+                  'assets/images/app_logo.png',
+                  width: 32,
+                  height: 32,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
             const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  cfg.appName,
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                    height: 1.15,
-                    color: cfg.primaryColor,
+                RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontSize: 19.5,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: -0.3,
+                      height: 1.1,
+                    ),
+                    children: [
+                      const TextSpan(
+                        text: 'Student',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      TextSpan(
+                        text: 'Hub',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: cfg.primaryColor,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(height: 1),
                 Text(
                   cfg.collegeShortCode,
                   style: const TextStyle(
                     fontSize: 10,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
                   ),
                 ),
               ],

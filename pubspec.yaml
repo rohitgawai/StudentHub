@@ -76,6 +76,7 @@ flutter:
   assets:
     - assets/config/app_config.json
     - assets/pdfs/
+    - assets/images/
 
 
   # To add assets to your application, add an assets section, like this:

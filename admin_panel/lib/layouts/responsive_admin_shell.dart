@@ -244,24 +244,36 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
             padding: const EdgeInsets.all(24),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    gradient: AdminTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 24),
                 ),
                 const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'StudentHub',
-                      style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: Colors.white,
+                    RichText(
+                      text: TextSpan(
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          color: Colors.white,
+                          letterSpacing: -0.2,
+                        ),
+                        children: const [
+                          TextSpan(
+                            text: 'Student',
+                            style: TextStyle(fontWeight: FontWeight.w400),
+                          ),
+                          TextSpan(
+                            text: 'Hub',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ],
                       ),
                     ),
                     Text(
@@ -480,25 +492,37 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
             ),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    gradient: AdminTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    width: 42,
+                    height: 42,
+                    fit: BoxFit.cover,
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 14),
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'StudentHub',
-                      style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
-                        color: Colors.white,
+                    RichText(
+                      text: TextSpan(
+                        style: GoogleFonts.outfit(
+                          fontSize: 20,
+                          color: Colors.white,
+                          letterSpacing: -0.2,
+                        ),
+                        children: const [
+                          TextSpan(
+                            text: 'Student',
+                            style: TextStyle(fontWeight: FontWeight.w400),
+                          ),
+                          TextSpan(
+                            text: 'Hub',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ],
                       ),
                     ),
                     Text(

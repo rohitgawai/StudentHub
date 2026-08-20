@@ -125,18 +125,52 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: AdminTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0030B0).withValues(alpha: 0.45),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-                child: const Icon(Icons.admin_panel_settings_rounded, size: 36, color: Colors.white),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'StudentHub Admin',
-                style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+              const SizedBox(height: 18),
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: GoogleFonts.outfit(
+                    fontSize: 26,
+                    color: Colors.white,
+                    letterSpacing: -0.3,
+                  ),
+                  children: const [
+                    TextSpan(
+                      text: 'Student',
+                      style: TextStyle(fontWeight: FontWeight.w400),
+                    ),
+                    TextSpan(
+                      text: 'Hub',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    TextSpan(
+                      text: ' Admin',
+                      style: TextStyle(fontWeight: FontWeight.w300, color: Colors.white70),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(height: 4),
               Text(
                 'Control Center Login',
                 style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 13),

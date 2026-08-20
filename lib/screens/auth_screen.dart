@@ -320,26 +320,49 @@ class _AuthScreenState extends State<AuthScreen> {
                     children: [
                       // Brand Logo & Header
                       Container(
-                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: cfg.primaryColor.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(22),
+                          boxShadow: [
+                            BoxShadow(
+                              color: cfg.primaryColor.withValues(alpha: 0.28),
+                              blurRadius: 20,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
                         ),
-                        child: Icon(
-                          Icons.school_rounded,
-                          size: 56,
-                          color: cfg.primaryColor,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(22),
+                          child: Image.asset(
+                            'assets/images/app_logo.png',
+                            width: 76,
+                            height: 76,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        cfg.appName,
+                      const SizedBox(height: 18),
+                      RichText(
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                          color: cfg.primaryColor,
+                        text: TextSpan(
+                          style: const TextStyle(
+                            fontSize: 30,
+                            color: Color(0xFF0F172A),
+                            letterSpacing: -0.5,
+                            height: 1.1,
+                          ),
+                          children: [
+                            const TextSpan(
+                              text: 'Student',
+                              style: TextStyle(fontWeight: FontWeight.w500),
+                            ),
+                            TextSpan(
+                              text: 'Hub',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: cfg.primaryColor,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 4),
