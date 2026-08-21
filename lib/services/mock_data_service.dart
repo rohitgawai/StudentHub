@@ -2066,18 +2066,22 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         .from('broadcasts')
         .select()
         .order('created_at', ascending: false)
-        .limit(50)
+        .limit(5)
         .timeout(const Duration(seconds: 15));
     var changed = false;
+    final now = DateTime.now();
+    // For fresh installs or unrecorded clear timestamps, only show broadcasts
+    // from the last 48 hours to avoid flooding new installs with dozens of old items.
+    final defaultCutoff = now.subtract(const Duration(hours: 48));
+    final effectiveCutoff = _notificationsClearedAt ?? defaultCutoff;
+
     for (final row in rows) {
       final id = row['id']?.toString();
       if (id == null || id.isEmpty) continue;
       final title = row['title']?.toString() ?? '';
       if (title.isEmpty) continue;
-      final createdAt = _parseDate(row['created_at']) ?? DateTime.now();
-      if (_notificationsCleared &&
-          _notificationsClearedAt != null &&
-          createdAt.isBefore(_notificationsClearedAt!)) {
+      final createdAt = _parseDate(row['created_at']) ?? now;
+      if (createdAt.isBefore(effectiveCutoff)) {
         continue;
       }
       final broadcastNotifId = 'notif_admin_broadcast_$id';
@@ -2101,8 +2105,6 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     }
     return changed;
   }
-
-
 
   Future<bool> checkBackendReachable() async {
     final client = _client;
@@ -2134,7 +2136,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     final currentDeviceId = await LocalStoreService.instance.getDeviceId();
     final rows = await client
         .from('profiles')
-        .select('user_id, roles, is_verified, active_device_id, has_password, has_completed_progressive_form, appreciated_by_user_ids')
+        .select('user_id, roles, is_verified, active_device_id, has_password, has_completed_progressive_form, appreciated_by_user_ids, notifications_cleared_at')
         .eq('user_id', currentUser.id)
         .limit(1)
         .timeout(const Duration(seconds: 12));
@@ -2153,6 +2155,17 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
 
     final row = rows.first;
     final serverActiveDeviceId = row['active_device_id']?.toString() ?? '';
+
+    // Reconcile server notifications_cleared_at so clean installs don't reload cleared notifs
+    if (row['notifications_cleared_at'] != null) {
+      final serverCleared = _parseDate(row['notifications_cleared_at']);
+      if (serverCleared != null) {
+        if (_notificationsClearedAt == null || serverCleared.isAfter(_notificationsClearedAt!)) {
+          _notificationsClearedAt = serverCleared;
+          _notificationsCleared = true;
+        }
+      }
+    }
 
     // Password protection rollout: an existing account that never set a
     // password is forced back to the login screen where a password must be
@@ -4622,6 +4635,18 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     _invalidateDataCaches();
     notifyListeners();
     _scheduleLocalSave();
+
+    // Persist clear-all state to Supabase profile so clean installs don't reload cleared notifs
+    final client = _client;
+    if (client != null && currentUser.id.isNotEmpty) {
+      unawaited(
+        client
+            .from('profiles')
+            .update({'notifications_cleared_at': _notificationsClearedAt!.toIso8601String()})
+            .eq('user_id', currentUser.id)
+            .catchError((_) {}),
+      );
+    }
   }
 
   void checkForExpiredRoles() {

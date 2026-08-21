@@ -252,7 +252,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                                 ? 'Upload Profile Photo'
                                 : _currentStep == 1
                                     ? 'Select Department & Year'
-                                    : 'Enter MIT Unique ID',
+                                    : 'Enter Student / Employee ID',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
@@ -328,11 +328,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                                             shape: BoxShape.circle,
                                             border: Border.all(color: Colors.white, width: 2),
                                           ),
-                                          child: const Icon(
-                                            Icons.camera_alt,
-                                            size: 16,
-                                            color: Colors.white,
-                                          ),
+                                          child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
                                         ),
                                       ),
                                     ),
@@ -375,7 +371,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Select Academic Information',
+                                'Academic Classification',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -442,7 +438,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Enter Campus Unique Identification',
+                                'Enter Campus Identification',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -450,7 +446,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                               ),
                               const SizedBox(height: 6),
                               const Text(
-                                'Enter your official MIT Unique ID / Roll Number or Employee Code.',
+                                'Enter your official Student ID / Roll Number or Employee Code.',
                                 style: TextStyle(fontSize: 12, color: Colors.grey),
                               ),
                               const SizedBox(height: 16),

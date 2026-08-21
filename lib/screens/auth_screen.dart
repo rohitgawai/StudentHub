@@ -22,6 +22,7 @@ class _AuthScreenState extends State<AuthScreen> {
   PasswordMode? _passwordMode;
   String _passwordError = '';
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   /// Account details from the "Continue as..." card while its password is
   /// being verified. The 3-field form controllers stay empty during that flow,
@@ -143,8 +144,6 @@ class _AuthScreenState extends State<AuthScreen> {
     } on PasswordRequiredException catch (e) {
       if (mounted) {
         setState(() {
-          // e.g. a password was set from another device while this user was
-          // picking one: switch to verifying it instead.
           _passwordMode = e.mode;
           _passwordError = '';
           passwordController.clear();
@@ -153,7 +152,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _passwordError = e.toString());
+        setState(() => _passwordError = e.toString().replaceAll('Exception: ', ''));
       }
     } finally {
       if (mounted) {
@@ -163,116 +162,226 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   void _showForgotPasswordDialog() {
-    final email = emailController.text.trim();
+    final effectiveEmail = (_pendingEmail ?? emailController.text).trim();
+    final emailInputCtrl = TextEditingController(text: effectiveEmail);
     final newPasswordController = TextEditingController();
     final confirmController = TextEditingController();
     final dataService = Provider.of<MockDataService>(context, listen: false);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    String errorText = '';
+    bool isResetting = false;
 
     showDialog(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          String errorText = '';
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text(
-              'Reset Password',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: isDark ? const Color(0xFF27272A) : Colors.grey.shade200,
+              ),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Account: $email',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Reset is only allowed from the device where the password was originally set.',
-                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: newPasswordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'New Password (min 6 characters)',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+            title: Text(
+              'Reset Password',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (effectiveEmail.isNotEmpty) ...[
+                    Text(
+                      'Account: $effectiveEmail',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0038D8),
+                      ),
+                    ),
+                  ] else ...[
+                    TextField(
+                      controller: emailInputCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                      decoration: InputDecoration(
+                        labelText: 'Your Registered Email',
+                        labelStyle: TextStyle(color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600),
+                        prefixIcon: const Icon(Icons.email_outlined),
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF27272A) : const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: isDark ? const Color(0xFF3F3F46) : Colors.grey.shade300,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: newPasswordController,
+                    obscureText: obscureNew,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                    decoration: InputDecoration(
+                      labelText: 'New Password (min 6 chars)',
+                      labelStyle: TextStyle(color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF27272A) : const Color(0xFFF8FAFC),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                        ),
+                        onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF3F3F46) : Colors.grey.shade300,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: confirmController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'Confirm New Password',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: confirmController,
+                    obscureText: obscureConfirm,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                    decoration: InputDecoration(
+                      labelText: 'Confirm New Password',
+                      labelStyle: TextStyle(color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF27272A) : const Color(0xFFF8FAFC),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                        ),
+                        onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: isDark ? const Color(0xFF3F3F46) : Colors.grey.shade300,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                if (errorText.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    errorText,
-                    style: const TextStyle(fontSize: 12, color: Colors.red),
-                  ),
+                  if (errorText.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline, size: 16, color: Colors.red),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              errorText,
+                              style: const TextStyle(fontSize: 12, color: Colors.red),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(dialogCtx),
-                child: const Text('Cancel'),
+                onPressed: isResetting ? null : () => Navigator.pop(dialogCtx),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700),
+                ),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF312E81),
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                onPressed: () async {
-                  final newPassword = newPasswordController.text;
-                  if (newPassword.length < 6) {
-                    setDialogState(() => errorText = 'Password must be at least 6 characters.');
-                    return;
-                  }
-                  if (newPassword != confirmController.text) {
-                    setDialogState(() => errorText = 'Passwords do not match.');
-                    return;
-                  }
-                  try {
-                    await dataService.resetPassword(
-                      email: email,
-                      password: newPassword,
-                    );
-                    if (dialogCtx.mounted) Navigator.pop(dialogCtx);
-                    if (mounted) {
-                      setState(() {
-                        _passwordError = '';
-                        passwordController.clear();
-                        confirmPasswordController.clear();
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            '✅ Password reset! Enter your new password to continue.',
-                          ),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    setDialogState(() => errorText = e.toString());
-                  }
-                },
-                child: const Text('Reset Password'),
+                onPressed: isResetting
+                    ? null
+                    : () async {
+                        final emailToUse = emailInputCtrl.text.trim();
+                        if (emailToUse.isEmpty) {
+                          setDialogState(() => errorText = 'Enter your account email.');
+                          return;
+                        }
+                        final newPassword = newPasswordController.text;
+                        if (newPassword.length < 6) {
+                          setDialogState(() => errorText = 'Password must be at least 6 characters.');
+                          return;
+                        }
+                        if (newPassword != confirmController.text) {
+                          setDialogState(() => errorText = 'Passwords do not match.');
+                          return;
+                        }
+
+                        setDialogState(() {
+                          isResetting = true;
+                          errorText = '';
+                        });
+
+                        try {
+                          await dataService.resetPassword(
+                            email: emailToUse,
+                            password: newPassword,
+                          );
+                          if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                          if (mounted) {
+                            setState(() {
+                              _passwordError = '';
+                              passwordController.clear();
+                              confirmPasswordController.clear();
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  '✅ Password reset! Enter your new password to continue.',
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (dialogCtx.mounted) {
+                            setDialogState(() {
+                              isResetting = false;
+                              errorText = e.toString().replaceAll('Exception: ', '');
+                            });
+                          }
+                        }
+                      },
+                child: isResetting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Reset Password'),
               ),
             ],
           );
@@ -299,8 +408,10 @@ class _AuthScreenState extends State<AuthScreen> {
             : null) ??
         sessionCandidate;
     final hasLastUser = lastUser != null && lastUser.email.isNotEmpty;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF8FAFC),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -308,9 +419,13 @@ class _AuthScreenState extends State<AuthScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: Card(
-                elevation: 4,
+                color: isDark ? const Color(0xFF141414) : Colors.white,
+                elevation: isDark ? 0 : 4,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                  ),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(28.0),
@@ -318,80 +433,54 @@ class _AuthScreenState extends State<AuthScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Brand Logo & Header
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22),
-                          boxShadow: [
-                            BoxShadow(
-                              color: cfg.primaryColor.withValues(alpha: 0.28),
-                              blurRadius: 20,
-                              offset: const Offset(0, 6),
+                      // Brand Header (Text & Icon badge)
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cfg.primaryColor.withValues(alpha: isDark ? 0.18 : 0.12),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(
+                            Icons.school_rounded,
+                            size: 36,
+                            color: cfg.primaryColor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      RichText(
+                        textAlign: TextAlign.center,
+                        text: TextSpan(
+                          style: TextStyle(
+                            fontSize: 30,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            letterSpacing: -0.5,
+                            height: 1.1,
+                          ),
+                          children: [
+                            const TextSpan(
+                              text: 'Student',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            TextSpan(
+                              text: 'Hub',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0038D8),
+                              ),
                             ),
                           ],
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(22),
-                          child: Image.asset(
-                            'assets/images/app_logo.png',
-                            width: 76,
-                            height: 76,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
                       ),
-                      const SizedBox(height: 18),
-                      Builder(
-                        builder: (context) {
-                          final isDark = Theme.of(context).brightness == Brightness.dark;
-                          return RichText(
-                            textAlign: TextAlign.center,
-                            text: TextSpan(
-                              style: TextStyle(
-                                fontSize: 30,
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                letterSpacing: -0.5,
-                                height: 1.1,
-                              ),
-                              children: [
-                                const TextSpan(
-                                  text: 'Student',
-                                  style: TextStyle(fontWeight: FontWeight.w500),
-                                ),
-                                TextSpan(
-                                  text: 'Hub',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    color: isDark ? const Color(0xFF2979FF) : const Color(0xFF0038D8),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
-                        cfg.tagline,
+                        'Digital Campus Platform',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 13, color: Colors.grey),
-                      ),
-                      const SizedBox(height: 10),
-                      Align(
-                        alignment: Alignment.center,
-                        child: Chip(
-                          backgroundColor: cfg.primaryColor.withValues(alpha: 0.08),
-                          side: BorderSide(
-                            color: cfg.primaryColor.withValues(alpha: 0.2),
-                          ),
-                          label: Text(
-                            cfg.collegeName,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: cfg.primaryColor,
-                            ),
-                          ),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -401,10 +490,10 @@ class _AuthScreenState extends State<AuthScreen> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: cfg.primaryColor.withValues(alpha: 0.06),
+                            color: isDark ? const Color(0xFF1E1E1E) : cfg.primaryColor.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: cfg.primaryColor.withValues(alpha: 0.25),
+                              color: isDark ? const Color(0xFF333333) : cfg.primaryColor.withValues(alpha: 0.25),
                             ),
                           ),
                           child: Column(
@@ -426,17 +515,18 @@ class _AuthScreenState extends State<AuthScreen> {
                               const SizedBox(height: 10),
                               Text(
                                 lastUser.name,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 lastUser.email,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey,
+                                  color: isDark ? const Color(0xFFA1A1AA) : Colors.grey,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -489,7 +579,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             'Log in with another account',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: cfg.primaryColor,
+                              color: isDark ? const Color(0xFF60A5FA) : cfg.primaryColor,
                             ),
                           ),
                         ),
@@ -502,34 +592,44 @@ class _AuthScreenState extends State<AuthScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const Text(
+                              Text(
                                 'Student & Staff Login',
                                 style: TextStyle(
-                                  fontSize: 20,
+                                  fontSize: 19,
                                   fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
                                 ),
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 6),
-                              const Text(
-                                'Enter your name, email, and phone number to continue.',
-                                style: TextStyle(fontSize: 12, color: Colors.grey),
+                              Text(
+                                'Enter your details to access campus services.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                                ),
                                 textAlign: TextAlign.center,
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 22),
 
                               // Input: Full Name
                               TextFormField(
                                 controller: nameController,
+                                style: TextStyle(color: isDark ? Colors.white : Colors.black),
                                 decoration: InputDecoration(
                                   labelText: 'Full Name',
+                                  labelStyle: TextStyle(color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600),
                                   hintText: 'e.g. Aarav Sharma',
+                                  hintStyle: TextStyle(color: isDark ? const Color(0xFF71717A) : Colors.grey.shade400),
                                   prefixIcon: const Icon(Icons.person_outline),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: isDark ? const Color(0xFF333333) : Colors.grey.shade300,
+                                    ),
                                   ),
                                   filled: true,
-                                  fillColor: Colors.grey.shade50,
+                                  fillColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF8FAFC),
                                 ),
                                 validator: (v) =>
                                     v == null || v.trim().isEmpty ? 'Enter your full name' : null,
@@ -540,15 +640,21 @@ class _AuthScreenState extends State<AuthScreen> {
                               TextFormField(
                                 controller: emailController,
                                 keyboardType: TextInputType.emailAddress,
+                                style: TextStyle(color: isDark ? Colors.white : Colors.black),
                                 decoration: InputDecoration(
                                   labelText: 'Email Address',
+                                  labelStyle: TextStyle(color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600),
                                   hintText: 'e.g. name@gmail.com',
+                                  hintStyle: TextStyle(color: isDark ? const Color(0xFF71717A) : Colors.grey.shade400),
                                   prefixIcon: const Icon(Icons.email_outlined),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: isDark ? const Color(0xFF333333) : Colors.grey.shade300,
+                                    ),
                                   ),
                                   filled: true,
-                                  fillColor: Colors.grey.shade50,
+                                  fillColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF8FAFC),
                                 ),
                                 validator: (v) {
                                   if (v == null || v.trim().isEmpty) return 'Enter your email address';
@@ -564,15 +670,21 @@ class _AuthScreenState extends State<AuthScreen> {
                               TextFormField(
                                 controller: mobileController,
                                 keyboardType: TextInputType.phone,
+                                style: TextStyle(color: isDark ? Colors.white : Colors.black),
                                 decoration: InputDecoration(
                                   labelText: 'Phone / Mobile Number',
+                                  labelStyle: TextStyle(color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600),
                                   hintText: 'e.g. +91 98765 12345',
+                                  hintStyle: TextStyle(color: isDark ? const Color(0xFF71717A) : Colors.grey.shade400),
                                   prefixIcon: const Icon(Icons.phone_outlined),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: isDark ? const Color(0xFF333333) : Colors.grey.shade300,
+                                    ),
                                   ),
                                   filled: true,
-                                  fillColor: Colors.grey.shade50,
+                                  fillColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF8FAFC),
                                 ),
                                 validator: (v) =>
                                     v == null || v.trim().isEmpty ? 'Enter your phone number' : null,
@@ -613,7 +725,12 @@ class _AuthScreenState extends State<AuthScreen> {
                                 const SizedBox(height: 12),
                                 TextButton(
                                   onPressed: () => setState(() => _showNewAccountForm = false),
-                                  child: const Text('Back to Continue as...'),
+                                  child: Text(
+                                    'Back to Continue as...',
+                                    style: TextStyle(
+                                      color: isDark ? const Color(0xFFA1A1AA) : null,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ],
@@ -625,13 +742,20 @@ class _AuthScreenState extends State<AuthScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.shield_outlined, size: 14, color: Colors.grey.shade600),
+                          Icon(
+                            Icons.shield_outlined,
+                            size: 14,
+                            color: isDark ? const Color(0xFF71717A) : Colors.grey.shade600,
+                          ),
                           const SizedBox(width: 4),
-                          const Flexible(
+                          Flexible(
                             child: Text(
                               'Secure Single-Device Active Session',
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? const Color(0xFF71717A) : Colors.grey,
+                              ),
                             ),
                           ),
                         ],
@@ -649,28 +773,32 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Widget _buildPasswordSection() {
     final cfg = Provider.of<MockDataService>(context).config;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSetMode = _passwordMode == PasswordMode.set;
-    final accountName = nameController.text.trim();
-    final accountEmail = emailController.text.trim();
+    final accountName = (_pendingName ?? nameController.text).trim();
+    final accountEmail = (_pendingEmail ?? emailController.text).trim();
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: cfg.primaryColor.withValues(alpha: 0.06),
+        color: isDark ? const Color(0xFF1E1E1E) : cfg.primaryColor.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cfg.primaryColor.withValues(alpha: 0.25)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF333333) : cfg.primaryColor.withValues(alpha: 0.25),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(Icons.lock_rounded, size: 40, color: cfg.primaryColor),
+          Icon(Icons.lock_rounded, size: 38, color: cfg.primaryColor),
           const SizedBox(height: 12),
           Text(
             isSetMode ? 'Set a Password' : 'Enter Your Password',
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
             ),
           ),
           const SizedBox(height: 6),
@@ -679,63 +807,96 @@ class _AuthScreenState extends State<AuthScreen> {
                 ? 'Choose a password to secure this account. It will only be asked when logging in from a new device.'
                 : 'This account is password protected. Verify it\u2019s you to continue.',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '$accountName${accountName.isNotEmpty ? ' • ' : ''}$accountEmail',
-            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: cfg.primaryColor,
+              fontSize: 12,
+              color: isDark ? const Color(0xFFA1A1AA) : Colors.grey,
             ),
           ),
+          if (accountEmail.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              '$accountName${accountName.isNotEmpty ? ' • ' : ''}$accountEmail',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFF60A5FA) : cfg.primaryColor,
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           TextField(
             controller: passwordController,
             obscureText: _obscurePassword,
+            style: TextStyle(color: isDark ? Colors.white : Colors.black),
             decoration: InputDecoration(
               labelText: isSetMode ? 'Password (min 6 characters)' : 'Password',
+              labelStyle: TextStyle(color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600),
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
                 icon: Icon(
                   _obscurePassword
                       ? Icons.visibility_off_outlined
                       : Icons.visibility_outlined,
+                  color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
                 ),
                 onPressed: () =>
                     setState(() => _obscurePassword = !_obscurePassword),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: isDark ? const Color(0xFF333333) : Colors.grey.shade300,
+                ),
               ),
               filled: true,
-              fillColor: Colors.grey.shade50,
+              fillColor: isDark ? const Color(0xFF27272A) : Colors.white,
             ),
           ),
           if (isSetMode) ...[
             const SizedBox(height: 14),
             TextField(
               controller: confirmPasswordController,
-              obscureText: _obscurePassword,
+              obscureText: _obscureConfirmPassword,
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
               decoration: InputDecoration(
                 labelText: 'Confirm Password',
+                labelStyle: TextStyle(color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600),
                 prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureConfirmPassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark ? const Color(0xFF333333) : Colors.grey.shade300,
+                  ),
                 ),
                 filled: true,
-                fillColor: Colors.grey.shade50,
+                fillColor: isDark ? const Color(0xFF27272A) : Colors.white,
               ),
             ),
           ],
           if (_passwordError.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Text(
-              '⚠️ $_passwordError',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12.5, color: Colors.red),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '⚠️ $_passwordError',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: Colors.red),
+              ),
             ),
           ],
           const SizedBox(height: 18),
@@ -775,7 +936,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 'Forgot password?',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: cfg.primaryColor,
+                  color: isDark ? const Color(0xFF60A5FA) : cfg.primaryColor,
                 ),
               ),
             ),
@@ -791,9 +952,12 @@ class _AuthScreenState extends State<AuthScreen> {
               _pendingEmail = null;
               _pendingMobile = null;
             }),
-            child: const Text(
+            child: Text(
               'Use a different account',
-              style: TextStyle(fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700,
+              ),
             ),
           ),
         ],

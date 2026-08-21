@@ -15,7 +15,7 @@ if "%PUSH_SECRET%"=="" (
     echo    Set it with:   set PUSH_SECRET=your-secret-value
     pause
 )
-call flutter build web --release --dart-define=PUSH_SECRET=%PUSH_SECRET%
+call flutter build web --release --no-tree-shake-icons --dart-define=PUSH_SECRET=%PUSH_SECRET%
 if %ERRORLEVEL% NEQ 0 (
     echo ❌ Build failed! Aborting deployment.
     pause
@@ -44,17 +44,14 @@ echo.
 echo 🔗 Applying custom domain alias...
 call vercel alias set web-pearl-one-86.vercel.app studenthub-admin-panel.vercel.app --scope akai11
 if %ERRORLEVEL% NEQ 0 (
-    echo ⚠️ WARNING: Custom domain alias could not be applied (error %ERRORLEVEL%).
-    echo    The deployment is still live at the fallback URL below.
-    echo    Common causes: temporary network issue or a domain-claim conflict.
+    echo [WARNING] Custom domain alias could not be applied.
 )
 
-echo.
 echo ========================================================
-echo 🎉 DEPLOYMENT COMPLETE!
+echo DEPLOYMENT COMPLETE!
 echo.
-echo   ✅ Custom domain: https://studenthub-admin-panel.vercel.app
-echo   🔗 Fallback URL:  https://web-pearl-one-86.vercel.app
+echo   Custom domain: https://studenthub-admin-panel.vercel.app
+echo   Fallback URL:  https://web-pearl-one-86.vercel.app
 echo ========================================================
 echo.
 pause

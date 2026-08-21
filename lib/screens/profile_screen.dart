@@ -13,6 +13,7 @@ import '../widgets/app_image.dart';
 import 'dashboards/admin_dashboard_screen.dart';
 import 'role_application_status_screen.dart';
 import 'dashboards/faculty_dashboard_screen.dart';
+import '../services/update_service.dart';
 import 'dashboards/event_host_dashboard_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -68,22 +69,15 @@ class _ProfileScreenState extends State<ProfileScreen>
     final pendingApplication =
         pendingApplications.isEmpty ? null : pendingApplications.first;
 
-    // Filter approved roles for dropdown (excluding Admin)
     final allowedSwitcherRoles = user.roles
         .where((r) => r != UserRole.admin)
         .toList();
     final bool canSwitchRoles = allowedSwitcherRoles.length > 1;
 
-    // Requirement 7: Apply for role button visibility & expiration logic.
-    // Hidden whenever the user holds Event Host or Faculty (both are granted
-    // via this flow): a temporary Host role hides it until it expires, after
-    // which the role is removed and the button reappears; a confirmed Faculty
-    // role hides it permanently.
     final bool hasHostRole = user.hasRole(UserRole.eventHost);
     final bool hasFacultyRole = user.hasRole(UserRole.faculty);
     final bool canApplyForRoles = !hasHostRole && !hasFacultyRole;
 
-    // Check if host/faculty role expired notification is present
     final bool showRoleExpiredNotice = notifications.any(
       (n) => n.title.contains('Access Expired'),
     );
@@ -117,6 +111,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                 _showFeedScopeDialog(context, dataService, user.year);
               } else if (val == 'reset_password') {
                 _showResetPasswordDialog(context, dataService, user.email);
+              } else if (val == 'check_updates') {
+                UpdateService.instance.checkForUpdate(context, silent: false);
               } else if (val == 'logout') {
                 showDialog(
                   context: context,
@@ -242,6 +238,29 @@ class _ProfileScreenState extends State<ProfileScreen>
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'check_updates',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.system_update_rounded,
+                        size: 18,
+                        color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0038D8),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Check for Updates (v${UpdateService.currentVersionName})',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],

@@ -11,6 +11,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "student_hub/security"
     private val CHANNEL_MEDIA = "student_hub/mediastore"
+    private val CHANNEL_INSTALLER = "student_hub/installer"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -65,6 +66,39 @@ class MainActivity : FlutterActivity() {
                             result.success(uri.toString())
                         } catch (e: Exception) {
                             result.error("INSERT_FAILED", e.message, null)
+                        }
+                    }
+                    else -> {
+                        result.notImplemented()
+                    }
+                }
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_INSTALLER)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "installApk" -> {
+                        try {
+                            val filePath = call.argument<String>("filePath")
+                                ?: throw IllegalArgumentException("filePath missing")
+                            val file = java.io.File(filePath)
+                            if (!file.exists()) {
+                                result.error("FILE_NOT_FOUND", "APK file not found at $filePath", null)
+                                return@setMethodCallHandler
+                            }
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                applicationContext,
+                                "${applicationContext.packageName}.fileprovider",
+                                file
+                            )
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, "application/vnd.android.package-archive")
+                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("INSTALL_ERROR", e.message, null)
                         }
                     }
                     else -> {

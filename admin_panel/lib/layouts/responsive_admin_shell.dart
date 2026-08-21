@@ -13,6 +13,7 @@ import '../screens/admins_screen.dart';
 import '../screens/role_removals_screen.dart';
 import '../screens/content_moderation_screen.dart';
 import '../screens/broadcast_screen.dart';
+import '../screens/admin_releases_screen.dart';
 import '../screens/admin_login_screen.dart';
 
 enum AdminTab {
@@ -25,6 +26,7 @@ enum AdminTab {
   roleRemovals,
   contentModeration,
   broadcast,
+  appReleases,
 }
 
 class ResponsiveAdminShell extends StatefulWidget {
@@ -88,6 +90,8 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
         return const ContentModerationScreen();
       case AdminTab.broadcast:
         return const BroadcastScreen();
+      case AdminTab.appReleases:
+        return const AdminReleasesScreen();
     }
   }
 
@@ -111,6 +115,8 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
         return 'Content & Post Moderation';
       case AdminTab.broadcast:
         return 'Broadcast Announcement System';
+      case AdminTab.appReleases:
+        return 'App Releases & In-App Updates';
     }
   }
 
@@ -352,6 +358,11 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                   Icons.campaign_rounded,
                   'Broadcast Alert',
                 ),
+                _sidebarNavItem(
+                  AdminTab.appReleases,
+                  Icons.system_update_rounded,
+                  'App Releases',
+                ),
               ],
             ),
           ),
@@ -552,6 +563,7 @@ class _ResponsiveAdminShellState extends State<ResponsiveAdminShell> {
                 _sidebarNavItem(AdminTab.roleRemovals, Icons.remove_moderator_rounded, 'Role Removals'),
                 _sidebarNavItem(AdminTab.contentModeration, Icons.gavel_rounded, 'Content Moderation'),
                 _sidebarNavItem(AdminTab.broadcast, Icons.campaign_rounded, 'Broadcast Alert'),
+                _sidebarNavItem(AdminTab.appReleases, Icons.system_update_rounded, 'App Releases'),
               ],
             ),
           ),

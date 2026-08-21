@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
   if (password.length < 6) {
     return new Response('Password must be at least 6 characters', { status: 400 })
   }
-  if (!['set_password', 'verify_login', 'reset_password'].includes(action)) {
+  if (!['set_password', 'verify_login', 'reset_password', 'admin_reset_password', 'admin_clear_password'].includes(action)) {
     return new Response('Invalid action', { status: 400 })
   }
 
@@ -68,6 +68,30 @@ Deno.serve(async (req) => {
   const profile = profiles[0]
   const userId = String(profile.user_id)
   const hasPassword = Boolean(profile.has_password)
+
+  if (action === 'admin_clear_password') {
+    await supabase.from('profile_credentials').delete().eq('user_id', userId)
+    await supabase.from('profiles').update({ has_password: false, active_device_id: null, updated_at: new Date().toISOString() }).eq('user_id', userId)
+    return new Response(JSON.stringify({ ok: true, user_id: userId, message: 'Password cleared. User will set a new one on next login.' }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (action === 'admin_reset_password') {
+    const newHash = bcrypt.hashSync(password, 10)
+    await supabase.from('profile_credentials').upsert(
+      {
+        user_id: userId,
+        password_hash: newHash,
+        created_device_id: null,
+      },
+      { onConflict: 'user_id' },
+    )
+    await supabase.from('profiles').update({ has_password: true, updated_at: new Date().toISOString() }).eq('user_id', userId)
+    return new Response(JSON.stringify({ ok: true, user_id: userId, message: 'Password reset successfully by admin.' }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 
   if (action === 'set_password') {
     if (hasPassword) {
@@ -121,21 +145,36 @@ Deno.serve(async (req) => {
   const createdDeviceId = String(creds[0].created_device_id ?? '')
 
   if (action === 'reset_password') {
-    if (createdDeviceId !== deviceId) {
-      return new Response(JSON.stringify({ error: 'device_mismatch' }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    // If a primary registered device was set, verify that the reset request is from the same device
+    if (createdDeviceId && createdDeviceId !== 'null' && createdDeviceId !== '' && createdDeviceId !== deviceId) {
+      return new Response(
+        JSON.stringify({
+          error: 'device_mismatch',
+          message: 'Password reset is only allowed from your primary registered phone. If you switched phones, please contact your College Admin.',
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      )
     }
+
     const newHash = bcrypt.hashSync(password, 10)
     const { error: updateError } = await supabase
       .from('profile_credentials')
-      .update({ password_hash: newHash })
+      .update({ password_hash: newHash, created_device_id: deviceId })
       .eq('user_id', userId)
     if (updateError) {
       console.error('account-credentials reset failed', updateError.message)
       return new Response('Internal error', { status: 500 })
     }
+
+    // Also update profile active device and password flag
+    await supabase
+      .from('profiles')
+      .update({ active_device_id: deviceId, has_password: true, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+
     return new Response(JSON.stringify({ ok: true, user_id: userId }), {
       headers: { 'Content-Type': 'application/json' },
     })

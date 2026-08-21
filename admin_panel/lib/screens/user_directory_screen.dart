@@ -91,6 +91,161 @@ class _UserDirectoryScreenState extends State<UserDirectoryScreen> {
     );
   }
 
+  void _showResetPasswordDialog(BuildContext context, AdminUserModel user) {
+    final passwordCtrl = TextEditingController(text: '123456');
+    bool clearMode = false;
+    bool isSubmitting = false;
+    String errorMsg = '';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AdminTheme.surfaceDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.lock_reset_rounded, color: AdminTheme.accentCyan, size: 24),
+              const SizedBox(width: 8),
+              Text(
+                'Reset User Password',
+                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Account: ${user.fullName}',
+                  style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                Text(
+                  user.email,
+                  style: GoogleFonts.inter(color: AdminTheme.accentCyan, fontSize: 12.5),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AdminTheme.bgDark,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Column(
+                    children: [
+                      RadioListTile<bool>(
+                        value: false,
+                        groupValue: clearMode,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        activeColor: AdminTheme.accentCyan,
+                        title: Text(
+                          'Set temporary password',
+                          style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                        subtitle: Text(
+                          'Student can log in immediately with this password.',
+                          style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 11),
+                        ),
+                        onChanged: (val) => setDialogState(() => clearMode = val!),
+                      ),
+                      if (!clearMode) ...[
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: passwordCtrl,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: 'New Password (min 6 chars)',
+                            labelStyle: const TextStyle(color: AdminTheme.textMuted),
+                            filled: true,
+                            fillColor: AdminTheme.surfaceDark,
+                            prefixIcon: const Icon(Icons.lock_outline, color: AdminTheme.textMuted),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
+                      const Divider(height: 20, color: Colors.white10),
+                      RadioListTile<bool>(
+                        value: true,
+                        groupValue: clearMode,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        activeColor: AdminTheme.accentCyan,
+                        title: Text(
+                          'Wipe password requirement',
+                          style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                        subtitle: Text(
+                          'Student will be prompted to pick a brand-new password on their next login.',
+                          style: GoogleFonts.inter(color: AdminTheme.textMuted, fontSize: 11),
+                        ),
+                        onChanged: (val) => setDialogState(() => clearMode = val!),
+                      ),
+                    ],
+                  ),
+                ),
+                if (errorMsg.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(errorMsg, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: Text('Cancel', style: GoogleFonts.inter(color: AdminTheme.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.accentCyan, foregroundColor: Colors.black),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      if (!clearMode && passwordCtrl.text.trim().length < 6) {
+                        setDialogState(() => errorMsg = 'Password must be at least 6 characters.');
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isSubmitting = true;
+                        errorMsg = '';
+                      });
+
+                      final service = Provider.of<AdminSupabaseService>(context, listen: false);
+                      final res = await service.adminResetUserPassword(
+                        email: user.email,
+                        newPassword: clearMode ? null : passwordCtrl.text.trim(),
+                        clearPassword: clearMode,
+                      );
+
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                      }
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(res.success
+                                ? '✅ ${clearMode ? "Password wiped. Student will set a new one on login." : "Password reset to: ${passwordCtrl.text.trim()}"}'
+                                : '⚠️ Error: ${res.message}'),
+                            backgroundColor: res.success ? AdminTheme.statusOnline : AdminTheme.statusDanger,
+                          ),
+                        );
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  : Text('Confirm Reset', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showDeleteUserDialog(BuildContext context, AdminUserModel user) {
     showDialog(
       context: context,
@@ -388,6 +543,13 @@ class _UserDirectoryScreenState extends State<UserDirectoryScreen> {
           constraints: const BoxConstraints(),
           padding: const EdgeInsets.all(6),
           onPressed: () => _showRoleChangeDialog(context, user),
+        ),
+        IconButton(
+          icon: const Icon(Icons.lock_reset_rounded, color: AdminTheme.statusPending, size: 20),
+          tooltip: 'Reset Password',
+          constraints: const BoxConstraints(),
+          padding: const EdgeInsets.all(6),
+          onPressed: () => _showResetPasswordDialog(context, user),
         ),
         if (user.isBanned)
           ElevatedButton.icon(

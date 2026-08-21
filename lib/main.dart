@@ -9,6 +9,7 @@ import 'models/user_model.dart';
 import 'services/mock_data_service.dart';
 import 'services/local_store_service.dart';
 import 'services/push_service.dart';
+import 'services/update_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth_screen.dart';
@@ -123,7 +124,7 @@ class MainNavigationContainer extends StatefulWidget {
       _MainNavigationContainerState();
 }
 
-class _MainNavigationContainerState extends State<MainNavigationContainer> {
+class _MainNavigationContainerState extends State<MainNavigationContainer> with WidgetsBindingObserver {
   int currentIndex = 0;
   // Starts false: anonymous/seed auto-login is not allowed. The app opens
   // straight to the feed only after a real login or a restored session that
@@ -155,12 +156,27 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     PushService.instance.openCategory.addListener(_handlePushTap);
     PushService.instance.targetPostId.addListener(_handlePushTap);
+
+    // Initialize OTA auto-update listener & check silently on launch
+    UpdateService.instance.initialize(() => context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      UpdateService.instance.checkForUpdate(context, silent: true);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      UpdateService.instance.checkForUpdate(context, silent: true);
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     PushService.instance.openCategory.removeListener(_handlePushTap);
     PushService.instance.targetPostId.removeListener(_handlePushTap);
     super.dispose();

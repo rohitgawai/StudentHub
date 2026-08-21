@@ -51,6 +51,13 @@ class SupabaseConfig {
         'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/admin-actions',
   );
 
+  /// Server-side password management for StudentHub accounts (set, verify, admin reset).
+  static const String accountCredentialsFunctionUrl = String.fromEnvironment(
+    'ACCOUNT_CREDENTIALS_FUNCTION_URL',
+    defaultValue:
+        'https://pdcfjkqermynsmezsyyt.supabase.co/functions/v1/account-credentials',
+  );
+
   /// Shared secret gate for edge functions. No default value on purpose —
   /// inject at build time with --dart-define=PUSH_SECRET=... so it never
   /// ships in source. Builds without it degrade (push features skipped).

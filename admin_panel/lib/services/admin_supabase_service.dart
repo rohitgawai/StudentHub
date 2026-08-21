@@ -570,6 +570,42 @@ class AdminSupabaseService extends ChangeNotifier {
     }
   }
 
+  // --- 6. Admin Password Reset / Wipe ---
+  Future<({bool success, String message})> adminResetUserPassword({
+    required String email,
+    String? newPassword,
+    bool clearPassword = false,
+  }) async {
+    try {
+      final action = clearPassword ? 'admin_clear_password' : 'admin_reset_password';
+      final res = await _callAdminFunction(
+        SupabaseConfig.accountCredentialsFunctionUrl,
+        {
+          'action': action,
+          'email': email,
+          'password': newPassword ?? '123456',
+          'device_id': 'admin_panel',
+        },
+      );
+
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(res.body);
+        return (
+          success: true,
+          message: data['message']?.toString() ?? 'Password updated successfully.',
+        );
+      } else {
+        return (
+          success: false,
+          message: 'Server responded with code ${res.statusCode}: ${res.body}',
+        );
+      }
+    } catch (e) {
+      debugPrint('adminResetUserPassword error: $e');
+      return (success: false, message: e.toString());
+    }
+  }
+
   @override
   void dispose() {
     _presenceChannel?.unsubscribe();
