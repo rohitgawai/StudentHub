@@ -7,8 +7,7 @@
     "strict": false,
     "noImplicitAny": false,
     "allowJs": true,
-    "skipLibCheck": true,
-    "typeRoots": ["./supabase/functions"]
+    "skipLibCheck": true
   },
   "include": [
     "supabase/functions/**/*.ts",
