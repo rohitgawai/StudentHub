@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "lib": ["ESNext", "DOM"],
+    "strict": false,
+    "noImplicitAny": false,
+    "allowJs": true,
+    "skipLibCheck": true,
+    "typeRoots": ["./supabase/functions"]
+  },
+  "include": [
+    "supabase/functions/**/*.ts",
+    "supabase/functions/**/*.d.ts"
+  ]
+}

@@ -1,53 +1,103 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2'
-import bcrypt from 'npm:bcryptjs@2'
+/// <reference path="../deno.d.ts" />
+import { createClient } from 'jsr:@supabase/supabase-js@2.45.0'
+import bcrypt from 'npm:bcryptjs@2.4.3'
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-)
+const supabaseUrl = Deno.env.get('SUPABASE_URL')
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-// Server-side password storage & verification for StudentHub accounts.
-// Guarded by the shared push secret (same trust model as the other edge
-// functions). Passwords are bcrypt-hashed and kept in `profile_credentials`,
-// which has no anon/authenticated RLS, so hashes can never leak to the app.
-//
-// Actions:
-//   set_password   - first password for an account (only when has_password=false)
-//   verify_login   - password check; on success rotates profiles.active_device_id
-//                    (kicks the previous device) so new-device logins are
-//                    single-session like everything else
-//   reset_password - only allowed from the device that originally set the
-//                    password (created_device_id match)
-Deno.serve(async (req) => {
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY')
+  Deno.exit(1)
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+const ALLOWED_ACTIONS = [
+  'set_password',
+  'verify_login',
+  'reset_password',
+  'admin_reset_password',
+  'admin_clear_password',
+] as const
+
+type Action = (typeof ALLOWED_ACTIONS)[number]
+
+interface RequestPayload {
+  action?: string
+  email?: string
+  password?: string
+  device_id?: string
+  admin_user_id?: string
+}
+
+interface ProfileRow {
+  user_id: string
+  has_password: boolean
+}
+
+interface CredentialRow {
+  password_hash: string
+  created_device_id: string | null
+}
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') ?? '*',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-push-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
+} as const
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+  })
+}
+
+function errorResponse(message: string, status = 400, extra?: Record<string, unknown>): Response {
+  return jsonResponse({ error: message, ...extra }, status)
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   const secret = Deno.env.get('PUSH_SECRET')
   if (!secret || req.headers.get('X-Push-Secret') !== secret) {
-    return new Response('Unauthorized', { status: 401 })
+    return errorResponse('Unauthorized', 401)
   }
 
-  let payload: {
-    action?: string
-    email?: string
-    password?: string
-    device_id?: string
+  if (req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405)
   }
+
+  const contentType = req.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    return errorResponse('Content-Type must be application/json', 400)
+  }
+
+  let payload: RequestPayload
   try {
     payload = await req.json()
   } catch {
-    return new Response('Bad request', { status: 400 })
+    return errorResponse('Bad request: invalid JSON', 400)
   }
-  const action = payload.action ?? ''
+
+  const action = (payload.action ?? '').trim()
   const email = (payload.email ?? '').trim().toLowerCase()
   const password = payload.password ?? ''
-  const deviceId = payload.device_id ?? ''
+  const deviceId = (payload.device_id ?? '').trim()
 
   if (!email || !password || !deviceId) {
-    return new Response('Missing email/password/device_id', { status: 400 })
+    return errorResponse('Missing email, password, or device_id', 400)
   }
   if (password.length < 6) {
-    return new Response('Password must be at least 6 characters', { status: 400 })
+    return errorResponse('Password must be at least 6 characters', 400)
   }
-  if (!['set_password', 'verify_login', 'reset_password', 'admin_reset_password', 'admin_clear_password'].includes(action)) {
-    return new Response('Invalid action', { status: 400 })
+  if (!ALLOWED_ACTIONS.includes(action as Action)) {
+    return errorResponse('Invalid action', 400)
   }
 
   const { data: profiles, error: profileError } = await supabase
@@ -55,26 +105,26 @@ Deno.serve(async (req) => {
     .select('user_id, has_password')
     .eq('email', email)
     .limit(1)
+
   if (profileError) {
     console.error('account-credentials profile lookup failed', profileError.message)
-    return new Response('Internal error', { status: 500 })
+    return errorResponse('Internal error', 500)
   }
   if (!profiles || profiles.length === 0) {
-    return new Response(JSON.stringify({ error: 'account_not_found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return errorResponse('account_not_found', 404)
   }
-  const profile = profiles[0]
+
+  const profile = profiles[0] as ProfileRow
   const userId = String(profile.user_id)
   const hasPassword = Boolean(profile.has_password)
 
   if (action === 'admin_clear_password') {
     await supabase.from('profile_credentials').delete().eq('user_id', userId)
-    await supabase.from('profiles').update({ has_password: false, active_device_id: null, updated_at: new Date().toISOString() }).eq('user_id', userId)
-    return new Response(JSON.stringify({ ok: true, user_id: userId, message: 'Password cleared. User will set a new one on next login.' }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    await supabase
+      .from('profiles')
+      .update({ has_password: false, active_device_id: null, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+    return jsonResponse({ ok: true, user_id: userId, message: 'Password cleared. User will set a new one on next login.' })
   }
 
   if (action === 'admin_reset_password') {
@@ -87,18 +137,16 @@ Deno.serve(async (req) => {
       },
       { onConflict: 'user_id' },
     )
-    await supabase.from('profiles').update({ has_password: true, updated_at: new Date().toISOString() }).eq('user_id', userId)
-    return new Response(JSON.stringify({ ok: true, user_id: userId, message: 'Password reset successfully by admin.' }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    await supabase
+      .from('profiles')
+      .update({ has_password: true, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+    return jsonResponse({ ok: true, user_id: userId, message: 'Password reset successfully by admin.' })
   }
 
   if (action === 'set_password') {
     if (hasPassword) {
-      return new Response(JSON.stringify({ error: 'password_already_set' }), {
-        status: 409,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return errorResponse('password_already_set', 409)
     }
     const hash = bcrypt.hashSync(password, 10)
     const { error: credError } = await supabase.from('profile_credentials').upsert(
@@ -111,7 +159,7 @@ Deno.serve(async (req) => {
     )
     if (credError) {
       console.error('account-credentials upsert failed', credError.message)
-      return new Response('Internal error', { status: 500 })
+      return errorResponse('Internal error', 500)
     }
     const { error: flagError } = await supabase
       .from('profiles')
@@ -119,11 +167,9 @@ Deno.serve(async (req) => {
       .eq('user_id', userId)
     if (flagError) {
       console.error('account-credentials flag update failed', flagError.message)
-      return new Response('Internal error', { status: 500 })
+      return errorResponse('Internal error', 500)
     }
-    return new Response(JSON.stringify({ ok: true, user_id: userId }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ ok: true, user_id: userId })
   }
 
   const { data: creds, error: credError } = await supabase
@@ -131,31 +177,25 @@ Deno.serve(async (req) => {
     .select('password_hash, created_device_id')
     .eq('user_id', userId)
     .limit(1)
+
   if (credError) {
     console.error('account-credentials fetch failed', credError.message)
-    return new Response('Internal error', { status: 500 })
+    return errorResponse('Internal error', 500)
   }
   if (!creds || creds.length === 0) {
-    return new Response(JSON.stringify({ error: 'credentials_missing' }), {
-      status: 409,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return errorResponse('credentials_missing', 409)
   }
-  const hash = String(creds[0].password_hash)
-  const createdDeviceId = String(creds[0].created_device_id ?? '')
+
+  const cred = creds[0] as CredentialRow
+  const hash = String(cred.password_hash)
+  const createdDeviceId = cred.created_device_id ?? ''
 
   if (action === 'reset_password') {
-    // If a primary registered device was set, verify that the reset request is from the same device
-    if (createdDeviceId && createdDeviceId !== 'null' && createdDeviceId !== '' && createdDeviceId !== deviceId) {
-      return new Response(
-        JSON.stringify({
-          error: 'device_mismatch',
-          message: 'Password reset is only allowed from your primary registered phone. If you switched phones, please contact your College Admin.',
-        }),
-        {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' },
-        },
+    if (createdDeviceId && createdDeviceId !== deviceId) {
+      return errorResponse(
+        'device_mismatch',
+        403,
+        { message: 'Password reset is only allowed from your primary registered phone. If you switched phones, please contact your College Admin.' },
       )
     }
 
@@ -166,38 +206,30 @@ Deno.serve(async (req) => {
       .eq('user_id', userId)
     if (updateError) {
       console.error('account-credentials reset failed', updateError.message)
-      return new Response('Internal error', { status: 500 })
+      return errorResponse('Internal error', 500)
     }
 
-    // Also update profile active device and password flag
     await supabase
       .from('profiles')
       .update({ active_device_id: deviceId, has_password: true, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
 
-    return new Response(JSON.stringify({ ok: true, user_id: userId }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ ok: true, user_id: userId })
   }
 
-  // verify_login
   if (!bcrypt.compareSync(password, hash)) {
-    // Throttle brute force: cheap delay before answering a wrong password.
     await new Promise((r) => setTimeout(r, 1000))
-    return new Response(JSON.stringify({ error: 'wrong_password' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return errorResponse('wrong_password', 401)
   }
+
   const { error: deviceError } = await supabase
     .from('profiles')
     .update({ active_device_id: deviceId, updated_at: new Date().toISOString() })
     .eq('user_id', userId)
   if (deviceError) {
     console.error('account-credentials device rotation failed', deviceError.message)
-    return new Response('Internal error', { status: 500 })
+    return errorResponse('Internal error', 500)
   }
-  return new Response(JSON.stringify({ ok: true, user_id: userId }), {
-    headers: { 'Content-Type': 'application/json' },
-  })
+
+  return jsonResponse({ ok: true, user_id: userId })
 })

@@ -1,95 +1,117 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+/// <reference path="../deno.d.ts" />
+import { createClient } from 'jsr:@supabase/supabase-js@2.45.0'
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-)
+const supabaseUrl = Deno.env.get('SUPABASE_URL')
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, x-push-secret',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY')
+  Deno.exit(1)
 }
 
-// Deletes a post ONLY when the caller proves they are its author — or when the
-// caller proves they hold the admin role (moderation). The app has no auth
-// accounts, so identity is the user id from the `profiles` table: `delete
-// where id = ? AND author_id = ?` for authors; for admins the caller's user id
-// is looked up in `profiles` and their roles must include 'admin'.
-Deno.serve(async (req) => {
-  // Browser CORS preflight must succeed BEFORE the secret check, otherwise the
-  // panel (Flutter web) silently fails every admin action with a 401.
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN') ?? '*'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-push-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
+} as const
+
+function corsResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+  })
+}
+
+function corsError(message: string, status = 400): Response {
+  return corsResponse({ error: message }, status)
+}
+
+interface RequestPayload {
+  post_id?: string
+  author_id?: string
+  admin_user_id?: string
+}
+
+interface ProfileRow {
+  roles: string[] | null
+}
+
+interface PostRow {
+  id: string
+}
+
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   const secret = Deno.env.get('PUSH_SECRET')
   if (!secret || req.headers.get('X-Push-Secret') !== secret) {
-    return new Response('Unauthorized', { status: 401, headers: corsHeaders })
+    return corsError('Unauthorized', 401)
   }
 
-  let payload: { post_id?: string; author_id?: string; admin_user_id?: string }
+  if (req.method !== 'POST') {
+    return corsError('Method not allowed', 405)
+  }
+
+  const contentType = req.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    return corsError('Content-Type must be application/json', 400)
+  }
+
+  let payload: RequestPayload
   try {
     payload = await req.json()
   } catch {
-    return new Response('Bad request', { status: 400, headers: corsHeaders })
-  }
-  const { post_id, author_id, admin_user_id } = payload
-  if (!post_id) {
-    return new Response('Missing post_id', { status: 400, headers: corsHeaders })
+    return corsError('Bad request: invalid JSON', 400)
   }
 
-  // Moderation path: verify the caller really is an admin before allowing a
-  // delete of a post they did not author.
+  const { post_id, author_id, admin_user_id } = payload
+
+  if (!post_id || typeof post_id !== 'string') {
+    return corsError('Missing or invalid post_id', 400)
+  }
+
   if (admin_user_id) {
     const { data: admins, error: adminError } = await supabase
       .from('profiles')
       .select('roles')
       .eq('user_id', admin_user_id)
       .limit(1)
+
     if (adminError) {
       console.error('delete-post admin lookup failed', adminError.message)
-      return new Response('Internal error', { status: 500, headers: corsHeaders })
+      return corsError('Internal error', 500)
     }
-    const isAdmin = (admins ?? []).some((p) =>
-      Array.isArray(p.roles) && p.roles.includes('admin'))
+
+    const isAdmin = (admins ?? []).some(
+      (p: ProfileRow) => Array.isArray(p.roles) && p.roles.includes('admin'),
+    )
+
     if (!isAdmin) {
-      return new Response('Not an admin', { status: 403, headers: corsHeaders })
+      return corsError('Not an admin', 403)
     }
+
     const { error: moderationError } = await supabase
       .from('posts')
       .delete()
       .eq('id', post_id)
+
     if (moderationError) {
       console.error('delete-post (admin) failed', moderationError.message)
-      return new Response('Internal error', { status: 500, headers: corsHeaders })
+      return corsError('Internal error', 500)
     }
-    return new Response(
-      JSON.stringify({ deleted: post_id, as: 'admin' }),
-      { headers: { 'Content-Type': 'application/json', ...corsHeaders } },
-    )
+
+    return corsResponse({ deleted: post_id, as: 'admin' })
   }
 
-  if (!author_id) {
-    return new Response('Missing author_id', { status: 400, headers: corsHeaders })
-  }
-
-  const { data: rows, error: selectError } = await supabase
-    .from('posts')
-    .select('id')
-    .eq('id', post_id)
-    .eq('author_id', author_id)
-    .limit(1)
-  if (selectError) {
-    console.error('delete-post check failed', selectError.message)
-    return new Response('Internal error', { status: 500, headers: corsHeaders })
-  }
-  if (!rows || rows.length === 0) {
-    return new Response('Not found or not the author', {
-      status: 404,
-      headers: corsHeaders,
-    })
+  if (!author_id || typeof author_id !== 'string') {
+    return corsError('Missing or invalid author_id', 400)
   }
 
   const { error: deleteError } = await supabase
@@ -97,12 +119,11 @@ Deno.serve(async (req) => {
     .delete()
     .eq('id', post_id)
     .eq('author_id', author_id)
+
   if (deleteError) {
     console.error('delete-post failed', deleteError.message)
-    return new Response('Internal error', { status: 500, headers: corsHeaders })
+    return corsError('Internal error', 500)
   }
 
-  return new Response(JSON.stringify({ deleted: post_id }), {
-    headers: { 'Content-Type': 'application/json', ...corsHeaders },
-  })
+  return corsResponse({ deleted: post_id })
 })

@@ -1,44 +1,64 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+/// <reference path="../deno.d.ts" />
+import { createClient } from 'jsr:@supabase/supabase-js@2.45.0'
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-)
+const supabaseUrl = Deno.env.get('SUPABASE_URL')
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, x-push-secret',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY')
+  Deno.exit(1)
 }
 
-// Best-effort FCM push to the applicant's devices so they learn the decision
-// instantly — even with the app closed. The app's foreground handler shows the
-// system notification and triggers a sync (type 'role_update'), which adopts
-// the new status, grants the role and adds the in-app bell entry. Never fails
-// the review: push problems are logged and ignored.
-async function pushRoleDecision(opts: {
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+const ALLOWED_ORIGIN = Deno.env.get('ALLOWED_ORIGIN') ?? '*'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-push-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
+} as const
+
+function corsResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+  })
+}
+
+function corsError(message: string, status = 400): Response {
+  return corsResponse({ error: message }, status)
+}
+
+interface PushRoleDecisionOpts {
   userId: string
   requestId: string
   approved: boolean
   roleName: string
   notes: string | null
   adminUserId: string
-}) {
+}
+
+async function pushRoleDecision(opts: PushRoleDecisionOpts): Promise<void> {
   try {
     const serviceAccountJson = Deno.env.get('FCM_SERVICE_ACCOUNT_JSON')
     if (!serviceAccountJson) {
       console.error('FCM_SERVICE_ACCOUNT_JSON not configured — role push skipped')
       return
     }
+
     const serviceAccount = JSON.parse(serviceAccountJson)
+
     const { data: devices } = await supabase
       .from('device_tokens')
       .select('token')
       .eq('user_id', opts.userId)
+
     const tokens = (devices ?? [])
-      .map((d) => String(d.token ?? ''))
-      .filter((t) => t.length > 0)
+      .map((d: any) => String(d.token ?? ''))
+      .filter((t: string) => t.length > 0)
+
     if (tokens.length === 0) return
 
     const { GoogleAuth } = await import('npm:google-auth-library@9')
@@ -49,10 +69,11 @@ async function pushRoleDecision(opts: {
     const client = await auth.getClient()
     const accessToken = await client.getAccessToken()
     const bearer = accessToken?.token
+
     if (!bearer) return
 
-    const fcmUrl =
-      `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`
+    const fcmUrl = `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`
+
     const hasNote = opts.notes != null && opts.notes.trim().length > 0
     const title = opts.approved ? '🎖️ Role Approved!' : '⛔ Role Request Rejected'
     const body = opts.approved
@@ -65,6 +86,7 @@ async function pushRoleDecision(opts: {
 
     let sent = 0
     const toRemove: string[] = []
+
     for (const token of tokens) {
       const message = {
         message: {
@@ -83,6 +105,7 @@ async function pushRoleDecision(opts: {
           },
         },
       }
+
       const res = await fetch(fcmUrl, {
         method: 'POST',
         headers: {
@@ -91,10 +114,12 @@ async function pushRoleDecision(opts: {
         },
         body: JSON.stringify(message),
       })
+
       if (res.ok) {
         sent += 1
         continue
       }
+
       const raw = await res.text()
       if (res.status === 404 || raw.includes('UNREGISTERED')) {
         toRemove.push(token)
@@ -102,9 +127,11 @@ async function pushRoleDecision(opts: {
         console.error('role push failed', res.status, raw)
       }
     }
+
     if (toRemove.length > 0) {
       await supabase.from('device_tokens').delete().in('token', toRemove)
     }
+
     const { error: logErr } = await supabase.from('push_log').insert({
       post_id: opts.requestId,
       title,
@@ -116,68 +143,92 @@ async function pushRoleDecision(opts: {
       sent,
       removed: toRemove.length,
     })
+
     if (logErr) console.error('role push log failed', logErr.message)
   } catch (e) {
     console.error('role push error', String(e))
   }
 }
 
-// Server-side role application review. Guarded by the shared push secret. The
-// reviewer must hold the admin role in `profiles` (same trust model as
-// delete-post). Approving seeds the granted role (with expiry for temporary
-// access) into the applicant's `profiles.roles` row so every device sees the
-// new role via sync — even if the admin's app dies right after.
-Deno.serve(async (req) => {
-  // Browser CORS preflight must succeed BEFORE the secret check, otherwise the
-  // panel (Flutter web) silently fails every admin action with a 401.
+interface RequestPayload {
+  request_id?: string
+  admin_user_id?: string
+  status?: string
+  notes?: string
+}
+
+interface ProfileRow {
+  user_id: string
+  roles: string[] | null
+}
+
+interface RoleRequestRow {
+  id: string
+  user_id: string
+  user_name: string | null
+  user_email: string | null
+  department: string | null
+  student_id: string | null
+  requested_role: string | null
+  is_limited_access: boolean | null
+  duration_days: number | null
+}
+
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   const secret = Deno.env.get('PUSH_SECRET')
   if (!secret || req.headers.get('X-Push-Secret') !== secret) {
-    return new Response('Unauthorized', { status: 401, headers: corsHeaders })
+    return corsError('Unauthorized', 401)
   }
 
-  let payload: {
-    request_id?: string
-    admin_user_id?: string
-    status?: string
-    notes?: string
+  if (req.method !== 'POST') {
+    return corsError('Method not allowed', 405)
   }
+
+  const contentType = req.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    return corsError('Content-Type must be application/json', 400)
+  }
+
+  let payload: RequestPayload
   try {
     payload = await req.json()
   } catch {
-    return new Response('Bad request', { status: 400, headers: corsHeaders })
-  }
-  const { request_id, admin_user_id, status, notes } = payload
-  if (!request_id || !admin_user_id || !status) {
-    return new Response('Missing request_id/admin_user_id/status', {
-      status: 400,
-      headers: corsHeaders,
-    })
-  }
-  if (status !== 'approved' && status !== 'rejected') {
-    return new Response('Invalid status', { status: 400, headers: corsHeaders })
+    return corsError('Bad request: invalid JSON', 400)
   }
 
-  // Reviewer must be an admin.
+  const { request_id, admin_user_id, status, notes } = payload
+
+  if (!request_id || !admin_user_id || !status) {
+    return corsError('Missing request_id, admin_user_id, or status', 400)
+  }
+
+  if (status !== 'approved' && status !== 'rejected') {
+    return corsError('Invalid status', 400)
+  }
+
   const { data: admins, error: adminError } = await supabase
     .from('profiles')
     .select('roles')
     .eq('user_id', admin_user_id)
     .limit(1)
+
   if (adminError) {
     console.error('review-role admin lookup failed', adminError.message)
-    return new Response('Internal error', { status: 500, headers: corsHeaders })
-  }
-  const isAdmin = (admins ?? []).some((p) =>
-    Array.isArray(p.roles) && p.roles.includes('admin'))
-  if (!isAdmin) {
-    return new Response('Not an admin', { status: 403, headers: corsHeaders })
+    return corsError('Internal error', 500)
   }
 
-  // Load the request.
+  const isAdmin = (admins ?? []).some(
+    (p: ProfileRow) => Array.isArray(p.roles) && p.roles.includes('admin'),
+  )
+
+  if (!isAdmin) {
+    return corsError('Not an admin', 403)
+  }
+
   const { data: requests, error: reqError } = await supabase
     .from('role_requests')
     .select(
@@ -185,28 +236,33 @@ Deno.serve(async (req) => {
     )
     .eq('id', request_id)
     .limit(1)
+
   if (reqError) {
     console.error('review-role fetch failed', reqError.message)
-    return new Response('Internal error', { status: 500, headers: corsHeaders })
+    return corsError('Internal error', 500)
   }
+
   if (!requests || requests.length === 0) {
-    return new Response('Not found', { status: 404, headers: corsHeaders })
+    return corsError('Not found', 404)
   }
-  const request = requests[0]
+
+  const request = requests[0] as RoleRequestRow
 
   const { error: statusError } = await supabase
     .from('role_requests')
     .update({ status, admin_notes: notes ?? null })
     .eq('id', request_id)
+
   if (statusError) {
     console.error('review-role status update failed', statusError.message)
-    return new Response('Internal error', { status: 500, headers: corsHeaders })
+    return corsError('Internal error', 500)
   }
 
   if (status === 'approved') {
     const role = String(request.requested_role ?? '')
+
     if (!role) {
-      return new Response('Request has no role', { status: 400, headers: corsHeaders })
+      return corsError('Request has no role', 400)
     }
 
     const { data: applicants, error: applicantError } = await supabase
@@ -214,17 +270,20 @@ Deno.serve(async (req) => {
       .select('user_id, roles')
       .eq('user_id', request.user_id)
       .limit(1)
+
     if (applicantError) {
       console.error('review-role applicant lookup failed', applicantError.message)
-      return new Response('Internal error', { status: 500, headers: corsHeaders })
+      return corsError('Internal error', 500)
     }
+
     const existingRoles = Array.isArray(applicants?.[0]?.roles)
       ? applicants![0].roles
       : []
-    // Faculty is a strict upgrade: it replaces the Student role everywhere.
+
     const baseRoles = existingRoles.includes(role)
       ? [...existingRoles]
       : [...existingRoles, role]
+
     const updatedRoles =
       role === 'faculty'
         ? baseRoles.filter((r) => r !== 'student')
@@ -235,14 +294,12 @@ Deno.serve(async (req) => {
         .from('profiles')
         .update({ roles: updatedRoles })
         .eq('user_id', request.user_id)
+
       if (grantError) {
         console.error('review-role grant failed', grantError.message)
-        return new Response('Internal error', { status: 500, headers: corsHeaders })
+        return corsError('Internal error', 500)
       }
     } else {
-      // Applicant has no profile row yet (a request from an offline device):
-      // create one so the role grant survives; display fields are filled in by
-      // the device on its next sync.
       const { error: grantError } = await supabase
         .from('profiles')
         .upsert(
@@ -256,15 +313,14 @@ Deno.serve(async (req) => {
           },
           { onConflict: 'user_id' },
         )
+
       if (grantError) {
         console.error('review-role grant (create) failed', grantError.message)
-        return new Response('Internal error', { status: 500, headers: corsHeaders })
+        return corsError('Internal error', 500)
       }
     }
   }
 
-  // Push the decision to the applicant's devices (best-effort, after the
-  // server state is final so a foreground sync sees the new status).
   await pushRoleDecision({
     userId: String(request.user_id),
     requestId: String(request_id),
@@ -274,8 +330,5 @@ Deno.serve(async (req) => {
     adminUserId: String(admin_user_id),
   })
 
-  return new Response(
-    JSON.stringify({ reviewed: request_id, status, user_id: request.user_id }),
-    { headers: { 'Content-Type': 'application/json', ...corsHeaders } },
-  )
+  return corsResponse({ reviewed: request_id, status, user_id: request.user_id })
 })
