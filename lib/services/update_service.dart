@@ -48,9 +48,9 @@ class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
 
-  // Current build numbers (synchronized with pubspec.yaml 1.4.2+35)
-  static const int currentVersionCode = 35;
-  static const String currentVersionName = '1.4.2';
+  // Current build numbers (synchronized with pubspec.yaml 1.4.4+37)
+  static const int currentVersionCode = 37;
+  static const String currentVersionName = '1.4.4';
 
   static const MethodChannel _installerChannel =
       MethodChannel('student_hub/installer');
@@ -59,7 +59,8 @@ class UpdateService {
   bool _isChecking = false;
   bool _modalVisible = false;
 
-  /// Initializes realtime listener for incoming OTA release broadcasts
+  /// Initializes realtime listener for incoming OTA release broadcasts.
+  /// Update notifications are delivered as push & in-app bell notification text.
   void initialize(BuildContext Function() getContext) {
     try {
       final client = Supabase.instance.client;
@@ -71,28 +72,13 @@ class UpdateService {
             schema: 'public',
             table: 'app_updates',
             callback: (payload) {
-              final newRecord = payload.newRecord;
-              if (newRecord.isNotEmpty) {
-                final update = AppUpdateInfo.fromMap(newRecord);
-                if (update.versionCode > currentVersionCode) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    final ctx = getContext();
-                    if (ctx.mounted) showUpdateDialog(ctx, update);
-                  });
-                }
-              }
+              // Realtime OTA updates notify via push & in-app bell notification text
             },
           )
           .onBroadcast(
             event: 'new_app_release',
             callback: (payload) {
-              final update = AppUpdateInfo.fromMap(payload);
-              if (update.versionCode > currentVersionCode) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  final ctx = getContext();
-                  if (ctx.mounted) showUpdateDialog(ctx, update);
-                });
-              }
+              // Realtime OTA updates notify via push & in-app bell notification text
             },
           )
           .subscribe();

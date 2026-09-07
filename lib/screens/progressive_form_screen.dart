@@ -27,6 +27,22 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
   late String _selectedYear;
   final _idController = TextEditingController(text: 'MIT25-A-03-UG-CSE-47484');
 
+  static const List<String> _availableInterests = [
+    'AI & Machine Learning',
+    'Data Science & Analytics',
+    'Hackathons & Coding',
+    'UI / UX Design',
+    'Web & App Development',
+    'Cloud & DevOps',
+    'Cybersecurity',
+    'Robotics & IoT',
+    'Scholarships & Grants',
+    'Placements & Internships',
+    'Cultural & Arts',
+    'Sports & Fitness',
+  ];
+  final Set<String> _selectedInterests = {};
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +63,10 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
 
     if (user.studentOrEmployeeId.isNotEmpty) {
       _idController.text = user.studentOrEmployeeId;
+    }
+
+    if (user.interests.isNotEmpty) {
+      _selectedInterests.addAll(user.interests);
     }
   }
 
@@ -76,7 +96,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
     }
   }
 
-  Future<void> _submitForm() async {
+  Future<void> _submitForm({bool skipInterests = false}) async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSubmitting = true);
 
@@ -88,6 +108,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
         department: _selectedDepartment,
         year: _selectedYear,
         studentOrEmployeeId: _idController.text.trim(),
+        interests: skipInterests ? const [] : _selectedInterests.toList(),
       );
 
       if (mounted) {
@@ -115,7 +136,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
     }
   }
 
-  double get _progressValue => (_currentStep + 1) / 3.0;
+  double get _progressValue => (_currentStep + 1) / 4.0;
 
   void _confirmLogout(MockDataService dataService) {
     showDialog(
@@ -205,7 +226,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Step ${_currentStep + 1} of 3',
+                                'Step ${_currentStep + 1} of 4',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -252,7 +273,9 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                                 ? 'Upload Profile Photo'
                                 : _currentStep == 1
                                     ? 'Select Department & Year'
-                                    : 'Enter Student / Employee ID',
+                                    : _currentStep == 2
+                                        ? 'Enter Student / Employee ID'
+                                        : 'Personalize Your Interests',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
@@ -260,9 +283,11 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          const Text(
-                            'One-time setup for synchronization with campus server',
-                            style: TextStyle(color: Colors.white70, fontSize: 11),
+                          Text(
+                            _currentStep == 3
+                                ? 'Choose topics to tailor your feed, recommendations & AI assistant'
+                                : 'One-time setup for synchronization with campus server',
+                            style: const TextStyle(color: Colors.white70, fontSize: 11),
                           ),
                         ],
                       ),
@@ -465,6 +490,110 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                       ),
                     ],
 
+                    // Step 4: Interests & Topics Selection
+                    if (_currentStep == 3) ...[
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: cfg.primaryColor.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      Icons.auto_awesome,
+                                      color: cfg.primaryColor,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Select Your Interests',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Pick topics you want to see most on campus',
+                                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 18),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 10,
+                                children: _availableInterests.map((interest) {
+                                  final isSelected = _selectedInterests.contains(interest);
+                                  return FilterChip(
+                                    label: Text(interest),
+                                    selected: isSelected,
+                                    selectedColor: cfg.primaryColor.withValues(alpha: 0.15),
+                                    checkmarkColor: cfg.primaryColor,
+                                    labelStyle: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                      color: isSelected ? cfg.primaryColor : Colors.black87,
+                                    ),
+                                    backgroundColor: Colors.grey.shade100,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      side: BorderSide(
+                                        color: isSelected ? cfg.primaryColor : Colors.grey.shade300,
+                                        width: isSelected ? 1.5 : 1.0,
+                                      ),
+                                    ),
+                                    onSelected: (selected) {
+                                      setState(() {
+                                        if (selected) {
+                                          _selectedInterests.add(interest);
+                                        } else {
+                                          _selectedInterests.remove(interest);
+                                        }
+                                      });
+                                    },
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 16),
+                              Center(
+                                child: TextButton(
+                                  onPressed: _isSubmitting
+                                      ? null
+                                      : () => _submitForm(skipInterests: true),
+                                  child: Text(
+                                    'Skip for now',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 24),
 
                     // Controls Bottom Row
@@ -500,7 +629,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                             onPressed: _isSubmitting
                                 ? null
                                 : () {
-                                    if (_currentStep < 2) {
+                                    if (_currentStep < 3) {
                                       setState(() => _currentStep++);
                                     } else {
                                       _submitForm();
@@ -516,7 +645,7 @@ class _ProgressiveFormScreenState extends State<ProgressiveFormScreen> {
                                     ),
                                   )
                                 : Text(
-                                    _currentStep < 2 ? 'Continue Step' : 'Submit & Enter Home',
+                                    _currentStep < 3 ? 'Continue Step' : 'Finish Setup & Enter Home',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 15,

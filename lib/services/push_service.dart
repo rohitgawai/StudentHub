@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -34,6 +34,9 @@ class PushService {
   /// Set when user opens an account ban/unban notification
   final ValueNotifier<String?> accountNotice = ValueNotifier<String?>(null);
 
+  /// Set when user taps an announcement / app update notification to open notification bell
+  final ValueNotifier<bool> openNotifications = ValueNotifier<bool>(false);
+
   MockDataService? _dataService;
   bool _initialized = false;
 
@@ -52,13 +55,20 @@ class PushService {
       return;
     }
 
+    if (type == 'announcement' || (postId != null && postId.startsWith('announcement_'))) {
+      openNotifications.value = true;
+      _maybeSyncAfterPush(message.data);
+      return;
+    }
+
     openCategory.value = 'event' == category || 'workshop' == category
         ? PostCategory.event
         : PostCategory.announcement;
     if (postId != null &&
         postId.isNotEmpty &&
         !postId.startsWith('ban_') &&
-        !postId.startsWith('role_removal_')) {
+        !postId.startsWith('role_removal_') &&
+        !postId.startsWith('announcement_')) {
       targetPostId.value = postId;
     }
     _maybeSyncAfterPush(message.data);
@@ -108,7 +118,11 @@ class PushService {
             payload.isNotEmpty &&
             !payload.startsWith('ban_') &&
             !payload.startsWith('role_removal_')) {
-          targetPostId.value = payload;
+          if (payload.startsWith('announcement_')) {
+            openNotifications.value = true;
+          } else {
+            targetPostId.value = payload;
+          }
         }
       },
     );

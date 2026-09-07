@@ -3,21 +3,17 @@ import 'package:provider/provider.dart';
 import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
+import '../screens/post_detail_screen.dart';
 import 'post_card.dart';
 
-/// Modal dialog that opens a full post / event card when redirected from a
-/// push notification tap or an in-app notification tap.
+/// Screen and modal accessor that opens an individual full page post/event.
 class PostDetailModal extends StatelessWidget {
   final String postId;
 
   const PostDetailModal({super.key, required this.postId});
 
   static Future<void> show(BuildContext context, String postId) {
-    return showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => PostDetailModal(postId: postId),
-    );
+    return PostDetailScreen.navigateTo(context, postId);
   }
 
   @override

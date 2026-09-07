@@ -9,6 +9,7 @@ import '../widgets/post_card.dart';
 import '../widgets/role_badge.dart';
 import '../models/user_model.dart';
 import 'user_profile_screen.dart';
+import 'search_screen.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -68,23 +69,19 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         .where((p) => !p.isEvent && dataService.matchesYear(p))
         .toList(growable: false);
 
-    Widget searchField = TextField(
-      controller: searchController,
-      onChanged: (val) => setState(() => searchQuery = val),
-      decoration: InputDecoration(
-        hintText: '🔍 Search posts, events, faculty...',
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon: searchQuery.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () {
-                  searchController.clear();
-                  setState(() => searchQuery = '');
-                },
-              )
-            : null,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-        filled: true,
+    Widget searchField = InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => SearchScreen.open(context),
+      child: IgnorePointer(
+        child: TextField(
+          readOnly: true,
+          decoration: InputDecoration(
+            hintText: '🔍 Search posts, events, scholarships...',
+            prefixIcon: const Icon(Icons.search),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+            filled: true,
+          ),
+        ),
       ),
     );
 

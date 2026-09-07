@@ -7,16 +7,20 @@ This directory contains developer automation scripts for building and releasing 
 ## 📂 Scripts & Utilities
 
 ### 1. `tool/release.dart`
-An automated command-line tool that parses `pubspec.yaml`, builds release APKs, uploads them to Supabase Storage (`app_releases`), inserts release metadata into the `app_updates` table, and broadcasts update alerts to all active mobile devices.
+An automated command-line tool that parses `pubspec.yaml`, automatically synchronizes `lib/services/update_service.dart`, builds release APKs, uploads them to Supabase Storage (`app_releases`), registers release metadata in `app_updates`, and broadcasts update alerts & push notifications.
 
 #### Usage:
 ```powershell
-# Standard Release
-dart run tool/release.dart
+# Standard Release (automatically syncs update_service.dart with pubspec.yaml)
+dart run tool/release.dart --notes "Release notes here"
 
-# Custom Release Notes
-dart run tool/release.dart --notes "Added event ticketing fixes and dark mode updates"
+# Auto-bump version (simultaneously bumps pubspec.yaml AND update_service.dart)
+dart run tool/release.dart --bump --notes "Bug fixes and improvements"
+
+# Specific Version
+dart run tool/release.dart --version 1.4.4+37 --notes "Feature update"
 
 # Mandatory Force-Update Release
 dart run tool/release.dart --mandatory --notes "Critical security release"
 ```
+

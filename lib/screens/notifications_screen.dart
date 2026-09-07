@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/notification_model.dart';
+import '../models/post_model.dart';
+import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
+import '../services/update_service.dart';
 import '../widgets/post_detail_modal.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -20,12 +23,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       dataService.markNotificationRead(n.id);
     }
 
-    // Role decisions carry the role-request id in relatedPostId — NOT a post
-    // id — so they must never deep-link into a post detail modal.
+    // Role decisions, admin broadcasts, and app updates must never deep-link into a post detail modal.
     if (n.relatedPostId != null &&
         n.relatedPostId!.isNotEmpty &&
-        !_isRoleNotif(n)) {
-      // Direct deep link to post / event / gallery detail modal!
+        !_isRoleNotif(n) &&
+        !_isAdminAnnouncement(n, dataService)) {
+      // Direct deep link to post / event / gallery detail page!
       PostDetailModal.show(context, n.relatedPostId!);
     } else {
       _showNotificationDetail(context, n);
@@ -39,6 +42,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final ref = n.relatedPostId ?? '';
     if (ref.startsWith('req_')) return true;
     return n.title.toLowerCase().contains('role');
+  }
+
+  bool _isAdminAnnouncement(NotificationModel n, MockDataService dataService) {
+    if (n.id.startsWith('notif_admin_broadcast_') ||
+        n.id.startsWith('announcement_') ||
+        n.title.toLowerCase().contains('admin') ||
+        n.body.toLowerCase().contains('admin') ||
+        n.title.toLowerCase().contains('announcement') ||
+        n.title.toLowerCase().contains('update') ||
+        n.title.toLowerCase().contains('notice')) {
+      return true;
+    }
+    if (n.relatedPostId != null && n.relatedPostId!.isNotEmpty) {
+      final post = dataService.posts.cast<PostModel?>().firstWhere(
+            (p) => p?.id == n.relatedPostId,
+            orElse: () => null,
+          );
+      if (post != null &&
+          (post.authorRole == UserRole.admin ||
+              post.category == PostCategory.announcement)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   void _showNotificationDetail(BuildContext context, NotificationModel n) {
@@ -140,6 +167,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  if (n.title.toLowerCase().contains('update') ||
+                      n.body.toLowerCase().contains('what\'s new')) ...[
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF2563EB),
+                        side: const BorderSide(color: Color(0xFF2563EB)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      icon: const Icon(Icons.system_update_rounded, size: 16),
+                      label: const Text('Update Now'),
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        UpdateService.instance.checkForUpdate(context, silent: false);
+                      },
+                    ),
+                    const SizedBox(width: 10),
+                  ],
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: catColor,
@@ -340,6 +386,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       final n = filtered[index];
                       final catColor = _getCatColor(n.category);
                       final isUnread = !n.isRead;
+                      final isAdminAnnounce = _isAdminAnnouncement(n, dataService);
+                      final hasPost = n.relatedPostId != null &&
+                          n.relatedPostId!.isNotEmpty &&
+                          !_isRoleNotif(n);
 
                       return InkWell(
                         onTap: () => _handleNotificationTap(context, n),
@@ -439,9 +489,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                             : FontWeight.normal,
                                       ),
                                     ),
-                                    if (n.relatedPostId != null &&
-                                        n.relatedPostId!.isNotEmpty &&
-                                        !_isRoleNotif(n)) ...[
+                                    if (hasPost && !isAdminAnnounce) ...[
                                       const SizedBox(height: 6),
                                       Row(
                                         children: [

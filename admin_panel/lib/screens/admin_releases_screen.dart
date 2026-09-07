@@ -2,7 +2,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/admin_supabase_service.dart';
 import '../theme/admin_theme.dart';
 
 class AdminReleasesScreen extends StatefulWidget {
@@ -214,6 +216,30 @@ class _AdminReleasesScreenState extends State<AdminReleasesScreen> {
           },
         );
       } catch (_) {}
+
+      // 5. Send individual broadcast push notification and save to in-app bell
+      try {
+        final broadcastId = 'announcement_update_$versionCode';
+        await client.from('broadcasts').upsert({
+          'id': broadcastId,
+          'title': 'App Update: v$versionName',
+          'body': "What's new:\n$notes",
+          'branch': 'ALL',
+          'year': 'ALL',
+          'author_name': 'Admin',
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+
+        if (mounted) {
+          final adminService = Provider.of<AdminSupabaseService>(context, listen: false);
+          await adminService.sendBroadcastAnnouncement(
+            title: 'App Update: v$versionName',
+            body: "What's new:\n$notes",
+          );
+        }
+      } catch (e) {
+        debugPrint('App update broadcast notification failed: $e');
+      }
 
       setState(() {
         _uploadProgress = 1.0;

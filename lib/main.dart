@@ -19,6 +19,7 @@ import 'screens/events_screen.dart';
 import 'screens/discover_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/notifications_screen.dart';
+import 'screens/student_hub_ai_screen.dart';
 import 'widgets/create_post_modal.dart';
 import 'widgets/create_event_modal.dart';
 import 'widgets/create_gallery_modal.dart';
@@ -137,6 +138,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> with 
   late final List<Widget> screens = [
     HomeFeedScreen(key: _homeKey),
     EventsScreen(key: _eventsKey),
+    const StudentHubAiScreen(),
     const DiscoverScreen(),
     const ProfileScreen(),
   ];
@@ -159,19 +161,15 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> with 
     WidgetsBinding.instance.addObserver(this);
     PushService.instance.openCategory.addListener(_handlePushTap);
     PushService.instance.targetPostId.addListener(_handlePushTap);
+    PushService.instance.openNotifications.addListener(_handleNotificationsPushTap);
 
-    // Initialize OTA auto-update listener & check silently on launch
+    // Initialize OTA auto-update listener (notices delivered as push & in-app bell text)
     UpdateService.instance.initialize(() => context);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      UpdateService.instance.checkForUpdate(context, silent: true);
-    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) {
-      UpdateService.instance.checkForUpdate(context, silent: true);
-    }
+    // App lifecycle changes without intrusive modal interruptions
   }
 
   @override
@@ -179,7 +177,23 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> with 
     WidgetsBinding.instance.removeObserver(this);
     PushService.instance.openCategory.removeListener(_handlePushTap);
     PushService.instance.targetPostId.removeListener(_handlePushTap);
+    PushService.instance.openNotifications.removeListener(_handleNotificationsPushTap);
     super.dispose();
+  }
+
+  void _handleNotificationsPushTap() {
+    if (PushService.instance.openNotifications.value) {
+      PushService.instance.openNotifications.value = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (c) => const NotificationsScreen(),
+            ),
+          );
+        }
+      });
+    }
   }
 
   void _handlePushTap() {
@@ -189,7 +203,9 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> with 
     if (currentIndex != targetIndex) {
       setState(() => currentIndex = targetIndex);
     }
-    if (postId != null && postId.isNotEmpty) {
+    if (postId != null &&
+        postId.isNotEmpty &&
+        !postId.startsWith('announcement_')) {
       PushService.instance.targetPostId.value = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -265,57 +281,31 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> with 
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: Row(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(9),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF0038D8).withValues(alpha: 0.2),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(9),
-                child: Image.asset(
-                  'assets/images/app_logo.png',
-                  width: 30,
-                  height: 30,
-                  fit: BoxFit.cover,
-                ),
-              ),
+        title: RichText(
+          text: TextSpan(
+            style: TextStyle(
+              fontSize: 22,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              letterSpacing: -0.3,
+              height: 1.1,
             ),
-            const SizedBox(width: 10),
-            RichText(
-              text: TextSpan(
+            children: [
+              TextSpan(
+                text: 'Student',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  letterSpacing: -0.3,
-                  height: 1.1,
                 ),
-                children: [
-                  TextSpan(
-                    text: 'Student',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    ),
-                  ),
-                  TextSpan(
-                    text: 'Hub',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFF2979FF) : const Color(0xFF0038D8),
-                    ),
-                  ),
-                ],
               ),
-            ),
-          ],
+              TextSpan(
+                text: 'Hub',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? const Color(0xFF2979FF) : const Color(0xFF0038D8),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           // Notification Bell with Badge
@@ -668,6 +658,11 @@ class _PillNavigationBar extends StatelessWidget {
       icon: Icons.event_outlined,
       activeIcon: Icons.event,
       label: 'Events',
+    ),
+    _NavItem(
+      icon: Icons.auto_awesome_outlined,
+      activeIcon: Icons.auto_awesome,
+      label: 'AI',
     ),
     _NavItem(
       icon: Icons.explore_outlined,

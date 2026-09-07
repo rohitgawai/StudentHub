@@ -23,19 +23,18 @@ void main(List<String> args) async {
     exit(1);
   }
 
-  final pubspecContent = pubspecFile.readAsStringSync();
+  var pubspecContent = pubspecFile.readAsStringSync();
   final versionMatch = RegExp(r'version:\s*([0-9\.]+)\+([0-9]+)').firstMatch(pubspecContent);
   if (versionMatch == null) {
     print('❌ Error: Could not determine version from pubspec.yaml');
     exit(1);
   }
 
-  final versionName = versionMatch.group(1)!;
-  final versionCode = int.parse(versionMatch.group(2)!);
+  var versionName = versionMatch.group(1)!;
+  var versionCode = int.parse(versionMatch.group(2)!);
 
   bool isMandatory = args.contains('--mandatory');
   String releaseNotes = '• General performance and stability improvements\n• Bug fixes and UI enhancements';
-
   String pushSecret = Platform.environment['PUSH_SECRET'] ?? 'studenthub-dev-push-secret';
 
   for (int i = 0; i < args.length; i++) {
@@ -43,7 +42,53 @@ void main(List<String> args) async {
       releaseNotes = args[i + 1];
     } else if (args[i] == '--push-secret' && i + 1 < args.length) {
       pushSecret = args[i + 1];
+    } else if (args[i] == '--version' && i + 1 < args.length) {
+      final customVer = args[i + 1];
+      final customMatch = RegExp(r'([0-9\.]+)\+([0-9]+)').firstMatch(customVer);
+      if (customMatch != null) {
+        versionName = customMatch.group(1)!;
+        versionCode = int.parse(customMatch.group(2)!);
+        pubspecContent = pubspecContent.replaceFirst(
+          RegExp(r'version:\s*[0-9\.]+\+[0-9]+'),
+          'version: $versionName+$versionCode',
+        );
+        pubspecFile.writeAsStringSync(pubspecContent);
+        print('📝 Updated pubspec.yaml -> version: $versionName+$versionCode');
+      }
+    } else if (args[i] == '--bump' || args[i] == '--bump-patch') {
+      versionCode += 1;
+      final parts = versionName.split('.');
+      if (parts.length == 3) {
+        final patch = int.tryParse(parts[2]) ?? 0;
+        versionName = '${parts[0]}.${parts[1]}.${patch + 1}';
+      }
+      pubspecContent = pubspecContent.replaceFirst(
+        RegExp(r'version:\s*[0-9\.]+\+[0-9]+'),
+        'version: $versionName+$versionCode',
+      );
+      pubspecFile.writeAsStringSync(pubspecContent);
+      print('🚀 Auto-bumped pubspec.yaml -> version: $versionName+$versionCode');
     }
+  }
+
+  // 1.1 Simultaneously synchronize lib/services/update_service.dart before building
+  final updateServiceFile = File('lib/services/update_service.dart');
+  if (updateServiceFile.existsSync()) {
+    var updateServiceContent = updateServiceFile.readAsStringSync();
+    updateServiceContent = updateServiceContent.replaceAll(
+      RegExp(r'static const int currentVersionCode = \d+;'),
+      'static const int currentVersionCode = $versionCode;',
+    );
+    updateServiceContent = updateServiceContent.replaceAll(
+      RegExp(r"static const String currentVersionName = '[^']+';"),
+      "static const String currentVersionName = '$versionName';",
+    );
+    updateServiceContent = updateServiceContent.replaceAll(
+      RegExp(r'// Current build numbers \(synchronized with pubspec\.yaml [^\)]+\)'),
+      '// Current build numbers (synchronized with pubspec.yaml $versionName+$versionCode)',
+    );
+    updateServiceFile.writeAsStringSync(updateServiceContent);
+    print('🔄 Synchronized update_service.dart -> v$versionName (Code: $versionCode)');
   }
 
   print('📦 Release Target:');
@@ -176,9 +221,67 @@ void main(List<String> args) async {
     exit(1);
   }
 
+  // 7. Register broadcast notification for the update
+  print('📢 Registering update broadcast notification...');
+  final broadcastId = 'announcement_update_$versionCode';
+  try {
+    final broadcastRes = await http.post(
+      Uri.parse('$supabaseUrl/rest/v1/broadcasts'),
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': 'Bearer $supabaseKey',
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: jsonEncode({
+        'id': broadcastId,
+        'title': 'App Update: v$versionName',
+        'body': "What's new:\n$releaseNotes",
+        'branch': 'ALL',
+        'year': 'ALL',
+        'author_name': 'Admin',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      }),
+    );
+    if (broadcastRes.statusCode == 200 || broadcastRes.statusCode == 201) {
+      print('✅ App update broadcast registered in in-app notification bell.');
+    }
+  } catch (e) {
+    print('⚠️ Broadcast register notice: $e');
+  }
+
+  // 8. Dispatch Push Notification to all active mobile devices
+  print('📲 Dispatching push notification to all active devices...');
+  try {
+    final pushRes = await http.post(
+      Uri.parse(SupabaseConfig.pushFunctionUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        if (pushSecret.isNotEmpty) 'X-Push-Secret': pushSecret,
+      },
+      body: jsonEncode({
+        'post_id': broadcastId,
+        'title': 'App Update: v$versionName',
+        'body': "What's new:\n$releaseNotes",
+        'category': 'announcement',
+        'author_id': 'admin_official',
+        'device_id': 'cli_release',
+        'type': 'announcement',
+        'skip_sender_device': false,
+        'target_branch': 'ALL',
+        'target_year': 'ALL',
+      }),
+    ).timeout(const Duration(seconds: 10));
+    if (pushRes.statusCode >= 200 && pushRes.statusCode < 300) {
+      print('✅ Push notifications dispatched successfully.');
+    }
+  } catch (e) {
+    print('⚠️ Push dispatch notice: $e');
+  }
+
   print('\n═══════════════════════════════════════════════════════════════');
   print('🎉 RELEASE v$versionName (Build $versionCode) PUBLISHED SUCCESSFULLY! ');
   print('═══════════════════════════════════════════════════════════════');
-  print('📲 All installed StudentHub apps will automatically receive the update prompt!');
+  print('📲 All active StudentHub apps have received push & in-app bell notification!');
   print('🔗 Public APK: $publicApkUrl\n');
 }

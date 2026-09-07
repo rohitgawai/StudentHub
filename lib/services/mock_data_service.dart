@@ -233,7 +233,9 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         final clean = _sanitizeAvatarUrl(p.authorAvatarUrl);
         return clean != p.authorAvatarUrl ? p.copyWith(authorAvatarUrl: clean) : p;
       }).toList();
-      _notifications = restored.notifications;
+      _notifications = restored.notifications
+          .where((n) => !n.id.startsWith('notif_save_'))
+          .toList();
       _notificationsCleared = restored.notificationsCleared;
       _notificationsClearedAt = restored.notificationsClearedAt;
       _roleRequests = restored.roleRequests;
@@ -437,6 +439,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           'isVerified': currentUser.isVerified,
           'hasChangedUniqueId': currentUser.hasChangedUniqueId,
           'hasCompletedProgressiveForm': currentUser.hasCompletedProgressiveForm,
+          'interests': currentUser.interests,
           'activeDeviceId': currentUser.activeDeviceId,
           'roleExpirations': currentUser.roleExpirations.map(
             (role, expiry) => MapEntry(role.name, expiry.toIso8601String()),
@@ -676,6 +679,9 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       hasChangedUniqueId: m['hasChangedUniqueId'] as bool? ?? false,
       hasCompletedProgressiveForm:
           m['hasCompletedProgressiveForm'] as bool? ?? true,
+      interests: ((m['interests'] as List?) ?? const [])
+          .whereType<String>()
+          .toList(),
       activeDeviceId: m['activeDeviceId']?.toString(),
     );
   }
@@ -1146,6 +1152,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       likedPostIds: ((r['liked_post_ids'] as List?) ?? const []).whereType<String>().toList(),
       isVerified: r['is_verified'] as bool? ?? true,
       hasCompletedProgressiveForm: r['has_completed_progressive_form'] as bool? ?? false,
+      interests: ((r['interests'] as List?) ?? const []).whereType<String>().toList(),
       activeDeviceId: deviceId,
     );
 
@@ -1306,6 +1313,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     required String department,
     required String year,
     required String studentOrEmployeeId,
+    List<String> interests = const [],
   }) async {
     final trimmedId = studentOrEmployeeId.trim();
     if (trimmedId.isNotEmpty) {
@@ -1325,6 +1333,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       department: department,
       year: year,
       studentOrEmployeeId: trimmedId,
+      interests: interests,
       hasCompletedProgressiveForm: true,
     );
     _invalidateDataCaches();
@@ -2086,15 +2095,18 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       }
       final broadcastNotifId = 'notif_admin_broadcast_$id';
       if (_notifications.any((n) => n.id == broadcastNotifId)) continue;
+      final displayTitle = title.startsWith('📢') || title.startsWith('🚀')
+          ? title
+          : (title.toLowerCase().contains('update') ? '🚀 $title' : '📢 $title');
       _notifications.insert(
         0,
         NotificationModel(
           id: broadcastNotifId,
-          title: '📢 $title',
+          title: displayTitle,
           body: '${row['body']?.toString() ?? ''}\n\nBy Admin',
           category: NotificationCategory.academic,
           timestamp: createdAt,
-          relatedPostId: id,
+          relatedPostId: null,
         ),
       );
       changed = true;
@@ -2260,6 +2272,9 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       avatarUrl: avatarToSet,
       isVerified: row['is_verified'] as bool? ?? currentUser.isVerified,
       hasCompletedProgressiveForm: serverHasCompleted,
+      interests: ((row['interests'] as List?) ?? currentUser.interests)
+          .whereType<String>()
+          .toList(),
     );
     if (avatarToSet.isNotEmpty) {
       _authorAvatarCache[currentUser.id] = avatarToSet;
@@ -2297,6 +2312,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         'avatar_url': avatar,
         'active_device_id': deviceId,
         'has_completed_progressive_form': currentUser.hasCompletedProgressiveForm,
+        'interests': currentUser.interests,
         'saved_post_ids': currentUser.savedPostIds,
         'registered_event_ids': currentUser.registeredEventIds,
         'congratulated_post_ids': currentUser.congratulatedPostIds,
@@ -3285,6 +3301,19 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     return target.trim().toLowerCase() == uYear.trim().toLowerCase();
   }
 
+  bool _matchesInterests(PostModel p, List<String> interests) {
+    if (interests.isEmpty) return false;
+    final text = '${p.title} ${p.description} ${p.category.displayName}'.toLowerCase();
+    for (final interest in interests) {
+      final query = interest.toLowerCase().replaceAll('&', ' ').replaceAll('/', ' ');
+      final words = query.split(' ').where((w) => w.trim().length > 2);
+      for (final w in words) {
+        if (text.contains(w)) return true;
+      }
+    }
+    return false;
+  }
+
   List<PostModel> getPersonalizedFeed({
     String? categoryFilter,
     String? searchQuery,
@@ -3295,7 +3324,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     // cached result, so rebuilds triggered by unrelated changes (or typing in
     // search bars) don't re-copy/re-sort the feed.
     final key =
-        '$savedOnly|$categoryFilter|$searchQuery|$excludeEvents|${currentUser.year}|$_showAllYearsFeed|$_dataVersion';
+        '$savedOnly|$categoryFilter|$searchQuery|$excludeEvents|${currentUser.year}|${currentUser.interests.join(',')}|$_showAllYearsFeed|$_dataVersion';
     final cached = _feedCacheValue;
     if (key == _feedCacheKey && cached != null) return cached;
 
@@ -3341,7 +3370,8 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     // 1. Urgent posts
     // 2. Pinned
     // 3. Department match
-    // 4. Timestamp
+    // 4. User interest match boost
+    // 5. Timestamp
     list.sort((a, b) {
       if (a.isUrgent != b.isUrgent) return a.isUrgent ? -1 : 1;
       if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
@@ -3357,6 +3387,14 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           b.department == 'Campus' ||
           b.department == currentUser.department;
       if (aDeptMatch != bDeptMatch) return aDeptMatch ? -1 : 1;
+
+      if (currentUser.interests.isNotEmpty) {
+        final aInterestsMatch = _matchesInterests(a, currentUser.interests);
+        final bInterestsMatch = _matchesInterests(b, currentUser.interests);
+        if (aInterestsMatch != bInterestsMatch) {
+          return aInterestsMatch ? -1 : 1;
+        }
+      }
 
       return b.timestamp.compareTo(a.timestamp);
     });
@@ -3386,23 +3424,6 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         _posts[postIndex] = targetPost.copyWith(
           saveCount: targetPost.saveCount + 1,
         );
-
-        // Instant social notification for the post creator
-        if (targetPost.authorId != currentUser.id &&
-            targetPost.authorName.trim().toLowerCase() !=
-                currentUser.name.trim().toLowerCase()) {
-          _notifications.insert(
-            0,
-            NotificationModel(
-              id: 'notif_save_${DateTime.now().millisecondsSinceEpoch}',
-              title: '🔖 Post Saved',
-              body: '${currentUser.name} saved your post "${targetPost.title}"',
-              category: NotificationCategory.personal,
-              timestamp: DateTime.now(),
-              relatedPostId: targetPost.id,
-            ),
-          );
-        }
       }
     }
 

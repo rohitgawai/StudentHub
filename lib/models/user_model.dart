@@ -39,6 +39,7 @@ class UserModel {
   final Map<UserRole, DateTime> roleExpirations;
   final bool hasChangedUniqueId;
   final bool hasCompletedProgressiveForm;
+  final List<String> interests;
   final String? activeDeviceId;
 
   UserModel({
@@ -56,6 +57,7 @@ class UserModel {
     this.cancelledEventIds = const [],
     this.congratulatedPostIds = const [],
     this.likedPostIds = const [],
+    this.interests = const [],
     this.isVerified = true,
     this.roleExpirations = const {},
     this.hasChangedUniqueId = false,
@@ -84,6 +86,7 @@ class UserModel {
     List<String>? cancelledEventIds,
     List<String>? congratulatedPostIds,
     List<String>? likedPostIds,
+    List<String>? interests,
     bool? isVerified,
     Map<UserRole, DateTime>? roleExpirations,
     bool? hasChangedUniqueId,
@@ -106,6 +109,7 @@ class UserModel {
       congratulatedPostIds:
           congratulatedPostIds ?? this.congratulatedPostIds,
       likedPostIds: likedPostIds ?? this.likedPostIds,
+      interests: interests ?? this.interests,
       isVerified: isVerified ?? this.isVerified,
       roleExpirations: roleExpirations ?? this.roleExpirations,
       hasChangedUniqueId: hasChangedUniqueId ?? this.hasChangedUniqueId,

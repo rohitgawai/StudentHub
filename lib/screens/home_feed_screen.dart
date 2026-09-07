@@ -5,6 +5,7 @@ import '../services/mock_data_service.dart';
 import '../widgets/post_card.dart';
 import '../widgets/post_card_skeleton.dart';
 import '../widgets/app_toast.dart';
+import 'search_screen.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -84,41 +85,31 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
-          // Search Bar
+          // Search Bar Trigger
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              controller: searchController,
-              onChanged: (val) => setState(() => searchQuery = val),
-              style: TextStyle(
-                fontSize: 13.5,
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
-              ),
-              decoration: InputDecoration(
-                hintText: '🔍 Search posts, events, faculty...',
-                hintStyle: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
-                  fontWeight: FontWeight.w400,
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  size: 18,
-                  color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
-                ),
-                suffixIcon: searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(
-                          Icons.clear,
-                          size: 18,
-                          color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
-                        ),
-                        onPressed: () {
-                          searchController.clear();
-                          setState(() => searchQuery = '');
-                        },
-                      )
-                    : null,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => SearchScreen.open(context),
+              child: IgnorePointer(
+                child: TextField(
+                  readOnly: true,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '🔍 Search posts, events, scholarships...',
+                    hintStyle: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      size: 18,
+                      color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                    ),
                 contentPadding: const EdgeInsets.symmetric(
                   vertical: 10,
                   horizontal: 14,
@@ -148,6 +139,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               ),
             ),
           ),
+        ),
+      ),
 
           // Pull-to-refresh feed; skeleton placeholders while initial data loads
           Expanded(
