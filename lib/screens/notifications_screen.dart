@@ -23,6 +23,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       dataService.markNotificationRead(n.id);
     }
 
+    final isUpdateNotif = n.title.toLowerCase().contains('update') ||
+        n.body.toLowerCase().contains('update') ||
+        n.body.toLowerCase().contains('what\'s new');
+
+    if (isUpdateNotif) {
+      UpdateService.instance.checkForUpdate(context, silent: false);
+      return;
+    }
+
     // Role decisions, admin broadcasts, and app updates must never deep-link into a post detail modal.
     if (n.relatedPostId != null &&
         n.relatedPostId!.isNotEmpty &&
@@ -76,24 +85,45 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
+        clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           side: BorderSide(
-            color: isDark ? const Color(0xFF262626) : Colors.transparent,
+            color: isDark ? const Color(0xFF2E2E38) : const Color(0xFFE2E8F0),
+            width: 1.2,
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Designed decorative header banner with ambient gradient
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 18, 14, 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isDark
+                      ? [
+                          catColor.withValues(alpha: 0.24),
+                          const Color(0xFF18181B),
+                        ]
+                      : [
+                          catColor.withValues(alpha: 0.12),
+                          Colors.white,
+                        ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: catColor.withValues(alpha: isDark ? 0.25 : 0.15),
-                    child: Icon(_getNotificationIcon(n), color: catColor, size: 20),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: catColor.withValues(alpha: isDark ? 0.3 : 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(_getNotificationIcon(n), color: catColor, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -129,9 +159,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Divider(height: 1, color: isDark ? const Color(0xFF262626) : Colors.grey.shade200),
-              const SizedBox(height: 16),
+            ),
+            Divider(height: 1, color: isDark ? const Color(0xFF262626) : Colors.grey.shade200),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
 
               SelectableText(
                 n.title,
@@ -202,9 +237,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  ),
+);
+}
 
   @override
   Widget build(BuildContext context) {

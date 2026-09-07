@@ -48,9 +48,9 @@ class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
 
-  // Current build numbers (synchronized with pubspec.yaml 1.4.4+37)
-  static const int currentVersionCode = 37;
-  static const String currentVersionName = '1.4.4';
+  // Current build numbers (synchronized with pubspec.yaml 1.4.6+39)
+  static const int currentVersionCode = 39;
+  static const String currentVersionName = '1.4.6';
 
   static const MethodChannel _installerChannel =
       MethodChannel('student_hub/installer');
@@ -150,18 +150,28 @@ class UpdateService {
     }
   }
 
-  /// Shows the rich in-app update bottom sheet
+  /// Shows the rich in-app update presentation
   void showUpdateDialog(BuildContext context, AppUpdateInfo update) {
     if (_modalVisible) return;
     _modalVisible = true;
 
-    showModalBottomSheet(
+    showGeneralDialog(
       context: context,
-      isDismissible: !update.isMandatory,
-      enableDrag: !update.isMandatory,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => UpdateModal(update: update),
+      barrierDismissible: !update.isMandatory,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (ctx, anim1, anim2) => UpdateModal(update: update),
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        final curved = CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: anim1,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.95, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
     ).whenComplete(() {
       _modalVisible = false;
     });

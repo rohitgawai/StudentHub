@@ -279,8 +279,10 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> with 
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 16,
+      appBar: currentIndex == 2
+          ? null
+          : AppBar(
+              titleSpacing: 16,
         title: RichText(
           text: TextSpan(
             style: TextStyle(

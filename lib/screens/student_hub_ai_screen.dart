@@ -1,7 +1,10 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../models/post_model.dart';
+import '../services/ai_service.dart';
 import '../services/mock_data_service.dart';
 import 'post_detail_screen.dart';
 
@@ -22,8 +25,7 @@ class _ChatMessage {
 }
 
 /// Dedicated StudentHub AI campus assistant interface.
-/// Seamlessly answers campus queries, summarizes notices, lists scholarships,
-/// and presents interactive citation cards that open standalone post pages.
+/// Accesses campus notices, events, workshops, attached PDFs, images, and coordinator profiles.
 class StudentHubAiScreen extends StatefulWidget {
   const StudentHubAiScreen({super.key});
 
@@ -31,7 +33,8 @@ class StudentHubAiScreen extends StatefulWidget {
   State<StudentHubAiScreen> createState() => _StudentHubAiScreenState();
 }
 
-class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
+class _StudentHubAiScreenState extends State<StudentHubAiScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
@@ -39,42 +42,61 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
   final List<_ChatMessage> _messages = [];
   bool _isTyping = false;
 
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
+  http.Client? _activeClient;
+  bool _wasCancelled = false;
+
   static const List<Map<String, dynamic>> _quickPrompts = [
     {
       'label': 'Scholarship updates',
       'icon': Icons.school_outlined,
-      'query': 'Tell me about scholarship updates and financial grants available for students.',
+      'query': 'Tell me about all scholarship updates, eligibility, and deadlines available on campus.',
     },
     {
       'label': 'Upcoming hackathons',
       'icon': Icons.emoji_events_outlined,
-      'query': 'What upcoming hackathons and coding competitions are happening this month?',
+      'query': 'What upcoming hackathons, tech contests, or coding events are scheduled this month?',
     },
     {
-      'label': 'Summarize exam notices',
+      'label': 'Event coordinators',
+      'icon': Icons.person_search_outlined,
+      'query': 'Who are the event coordinators and faculty hosts for current events and workshops?',
+    },
+    {
+      'label': 'Exam passing tips',
+      'icon': Icons.lightbulb_outline_rounded,
+      'query': 'Is there any tip to get pass in mid-sem and semester exams?',
+    },
+    {
+      'label': 'Summarize notices & PDFs',
       'icon': Icons.assignment_outlined,
-      'query': 'Summarize the latest urgent academic exam notices and schedule revisions.',
+      'query': 'Summarize the latest urgent academic notices and attached document circulars.',
     },
     {
       'label': 'Fee submission dates',
       'icon': Icons.calendar_month_outlined,
-      'query': 'When is the deadline for college fees submission and registration?',
-    },
-    {
-      'label': 'Campus events & workshops',
-      'icon': Icons.celebration_outlined,
-      'query': 'Show me fun workshops, tech talks, and cultural events happening on campus.',
+      'query': 'When is the deadline for college semester fees submission?',
     },
   ];
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _pulseAnimation = Tween<double>(begin: 0.94, end: 1.06).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
     _initWelcomeMessage();
   }
 
   @override
   void dispose() {
+    _activeClient?.close();
+    _pulseController.dispose();
     _textController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -86,7 +108,9 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
     _messages.add(
       _ChatMessage(
         id: 'msg_init',
-        text: 'Hello! 👋 I am **StudentHub AI**, your campus assistant.\n\nAsk me anything about college notices, scholarship updates, upcoming hackathons, exam schedules, or fee deadlines!',
+        text: 'Hello! 👋 I am **StudentHub AI**, your official campus assistant.\n\n'
+            'I have live access to college notices, upcoming events, workshops, attached PDFs, and coordinator profiles.\n\n'
+            'Ask me anything about academics, exam tips, scholarships, or campus activities!',
         isUser: false,
         timestamp: DateTime.now(),
       ),
@@ -106,6 +130,11 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
   }
 
   void _handleSubmitted(String text) {
+    if (_isTyping) {
+      _stopAiGeneration();
+      return;
+    }
+
     final query = text.trim();
     if (query.isEmpty) return;
 
@@ -123,68 +152,66 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
     });
     _scrollToBottom();
 
-    // Process query with campus database
     _generateAiResponse(query);
   }
 
-  void _generateAiResponse(String query) {
+  void _stopAiGeneration() {
+    if (!_isTyping) return;
+    _wasCancelled = true;
+    _activeClient?.close();
+    _activeClient = null;
+    _pulseController.stop();
+
+    setState(() {
+      _isTyping = false;
+      _messages.add(
+        _ChatMessage(
+          id: 'msg_stopped_${DateTime.now().millisecondsSinceEpoch}',
+          text: '⏹️ *Response stopped by user.*',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
+
+  void _generateAiResponse(String query) async {
     final dataService = context.read<MockDataService>();
     final allPosts = dataService.posts;
-    final lower = query.toLowerCase();
 
-    Timer(const Duration(milliseconds: 650), () {
-      if (!mounted) return;
+    // Convert past history for context
+    final history = _messages
+        .where((m) => m.id != 'msg_init' && !m.id.startsWith('msg_stopped_'))
+        .map((m) => {
+              'role': m.isUser ? 'user' : 'model',
+              'text': m.text,
+            })
+        .toList();
 
-      String replyText = '';
-      List<PostModel> matchedPosts = [];
+    _wasCancelled = false;
+    _activeClient?.close();
+    final currentClient = http.Client();
+    _activeClient = currentClient;
+    _pulseController.repeat(reverse: true);
 
-      if (lower.contains('scholarship') || lower.contains('grant') || lower.contains('fee')) {
-        matchedPosts = allPosts.where((p) {
-          final t = '${p.title} ${p.description}'.toLowerCase();
-          return t.contains('scholarship') || t.contains('grant') || t.contains('fee') || t.contains('award');
-        }).toList();
+    try {
+      final aiResponse = await AiService.instance.ask(
+        query: query,
+        posts: allPosts,
+        history: history,
+        client: currentClient,
+      );
 
-        if (matchedPosts.isNotEmpty) {
-          replyText = '🎓 **Scholarship & Financial Updates**:\n\n'
-              'Here are the active scholarship announcements and financial notifications found for your campus:';
-        } else {
-          replyText = '🎓 **Scholarship Updates**:\n\n'
-              'Currently, college scholarship renewal and national fellowship forms are active. Please check the administrative office for EBC, minority scholarships, and corporate sponsor grants. You can also view the notifications tab for real-time announcements.';
-        }
-      } else if (lower.contains('hackathon') || lower.contains('contest') || lower.contains('coding')) {
-        matchedPosts = allPosts.where((p) {
-          final t = '${p.title} ${p.description}'.toLowerCase();
-          return t.contains('hackathon') || t.contains('flutter') || t.contains('coding') || t.contains('contest') || p.isEvent;
-        }).take(3).toList();
+      if (!mounted || _wasCancelled) return;
 
-        replyText = '🏆 **Upcoming Hackathons & Contests**:\n\n'
-            'We found relevant tech hackathons and innovation challenges listed on campus! Check the event dates and register before the slots fill up:';
-      } else if (lower.contains('exam') || lower.contains('schedule') || lower.contains('mid-sem') || lower.contains('notice')) {
-        matchedPosts = allPosts.where((p) {
-          return p.category == PostCategory.announcement || p.category == PostCategory.academic;
-        }).take(3).toList();
-
-        replyText = '📢 **Campus Notice & Exam Summary**:\n\n'
-            'The examination section has posted important circulars regarding schedules, seating plans, and attendance criteria:';
-      } else {
-        // Semantic keyword search over campus posts
-        final tokens = lower.split(' ').where((t) => t.length > 2).toList();
-        matchedPosts = allPosts.where((p) {
-          final t = '${p.title} ${p.description} ${p.department}'.toLowerCase();
-          return tokens.any((tok) => t.contains(tok));
-        }).take(3).toList();
-
-        if (matchedPosts.isNotEmpty) {
-          replyText = 'Here is what I found in the campus records regarding your query:';
-        } else {
-          replyText = 'I analyzed the latest college bulletins and departmental notices for **"$query"**.\n\n'
-              'For further assistance, explore the Discover tab or search directly using the top search bar!';
-        }
-      }
+      final matchedPosts = allPosts
+          .where((p) => aiResponse.citedPostIds.contains(p.id))
+          .toList();
 
       final aiMsg = _ChatMessage(
         id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
-        text: replyText,
+        text: aiResponse.text,
         isUser: false,
         timestamp: DateTime.now(),
         citations: matchedPosts,
@@ -195,7 +222,26 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
         _messages.add(aiMsg);
       });
       _scrollToBottom();
-    });
+    } catch (e) {
+      if (!mounted || _wasCancelled) return;
+      setState(() {
+        _isTyping = false;
+        _messages.add(
+          _ChatMessage(
+            id: 'msg_err_${DateTime.now().millisecondsSinceEpoch}',
+            text:
+                "I couldn't process your request right now. Please check your network connection and try again.",
+            isUser: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
+      _scrollToBottom();
+    } finally {
+      if (mounted && !_isTyping) {
+        _pulseController.stop();
+      }
+    }
   }
 
   @override
@@ -205,72 +251,13 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F0F12) : const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        elevation: 0.5,
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
-                ),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.auto_awesome,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'StudentHub AI',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                Row(
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF10B981),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Campus Intelligent Assistant',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'New Chat',
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () {
-              setState(() {
-                _initWelcomeMessage();
-              });
-            },
-          ),
-        ],
-      ),
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
+            // Ultra-modern custom full-bleed AI Header
+            _buildCustomAiHeader(isDark),
+
             // Chat message stream
             Expanded(
               child: ListView.builder(
@@ -290,13 +277,19 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                       decoration: BoxDecoration(
                         color: isDark ? const Color(0xFF1F1F24) : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(18),
                         border: Border.all(
                           color: isDark ? const Color(0xFF2B2B33) : Colors.grey.shade200,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                            blurRadius: 6,
+                          ),
+                        ],
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -306,11 +299,12 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
                             height: 12,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           Text(
-                            'StudentHub AI is finding info...',
+                            'StudentHub AI is analyzing campus data...',
                             style: TextStyle(
                               fontSize: 12,
+                              fontWeight: FontWeight.w500,
                               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                             ),
                           ),
@@ -356,7 +350,7 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
 
             // Bottom prompt input field
             Container(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF141418) : Colors.white,
                 border: Border(
@@ -386,7 +380,7 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
                           color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
                         decoration: InputDecoration(
-                          hintText: 'Ask StudentHub AI anything about campus...',
+                          hintText: 'Ask about notices, events, pass tips, PDFs...',
                           hintStyle: TextStyle(
                             fontSize: 13,
                             color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
@@ -398,18 +392,56 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
+                  if (_isTyping)
+                    GestureDetector(
+                      onTap: _stopAiGeneration,
+                      child: ScaleTransition(
+                        scale: _pulseAnimation,
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFEF4444), Color(0xFF7C3AED)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFEF4444).withValues(alpha: 0.45),
+                                blurRadius: 10,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.stop_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                        ),
                       ),
-                      shape: BoxShape.circle,
+                    )
+                  else
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
+                        onPressed: () => _handleSubmitted(_textController.text),
+                      ),
                     ),
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
-                      onPressed: () => _handleSubmitted(_textController.text),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -419,12 +451,172 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
     );
   }
 
+  /// Custom top header extending to the status bar, replacing the standard app bar
+  Widget _buildCustomAiHeader(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF121216) : Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? const Color(0xFF24242C) : const Color(0xFFE2E8F0),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Glowing Gradient AI Logo Icon
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.auto_awesome,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Title & Live Status Indicator
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'StudentHub AI',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'PRO',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF2563EB),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Container(
+                      width: 6.5,
+                      height: 6.5,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981), // Live green
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Online • Always active for campus help',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Modern "New Chat" Action (replaces the old circular refresh icon)
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () {
+              setState(() {
+                _initWelcomeMessage();
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('✨ Started a new AI conversation'),
+                  duration: Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1F1F28) : const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF323242) : const Color(0xFFDBEAFE),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.edit_note_rounded,
+                    size: 16,
+                    color: isDark ? Colors.blue.shade300 : const Color(0xFF2563EB),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'New Chat',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.blue.shade300 : const Color(0xFF2563EB),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMessageItem(_ChatMessage msg, bool isDark, Color primaryColor) {
     if (msg.isUser) {
       return Align(
         alignment: Alignment.centerRight,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 12, left: 48),
+          margin: const EdgeInsets.only(bottom: 14, left: 48),
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
           decoration: BoxDecoration(
             color: primaryColor,
@@ -434,6 +626,13 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
               bottomLeft: Radius.circular(18),
               bottomRight: Radius.circular(18),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withValues(alpha: 0.25),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Text(
             msg.text,
@@ -451,7 +650,7 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14, right: 28),
+        margin: const EdgeInsets.only(bottom: 16, right: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -459,9 +658,9 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
                       colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
                     ),
                     shape: BoxShape.circle,
@@ -495,30 +694,121 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
                         ),
                       ],
                     ),
-                    child: Text(
-                      msg.text,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        color: isDark ? const Color(0xFFE4E4E7) : const Color(0xFF1E293B),
-                        height: 1.4,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Top action bar (copy button only, no model badge)
+                        Align(
+                          alignment: Alignment.topRight,
+                          child: IconButton(
+                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.zero,
+                            icon: Icon(
+                              Icons.copy_rounded,
+                              size: 14,
+                              color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
+                            ),
+                            tooltip: 'Copy answer',
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: msg.text));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Copied response to clipboard'),
+                                  duration: Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+
+                        // Styled Markdown rendering for headlines, subtitles, bullets, and clean bold text
+                        MarkdownBody(
+                          data: msg.text,
+                          selectable: true,
+                          styleSheet: MarkdownStyleSheet(
+                            p: TextStyle(
+                              fontSize: 13.5,
+                              color: isDark ? const Color(0xFFE4E4E7) : const Color(0xFF1E293B),
+                              height: 1.45,
+                            ),
+                            h1: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              letterSpacing: -0.3,
+                              height: 1.4,
+                            ),
+                            h2: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              letterSpacing: -0.2,
+                              height: 1.35,
+                            ),
+                            h3: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF1D4ED8),
+                              height: 1.35,
+                            ),
+                            strong: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            ),
+                            em: TextStyle(
+                              fontStyle: FontStyle.italic,
+                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                            ),
+                            listBullet: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                            ),
+                            blockSpacing: 10,
+                            tableBorder: TableBorder.all(
+                              color: isDark ? const Color(0xFF2E2E3A) : const Color(0xFFE2E8F0),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            tableHead: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            ),
+                            tableBody: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                            ),
+                            code: TextStyle(
+                              backgroundColor: isDark ? const Color(0xFF101014) : const Color(0xFFF1F5F9),
+                              fontSize: 12,
+                              color: isDark ? const Color(0xFFF43F5E) : const Color(0xFFE11D48),
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ],
             ),
+
+            // Interactive clickable citation cards linking directly to the standalone post page
             if (msg.citations.isNotEmpty) ...[
               const SizedBox(height: 10),
               Padding(
-                padding: const EdgeInsets.only(left: 30),
+                padding: const EdgeInsets.only(left: 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Tappable Campus Resources:',
+                      '📌 Cited Campus Resources (Tap to View):',
                       style: TextStyle(
-                        fontSize: 11.5,
+                        fontSize: 11,
                         fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
                         color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                       ),
                     ),
@@ -527,7 +817,7 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
                       return InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
-                          // Opens individual post page as requested
+                          // Opens individual post page
                           PostDetailScreen.navigateTo(context, post.id);
                         },
                         child: Container(
@@ -561,7 +851,7 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen> {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              const Icon(Icons.arrow_forward, size: 14, color: Colors.grey),
+                              const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Colors.grey),
                             ],
                           ),
                         ),
