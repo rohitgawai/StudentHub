@@ -890,10 +890,6 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
   Widget _buildSmartActionBar(BuildContext context) {
     final post = widget.post;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentUserId = widget.currentUserId;
-    final isOwnPost = currentUserId != null &&
-        (post.authorId == currentUserId ||
-            (post.authorId.isNotEmpty && post.authorId == currentUserId));
 
     final List<Widget> actions = [];
 
@@ -909,14 +905,6 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
         burstOnActivate: true,
         onTap: () {
           widget.onToggleLike?.call();
-          if (!isOwnPost) {
-            _showActionFeedback(
-              context,
-              widget.isLiked ? 'Removed like' : '❤️ Liked post',
-              Icons.favorite_rounded,
-              const Color(0xFFE11D48),
-            );
-          }
         },
       ),
     );
@@ -934,14 +922,6 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
           burstStyle: _BurstStyle.confetti,
           onTap: () {
             widget.onToggleCongratulate?.call();
-            if (!isOwnPost) {
-              _showActionFeedback(
-                context,
-                widget.isCongratulated ? 'Removed congratulations' : '🎉 Congratulated ${post.authorName}!',
-                Icons.celebration_rounded,
-                const Color(0xFFD97706),
-              );
-            }
           },
         ),
       );
@@ -958,12 +938,6 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
           burstIcon: Icons.bookmark_added_rounded,
           onTap: () {
             widget.onToggleSave?.call();
-            _showActionFeedback(
-              context,
-              widget.isSaved ? 'Removed from Saved' : '🔖 Saved to bookmarks',
-              Icons.bookmark_rounded,
-              const Color(0xFF4F46E5),
-            );
           },
         ),
       );

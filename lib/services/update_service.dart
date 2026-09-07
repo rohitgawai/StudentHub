@@ -48,9 +48,40 @@ class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
 
-  // Current build numbers (synchronized with pubspec.yaml 1.4.10+43)
-  static const int currentVersionCode = 43;
-  static const String currentVersionName = '1.4.10';
+  // Current build numbers (synchronized with pubspec.yaml 1.4.11+44)
+  static const int currentVersionCode = 44;
+  static const String currentVersionName = '1.4.11';
+
+  /// Compares semantic versions e.g. "1.4.10" vs "1.4.9".
+  /// Returns > 0 if v1 > v2, < 0 if v1 < v2, 0 if equal.
+  static int compareVersions(String v1, String v2) {
+    try {
+      final clean1 = v1.replaceAll(RegExp(r'[^0-9.]'), '');
+      final clean2 = v2.replaceAll(RegExp(r'[^0-9.]'), '');
+      final parts1 = clean1.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+      final parts2 = clean2.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+      final maxLen = parts1.length > parts2.length ? parts1.length : parts2.length;
+      for (int i = 0; i < maxLen; i++) {
+        final p1 = i < parts1.length ? parts1[i] : 0;
+        final p2 = i < parts2.length ? parts2[i] : 0;
+        if (p1 != p2) return p1.compareTo(p2);
+      }
+      return 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Returns true if a given versionCode or versionName is already installed on the client.
+  static bool isVersionInstalled({int? versionCode, String? versionName}) {
+    if (versionCode != null && versionCode > 0) {
+      return currentVersionCode >= versionCode;
+    }
+    if (versionName != null && versionName.isNotEmpty) {
+      return compareVersions(currentVersionName, versionName) >= 0;
+    }
+    return true;
+  }
 
   static const MethodChannel _installerChannel =
       MethodChannel('student_hub/installer');
@@ -87,7 +118,8 @@ class UpdateService {
     }
   }
 
-  /// Checks Supabase for the latest version and presents the update modal if newer
+  /// Checks Supabase for the latest version and presents the update modal if newer,
+  /// or presents the update modal in the 'Already Up to Date' state if already updated.
   Future<AppUpdateInfo?> checkForUpdate(
     BuildContext context, {
     bool silent = false,
@@ -107,7 +139,7 @@ class UpdateService {
 
       _isChecking = false;
       if (res == null) {
-        if (forceShow && context.mounted) {
+        if ((!silent || forceShow) && context.mounted) {
           // Construct fallback update info representing current build so dialog can open
           final fallback = AppUpdateInfo(
             id: 'current_build',
@@ -115,20 +147,12 @@ class UpdateService {
             versionCode: currentVersionCode,
             apkUrl: '',
             fileSizeBytes: 0,
-            releaseNotes: 'You are on the latest version of StudentHub (v$currentVersionName).',
+            releaseNotes: 'You are on the latest version of StudentHub (v$currentVersionName).\n\n• Performance optimizations and smooth animations\n• Enhanced AI assistant experience\n• Latest campus security updates and real-time synchronization',
             isMandatory: false,
             createdAt: DateTime.now(),
           );
           showUpdateDialog(context, fallback);
           return fallback;
-        }
-        if (!silent && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ StudentHub is up to date (v$currentVersionName)'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
         }
         return null;
       }
@@ -140,17 +164,11 @@ class UpdateService {
         }
         return latest;
       } else {
+        // App is already up to date!
         if (!silent && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '✅ You are using the latest version of StudentHub (v$currentVersionName)',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          showUpdateDialog(context, latest);
         }
-        return null;
+        return latest;
       }
     } catch (e) {
       _isChecking = false;

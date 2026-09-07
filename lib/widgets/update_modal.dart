@@ -63,9 +63,15 @@ class _UpdateModalState extends State<UpdateModal> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isMandatory = widget.update.isMandatory;
-    final primaryColor = isMandatory
-        ? const Color(0xFFF59E0B)
-        : const Color(0xFF2563EB);
+    final isAlreadyUpToDate = UpdateService.isVersionInstalled(
+      versionCode: widget.update.versionCode,
+      versionName: widget.update.versionName,
+    );
+    final primaryColor = isAlreadyUpToDate
+        ? const Color(0xFF10B981)
+        : (isMandatory
+            ? const Color(0xFFF59E0B)
+            : const Color(0xFF2563EB));
 
     return PopScope(
       canPop: !isMandatory && !_isDownloading,
@@ -112,7 +118,10 @@ class _UpdateModalState extends State<UpdateModal> {
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        const Color(0xFF3B82F6).withValues(alpha: isDark ? 0.35 : 0.22),
+                        (isAlreadyUpToDate
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFF3B82F6))
+                            .withValues(alpha: isDark ? 0.35 : 0.22),
                         Colors.transparent,
                       ],
                     ),
@@ -133,7 +142,10 @@ class _UpdateModalState extends State<UpdateModal> {
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        const Color(0xFF7C3AED).withValues(alpha: isDark ? 0.32 : 0.18),
+                        (isAlreadyUpToDate
+                                ? const Color(0xFF059669)
+                                : const Color(0xFF7C3AED))
+                            .withValues(alpha: isDark ? 0.32 : 0.18),
                         Colors.transparent,
                       ],
                     ),
@@ -203,14 +215,16 @@ class _UpdateModalState extends State<UpdateModal> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Top Glowing Hero Rocket Badge
+                        // Top Glowing Hero Rocket / Verified Badge
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: isMandatory
-                                  ? [const Color(0xFFF59E0B), const Color(0xFFEA580C)]
-                                  : [const Color(0xFF2563EB), const Color(0xFF7C3AED)],
+                              colors: isAlreadyUpToDate
+                                  ? [const Color(0xFF10B981), const Color(0xFF059669)]
+                                  : (isMandatory
+                                      ? [const Color(0xFFF59E0B), const Color(0xFFEA580C)]
+                                      : [const Color(0xFF2563EB), const Color(0xFF7C3AED)]),
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -224,9 +238,11 @@ class _UpdateModalState extends State<UpdateModal> {
                             ],
                           ),
                           child: Icon(
-                            isMandatory
-                                ? Icons.warning_amber_rounded
-                                : Icons.rocket_launch_rounded,
+                            isAlreadyUpToDate
+                                ? Icons.verified_rounded
+                                : (isMandatory
+                                    ? Icons.warning_amber_rounded
+                                    : Icons.rocket_launch_rounded),
                             color: Colors.white,
                             size: 32,
                           ),
@@ -235,7 +251,9 @@ class _UpdateModalState extends State<UpdateModal> {
 
                         // Title
                         Text(
-                          isMandatory ? 'Mandatory Update Required' : 'New Update Available',
+                          isAlreadyUpToDate
+                              ? 'You’re Up to Date!'
+                              : (isMandatory ? 'Mandatory Update Required' : 'New Update Available'),
                           style: TextStyle(
                             fontSize: 19,
                             fontWeight: FontWeight.w800,
@@ -246,7 +264,7 @@ class _UpdateModalState extends State<UpdateModal> {
                         ),
                         const SizedBox(height: 6),
 
-                        // Version & Size Badges
+                        // Version & Size / Status Badges
                         Wrap(
                           spacing: 8,
                           runSpacing: 6,
@@ -270,23 +288,62 @@ class _UpdateModalState extends State<UpdateModal> {
                                 ),
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
-                              decoration: BoxDecoration(
-                                color: isDark ? const Color(0xFF22222C) : const Color(0xFFF1F5F9),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                'Size: ${_formatBytes(widget.update.fileSizeBytes)}',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                            if (isAlreadyUpToDate) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981).withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                                  ),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF10B981)),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Latest Version Installed',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF10B981),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
+                            ] else if (widget.update.fileSizeBytes > 0) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF22222C) : const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  'Size: ${_formatBytes(widget.update.fileSizeBytes)}',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
+                        if (isAlreadyUpToDate) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'StudentHub is running the newest release with all active features & security patches.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
 
                         // Release Notes Box
@@ -326,8 +383,8 @@ class _UpdateModalState extends State<UpdateModal> {
                         ),
                         const SizedBox(height: 18),
 
-                        // Progress Bar / Error section
-                        if (_isDownloading) ...[
+                        // Progress Bar / Error section (Only shown during active updates)
+                        if (!isAlreadyUpToDate && _isDownloading) ...[
                           ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: LinearProgressIndicator(
@@ -364,7 +421,7 @@ class _UpdateModalState extends State<UpdateModal> {
                           const SizedBox(height: 16),
                         ],
 
-                        if (_errorMessage != null) ...[
+                        if (!isAlreadyUpToDate && _errorMessage != null) ...[
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
@@ -389,86 +446,129 @@ class _UpdateModalState extends State<UpdateModal> {
                         ],
 
                         // Action Buttons
-                        Row(
-                          children: [
-                            if (!isMandatory && !_isDownloading) ...[
-                              Expanded(
-                                child: OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 13),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    side: BorderSide(
-                                      color: isDark ? const Color(0xFF2E2E3C) : Colors.grey.shade300,
-                                    ),
-                                  ),
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: Text(
-                                    'Remind Later',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                      color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700,
-                                    ),
-                                  ),
+                        if (isAlreadyUpToDate) ...[
+                          SizedBox(
+                            width: double.infinity,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF10B981), Color(0xFF059669)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 12),
-                            ],
-                            Expanded(
-                              flex: isMandatory ? 1 : 2,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: isMandatory
-                                        ? [const Color(0xFFF59E0B), const Color(0xFFEA580C)]
-                                        : [const Color(0xFF2563EB), const Color(0xFF7C3AED)],
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 13),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
                                   ),
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: primaryColor.withValues(alpha: 0.35),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
                                 ),
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    shadowColor: Colors.transparent,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 13),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                  ),
-                                  onPressed: _isDownloading ? null : _startUpdate,
-                                  icon: _isDownloading
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : const Icon(Icons.download_rounded, size: 18),
-                                  label: Text(
-                                    _isDownloading
-                                        ? 'Downloading...'
-                                        : (_errorMessage != null ? 'Retry Download' : 'Update Now'),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
+                                onPressed: () => Navigator.of(context).pop(),
+                                icon: const Icon(Icons.check_rounded, size: 18),
+                                label: const Text(
+                                  'Great, Got it!',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ] else ...[
+                          Row(
+                            children: [
+                              if (!isMandatory && !_isDownloading) ...[
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 13),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      side: BorderSide(
+                                        color: isDark ? const Color(0xFF2E2E3C) : Colors.grey.shade300,
+                                      ),
+                                    ),
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    child: Text(
+                                      'Remind Later',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                        color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              Expanded(
+                                flex: isMandatory ? 1 : 2,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: isMandatory
+                                          ? [const Color(0xFFF59E0B), const Color(0xFFEA580C)]
+                                          : [const Color(0xFF2563EB), const Color(0xFF7C3AED)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: primaryColor.withValues(alpha: 0.35),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      shadowColor: Colors.transparent,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 13),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                    ),
+                                    onPressed: _isDownloading ? null : _startUpdate,
+                                    icon: _isDownloading
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(Icons.download_rounded, size: 18),
+                                    label: Text(
+                                      _isDownloading
+                                          ? 'Downloading...'
+                                          : (_errorMessage != null ? 'Retry Download' : 'Update Now'),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

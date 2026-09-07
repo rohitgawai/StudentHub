@@ -98,32 +98,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       return;
     }
     _likeAnimController.forward(from: 0.0);
-    final wasLiked = dataService.isProfileLiked(widget.authorId);
     dataService.toggleLikeProfile(widget.authorId, widget.authorName);
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              wasLiked ? Icons.favorite_border : Icons.favorite,
-              color: Colors.white,
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              wasLiked
-                  ? 'Removed profile appreciation'
-                  : '❤️ Appreciated ${widget.authorName}!',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-        backgroundColor: wasLiked ? Colors.orange.shade800 : const Color(0xFFE11D48),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void _showAvatarZoomDialog(BuildContext context, String avatarUrl) {

@@ -34,6 +34,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         n.body.toLowerCase().contains('what\'s new');
   }
 
+  bool _isUpdateInstalled(NotificationModel n) {
+    if (!_isAppUpdateNotif(n)) return false;
+
+    // 1. Check version code from ID (e.g., announcement_update_43)
+    final codeMatch = RegExp(r'update_(\d+)').firstMatch(n.id);
+    if (codeMatch != null) {
+      final code = int.tryParse(codeMatch.group(1)!);
+      if (code != null && code > 0) {
+        return UpdateService.currentVersionCode >= code;
+      }
+    }
+
+    // 2. Check semantic version string from title or body (e.g. "v1.4.10")
+    final versionMatch = RegExp(r'v?(\d+\.\d+(?:\.\d+)?)', caseSensitive: false)
+        .firstMatch('${n.title} ${n.body}');
+    if (versionMatch != null) {
+      final notifVer = versionMatch.group(1)!;
+      return UpdateService.compareVersions(UpdateService.currentVersionName, notifVer) >= 0;
+    }
+
+    return true;
+  }
+
+  String _extractNotificationVersion(NotificationModel n) {
+    final versionMatch = RegExp(r'v?(\d+\.\d+(?:\.\d+)?)', caseSensitive: false)
+        .firstMatch('${n.title} ${n.body}');
+    if (versionMatch != null) {
+      return versionMatch.group(1)!;
+    }
+    return UpdateService.currentVersionName;
+  }
+
   void _handleNotificationTap(BuildContext context, NotificationModel n) {
     final dataService = context.read<MockDataService>();
     if (!n.isRead) {
@@ -216,20 +248,40 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   if (n.title.toLowerCase().contains('update') ||
-                      n.body.toLowerCase().contains('what\'s new')) ...[
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF2563EB),
-                        side: const BorderSide(color: Color(0xFF2563EB)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      icon: const Icon(Icons.system_update_rounded, size: 16),
-                      label: const Text('Update Now'),
-                      onPressed: () {
-                        Navigator.of(ctx).pop();
-                        UpdateService.instance.checkForUpdate(context, silent: false, forceShow: true);
+                      n.body.toLowerCase().contains('what\'s new') ||
+                      _isAppUpdateNotif(n)) ...[
+                    Builder(
+                      builder: (context) {
+                        final isInstalled = _isUpdateInstalled(n);
+                        final btnColor = isInstalled
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFF2563EB);
+                        return OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: btnColor,
+                            side: BorderSide(color: btnColor),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          icon: Icon(
+                            isInstalled
+                                ? Icons.verified_rounded
+                                : Icons.system_update_rounded,
+                            size: 16,
+                          ),
+                          label: Text(
+                            isInstalled ? 'View Release Notes' : 'Update Now',
+                          ),
+                          onPressed: () {
+                            Navigator.of(ctx).pop();
+                            UpdateService.instance.checkForUpdate(
+                              context,
+                              silent: false,
+                              forceShow: true,
+                            );
+                          },
+                        );
                       },
                     ),
                     const SizedBox(width: 10),
@@ -446,7 +498,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       itemBuilder: (context, index) {
                         final n = filtered[index];
                         final isUpdate = _isAppUpdateNotif(n);
-                        final catColor = isUpdate ? const Color(0xFF2563EB) : _getCatColor(n.category);
+                        final isInstalled = isUpdate && _isUpdateInstalled(n);
+                        final catColor = isUpdate
+                            ? (isInstalled
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFF2563EB))
+                            : _getCatColor(n.category);
                         final isUnread = !n.isRead;
                         final isAdminAnnounce = _isAdminAnnouncement(n, dataService);
                         final hasPost = n.relatedPostId != null &&
@@ -579,43 +636,70 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           color: isUnread
                                               ? (isDark ? const Color(0xFFE4E4E7) : const Color(0xFF1E293B))
                                               : (isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B)),
-                                          fontWeight: isUnread
-                                              ? FontWeight.w500
-                                              : FontWeight.normal,
+                                            fontWeight: isUnread
+                                                ? FontWeight.w500
+                                                : FontWeight.normal,
+                                          ),
                                         ),
-                                      ),
-                                      if (isUpdate) ...[
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFF2563EB).withValues(alpha: isDark ? 0.25 : 0.12),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(
-                                                  color: const Color(0xFF2563EB).withValues(alpha: 0.4),
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(Icons.rocket_launch_rounded, size: 13, color: Color(0xFF2563EB)),
-                                                  const SizedBox(width: 5),
-                                                  Text(
-                                                    'App Update • Tap to view & install',
-                                                    style: TextStyle(
-                                                      fontSize: 11.5,
-                                                      fontWeight: FontWeight.w700,
-                                                      color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                        if (isUpdate) ...[
+                                         const SizedBox(height: 8),
+                                         Row(
+                                           children: [
+                                             Container(
+                                               padding: const EdgeInsets.symmetric(
+                                                 horizontal: 10,
+                                                 vertical: 4,
+                                               ),
+                                               decoration: BoxDecoration(
+                                                 color: (isInstalled
+                                                         ? const Color(0xFF10B981)
+                                                         : const Color(0xFF2563EB))
+                                                     .withValues(
+                                                       alpha: isDark ? 0.25 : 0.12,
+                                                     ),
+                                                 borderRadius: BorderRadius.circular(8),
+                                                 border: Border.all(
+                                                   color: (isInstalled
+                                                           ? const Color(0xFF10B981)
+                                                           : const Color(0xFF2563EB))
+                                                       .withValues(alpha: 0.4),
+                                                   width: 1,
+                                                 ),
+                                               ),
+                                               child: Row(
+                                                 mainAxisSize: MainAxisSize.min,
+                                                 children: [
+                                                   Icon(
+                                                     isInstalled
+                                                         ? Icons.check_circle_rounded
+                                                         : Icons.rocket_launch_rounded,
+                                                     size: 13,
+                                                     color: isInstalled
+                                                         ? const Color(0xFF10B981)
+                                                         : const Color(0xFF2563EB),
+                                                   ),
+                                                   const SizedBox(width: 5),
+                                                   Text(
+                                                     isInstalled
+                                                         ? '✓ Installed (v${_extractNotificationVersion(n)}) • Up to date'
+                                                         : 'App Update • Tap to view & install',
+                                                     style: TextStyle(
+                                                       fontSize: 11.5,
+                                                       fontWeight: FontWeight.w700,
+                                                       color: isInstalled
+                                                           ? (isDark
+                                                               ? const Color(0xFF34D399)
+                                                               : const Color(0xFF059669))
+                                                           : (isDark
+                                                               ? const Color(0xFF60A5FA)
+                                                               : const Color(0xFF1D4ED8)),
+                                                     ),
+                                                   ),
+                                                 ],
+                                               ),
+                                             ),
+                                           ],
+                                         ),
                                       ] else if (hasPost && !isAdminAnnounce) ...[
                                         const SizedBox(height: 6),
                                         Row(
@@ -669,7 +753,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   IconData _getNotificationIcon(NotificationModel n) {
     if (_isAppUpdateNotif(n)) {
-      return Icons.rocket_launch_rounded;
+      return _isUpdateInstalled(n)
+          ? Icons.check_circle_rounded
+          : Icons.rocket_launch_rounded;
     }
     if (_isRoleNotif(n)) {
       final t = n.title.toLowerCase();
