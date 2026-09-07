@@ -170,6 +170,18 @@ void main(List<String> args) async {
 
   print('✅ Built APK successfully: ${apkFile.path} ($sizeMb MB)');
 
+  // Create human-friendly named copies with app name, version, and ABI
+  for (final abi in ['arm64-v8a', 'armeabi-v7a', 'x86_64']) {
+    final rawAbiApk = File('build/app/outputs/flutter-apk/app-$abi-release.apk');
+    if (rawAbiApk.existsSync()) {
+      rawAbiApk.copySync('build/app/outputs/flutter-apk/StudentHub-v$versionName-$abi-release.apk');
+    }
+  }
+  final arm64Apk = File('build/app/outputs/flutter-apk/app-arm64-v8a-release.apk');
+  if (arm64Apk.existsSync()) {
+    arm64Apk.copySync('build/app/outputs/flutter-apk/StudentHub-v$versionName-release.apk');
+  }
+
   // 5. Upload APK to Supabase Storage 'app_releases' bucket
   final storageFileName = 'StudentHub-v$versionName-$versionCode.apk';
   print('☁️ Uploading to Supabase Storage bucket [app_releases] as $storageFileName...');
@@ -266,7 +278,7 @@ void main(List<String> args) async {
         'category': 'announcement',
         'author_id': 'admin_official',
         'device_id': 'cli_release',
-        'type': 'announcement',
+        'type': 'app_update',
         'skip_sender_device': false,
         'target_branch': 'ALL',
         'target_year': 'ALL',

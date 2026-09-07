@@ -227,7 +227,7 @@ Deno.serve(async (req: Request) => {
     .map((d: DeviceTokenRow) => String(d.token))
     .filter((t: string) => t.length > 0)
 
-  if (type === 'announcement' && author_id === 'admin_official') {
+  if ((type === 'announcement' || type === 'app_update') && author_id === 'admin_official') {
     const branchName =
       target_branch && target_branch !== 'ALL'
         ? (BRANCH_MAP[String(target_branch)] ?? String(target_branch))
@@ -288,18 +288,19 @@ Deno.serve(async (req: Request) => {
 
   let sent = 0
   const toRemove: string[] = []
-  const isAdminBroadcast = type === 'announcement' && author_id === 'admin_official'
-  const pushTitle = isAdminBroadcast ? `📢 ${title}` : title
-  const pushBody = `${(body ?? title).slice(0, 200)}${isAdminBroadcast ? '\n\nBy Admin' : ''}`
+  const isAppUpdate = type === 'app_update' || post_id?.startsWith('announcement_update_') || title.toLowerCase().includes('update')
+  const isAdminBroadcast = (type === 'announcement' || isAppUpdate) && author_id === 'admin_official'
+  const pushTitle = isAppUpdate ? (title.startsWith('🚀') ? title : `🚀 ${title}`) : (isAdminBroadcast ? `📢 ${title}` : title)
+  const pushBody = isAppUpdate ? (body ?? title) : `${(body ?? title).slice(0, 200)}${isAdminBroadcast ? '\n\nBy Admin' : ''}`
   const channelId = getChannelId(type, category)
 
-  for (const token of targets) {
+  const sendTasks = targets.map(async (token) => {
     const message = {
       message: {
         token,
         notification: { title: pushTitle, body: pushBody },
         data: {
-          type,
+          type: isAppUpdate ? 'app_update' : type,
           post_id: post_id ?? '',
           category: category ?? 'announcement',
           author_id: author_id ?? '',
@@ -307,30 +308,51 @@ Deno.serve(async (req: Request) => {
         },
         android: {
           priority: 'HIGH',
-          notification: { channel_id: channelId },
+          notification: {
+            channel_id: channelId,
+            notification_priority: 'PRIORITY_MAX',
+            default_sound: true,
+            default_vibrate_timings: true,
+          },
         },
       },
     }
 
-    const res = await fetch(fcmUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${bearer}`,
-      },
-      body: JSON.stringify(message),
-    })
+    try {
+      const res = await fetch(fcmUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${bearer}`,
+        },
+        body: JSON.stringify(message),
+      })
 
-    if (res.ok) {
-      sent += 1
-      continue
+      if (res.ok) {
+        return { ok: true, token }
+      }
+
+      const raw = await res.text()
+      if (res.status === 404 || raw.includes('UNREGISTERED')) {
+        return { ok: false, token, unregistered: true }
+      } else {
+        console.error('FCM send failed', res.status, raw)
+        return { ok: false, token, unregistered: false }
+      }
+    } catch (e) {
+      console.error('FCM fetch error', e)
+      return { ok: false, token, unregistered: false }
     }
+  })
 
-    const raw = await res.text()
-    if (res.status === 404 || raw.includes('UNREGISTERED')) {
-      toRemove.push(token)
-    } else {
-      console.error('FCM send failed', res.status, raw)
+  const results = await Promise.allSettled(sendTasks)
+  for (const r of results) {
+    if (r.status === 'fulfilled') {
+      if (r.value.ok) {
+        sent += 1
+      } else if (r.value.unregistered) {
+        toRemove.push(r.value.token)
+      }
     }
   }
 

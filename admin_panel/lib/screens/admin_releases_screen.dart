@@ -235,6 +235,7 @@ class _AdminReleasesScreenState extends State<AdminReleasesScreen> {
           await adminService.sendBroadcastAnnouncement(
             title: 'App Update: v$versionName',
             body: "What's new:\n$notes",
+            customId: broadcastId,
           );
         }
       } catch (e) {

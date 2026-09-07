@@ -70,6 +70,10 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
   final Map<String, String> _authorAvatarCache = {};
   bool _notificationsCleared = false;
   DateTime? _notificationsClearedAt;
+  final Set<String> _dismissedNotificationIds = {};
+  bool get notificationsCleared => _notificationsCleared;
+  DateTime? get notificationsClearedAt => _notificationsClearedAt;
+  Set<String> get dismissedNotificationIds => Set.unmodifiable(_dismissedNotificationIds);
 
   static String? _sanitizeAvatarUrl(String? url) {
     if (url == null || url.trim().isEmpty) return null;
@@ -238,6 +242,17 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           .toList();
       _notificationsCleared = restored.notificationsCleared;
       _notificationsClearedAt = restored.notificationsClearedAt;
+      _dismissedNotificationIds
+        ..clear()
+        ..addAll(restored.dismissedNotificationIds);
+      if (_notificationsCleared && _notificationsClearedAt != null) {
+        final cutoff = _notificationsClearedAt!.toUtc();
+        _notifications.removeWhere((n) {
+          if (_dismissedNotificationIds.contains(n.id)) return true;
+          if (n.relatedPostId != null && _dismissedNotificationIds.contains(n.relatedPostId)) return true;
+          return !n.timestamp.toUtc().isAfter(cutoff);
+        });
+      }
       _roleRequests = restored.roleRequests;
       _formSubmissions = restored.formSubmissions;
       _showAllYearsFeed = restored.showAllYearsFeed;
@@ -457,7 +472,8 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         'hadServerProfile': _hadServerProfile,
         'notificationsCleared': _notificationsCleared,
         'notificationsClearedAt':
-            _notificationsClearedAt?.toIso8601String(),
+            _notificationsClearedAt?.toUtc().toIso8601String(),
+        'dismissedNotificationIds': _dismissedNotificationIds.toList(),
       };
 
       await _localStore.saveSnapshot(jsonEncode(payload));
@@ -520,9 +536,17 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           payload['hadServerProfile'] as bool? ?? false;
       final notificationsCleared =
           payload['notificationsCleared'] as bool? ?? false;
-      final notificationsClearedAt = DateTime.tryParse(
+      final parsedClearedAt = DateTime.tryParse(
         payload['notificationsClearedAt']?.toString() ?? '',
-      );
+      )?.toUtc();
+      final notificationsClearedAt = (parsedClearedAt != null &&
+              parsedClearedAt.isAfter(DateTime.now().toUtc()))
+          ? DateTime.now().toUtc()
+          : parsedClearedAt;
+      final dismissedNotificationIds =
+          ((payload['dismissedNotificationIds'] as List?) ?? const [])
+              .whereType<String>()
+              .toSet();
 
       return _LocalState(
         currentUser: user,
@@ -539,6 +563,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         hadServerProfile: hadServerProfile,
         notificationsCleared: notificationsCleared,
         notificationsClearedAt: notificationsClearedAt,
+        dismissedNotificationIds: dismissedNotificationIds,
       );
     } catch (_) {
       return null;
@@ -1627,6 +1652,51 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
               _handleRealtimePostPayload(payload);
             },
           )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'broadcasts',
+            callback: (payload) {
+              _syncAdminBroadcasts(client);
+            },
+          )
+          .onBroadcast(
+            event: 'admin_broadcast',
+            callback: (payload) {
+              try {
+                final id = payload['id']?.toString() ?? '';
+                final title = payload['title']?.toString() ?? '';
+                final body = payload['body']?.toString() ?? '';
+                if (id.isNotEmpty && title.isNotEmpty) {
+                  final broadcastNotifId = 'notif_admin_broadcast_$id';
+                  final isUpdate = id.startsWith('announcement_update_') ||
+                      title.toLowerCase().contains('update');
+                  final displayTitle = title.startsWith('📢') || title.startsWith('🚀')
+                      ? title
+                      : (isUpdate ? '🚀 $title' : '📢 $title');
+                  if (!_notifications.any((n) => n.id == broadcastNotifId) &&
+                      !_dismissedNotificationIds.contains(id) &&
+                      !_dismissedNotificationIds.contains(broadcastNotifId)) {
+                    _notifications.insert(
+                      0,
+                      NotificationModel(
+                        id: broadcastNotifId,
+                        title: displayTitle,
+                        body: '$body\n\nBy Admin',
+                        category: NotificationCategory.general,
+                        timestamp: DateTime.now(),
+                        relatedPostId: isUpdate ? 'app_update' : null,
+                      ),
+                    );
+                    _invalidateDataCaches();
+                    notifyListeners();
+                    _scheduleLocalSave();
+                  }
+                }
+              } catch (_) {}
+              _syncAdminBroadcasts(client);
+            },
+          )
           .onBroadcast(
             event: 'post_sync',
             callback: (payload) {
@@ -1996,7 +2066,10 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         for (final post in fetched) {
           if (_notificationsCleared &&
               _notificationsClearedAt != null &&
-              post.timestamp.isBefore(_notificationsClearedAt!)) {
+              !post.timestamp.toUtc().isAfter(_notificationsClearedAt!.toUtc())) {
+            continue;
+          }
+          if (_dismissedNotificationIds.contains(post.id)) {
             continue;
           }
           if (!_notifications.any((n) => n.relatedPostId == post.id)) {
@@ -2063,6 +2136,11 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       }),
     ]);
     if (extras.any((changedExtra) => changedExtra)) changed = true;
+    if (changed) {
+      _invalidateDataCaches();
+      notifyListeners();
+      _scheduleLocalSave();
+    }
     _recordReachability(true);
     return (success: true, changed: changed);
   }
@@ -2071,51 +2149,90 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
   /// notification bell only — they never appear in the campus feed. Each
   /// broadcast becomes an unread notification carrying the "By Admin" marker.
   Future<bool> _syncAdminBroadcasts(SupabaseClient client) async {
-    final rows = await client
-        .from('broadcasts')
-        .select()
-        .order('created_at', ascending: false)
-        .limit(5)
-        .timeout(const Duration(seconds: 15));
-    var changed = false;
-    final now = DateTime.now();
-    // For fresh installs or unrecorded clear timestamps, only show broadcasts
-    // from the last 48 hours to avoid flooding new installs with dozens of old items.
-    final defaultCutoff = now.subtract(const Duration(hours: 48));
-    final effectiveCutoff = _notificationsClearedAt ?? defaultCutoff;
+    try {
+      final rows = await client
+          .from('broadcasts')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(30)
+          .timeout(const Duration(seconds: 15));
+      var changed = false;
+      final nowUtc = DateTime.now().toUtc();
+      // For fresh installs or unrecorded clear timestamps, show broadcasts
+      // from the last 72 hours so students don't miss recent announcements.
+      final defaultCutoff = nowUtc.subtract(const Duration(hours: 72));
 
-    for (final row in rows) {
-      final id = row['id']?.toString();
-      if (id == null || id.isEmpty) continue;
-      final title = row['title']?.toString() ?? '';
-      if (title.isEmpty) continue;
-      final createdAt = _parseDate(row['created_at']) ?? now;
-      if (createdAt.isBefore(effectiveCutoff)) {
-        continue;
+      for (final row in rows) {
+        final id = row['id']?.toString();
+        if (id == null || id.isEmpty) continue;
+        final title = row['title']?.toString() ?? '';
+        if (title.isEmpty) continue;
+        final broadcastNotifId = 'notif_admin_broadcast_$id';
+        if (_dismissedNotificationIds.contains(id) ||
+            _dismissedNotificationIds.contains(broadcastNotifId)) {
+          continue;
+        }
+
+        final createdAt = _parseDate(row['created_at'])?.toUtc() ?? nowUtc;
+        final isUpdate = id.startsWith('announcement_update_') ||
+            title.toLowerCase().contains('update');
+
+        if (_notificationsCleared && _notificationsClearedAt != null) {
+          if (!createdAt.isAfter(_notificationsClearedAt!.toUtc())) {
+            continue;
+          }
+        } else if (createdAt.isBefore(defaultCutoff)) {
+          continue;
+        }
+
+        final existingIndex = _notifications.indexWhere((n) => n.id == broadcastNotifId);
+        if (existingIndex != -1) {
+          // Retroactively update category & relatedPostId if stored from older builds
+          if (isUpdate &&
+              (_notifications[existingIndex].category != NotificationCategory.general ||
+                  _notifications[existingIndex].relatedPostId != 'app_update')) {
+            _notifications[existingIndex] = _notifications[existingIndex].copyWith(
+              category: NotificationCategory.general,
+              relatedPostId: 'app_update',
+            );
+            changed = true;
+          }
+          continue;
+        }
+
+        final displayTitle = title.startsWith('📢') || title.startsWith('🚀')
+            ? title
+            : (isUpdate ? '🚀 $title' : '📢 $title');
+        _notifications.insert(
+          0,
+          NotificationModel(
+            id: broadcastNotifId,
+            title: displayTitle,
+            body: '${row['body']?.toString() ?? ''}\n\nBy Admin',
+            category: NotificationCategory.general,
+            timestamp: createdAt.toLocal(),
+            relatedPostId: isUpdate ? 'app_update' : null,
+          ),
+        );
+        changed = true;
       }
-      final broadcastNotifId = 'notif_admin_broadcast_$id';
-      if (_notifications.any((n) => n.id == broadcastNotifId)) continue;
-      final displayTitle = title.startsWith('📢') || title.startsWith('🚀')
-          ? title
-          : (title.toLowerCase().contains('update') ? '🚀 $title' : '📢 $title');
-      _notifications.insert(
-        0,
-        NotificationModel(
-          id: broadcastNotifId,
-          title: displayTitle,
-          body: '${row['body']?.toString() ?? ''}\n\nBy Admin',
-          category: NotificationCategory.academic,
-          timestamp: createdAt,
-          relatedPostId: null,
-        ),
-      );
-      changed = true;
+      if (changed) {
+        _invalidateDataCaches();
+        notifyListeners();
+        _scheduleLocalSave();
+      }
+      return changed;
+    } catch (e) {
+      debugPrint('StudentHub: _syncAdminBroadcasts failed: $e');
+      return false;
     }
-    if (changed) {
-      _invalidateDataCaches();
-      _scheduleLocalSave();
-    }
-    return changed;
+  }
+
+  /// Manually pulls recent admin broadcasts into the notification bell
+  Future<void> syncBroadcasts() async {
+    final client = _client;
+    if (client == null) return;
+    await _syncAdminBroadcasts(client);
   }
 
   Future<bool> checkBackendReachable() async {
@@ -2170,12 +2287,29 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
 
     // Reconcile server notifications_cleared_at so clean installs don't reload cleared notifs
     if (row['notifications_cleared_at'] != null) {
-      final serverCleared = _parseDate(row['notifications_cleared_at']);
+      final serverCleared = _parseDate(row['notifications_cleared_at'])?.toUtc();
       if (serverCleared != null) {
-        if (_notificationsClearedAt == null || serverCleared.isAfter(_notificationsClearedAt!)) {
-          _notificationsClearedAt = serverCleared;
+        final nowUtc = DateTime.now().toUtc();
+        final sanitizedCleared = serverCleared.isAfter(nowUtc) ? nowUtc : serverCleared;
+        if (_notificationsClearedAt == null || sanitizedCleared.isAfter(_notificationsClearedAt!.toUtc())) {
+          _notificationsClearedAt = sanitizedCleared;
           _notificationsCleared = true;
         }
+      }
+    }
+
+    if (_notificationsCleared && _notificationsClearedAt != null) {
+      final cutoff = _notificationsClearedAt!.toUtc();
+      final beforeLen = _notifications.length;
+      _notifications.removeWhere((n) {
+        if (_dismissedNotificationIds.contains(n.id)) return true;
+        if (n.relatedPostId != null && _dismissedNotificationIds.contains(n.relatedPostId)) return true;
+        return !n.timestamp.toUtc().isAfter(cutoff);
+      });
+      if (_notifications.length != beforeLen) {
+        _invalidateDataCaches();
+        notifyListeners();
+        _scheduleLocalSave();
       }
     }
 
@@ -4649,9 +4783,31 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     _scheduleLocalSave();
   }
 
+  void deleteNotification(String notifId) {
+    final idx = _notifications.indexWhere((n) => n.id == notifId);
+    if (idx != -1) {
+      final notif = _notifications[idx];
+      _dismissedNotificationIds.add(notif.id);
+      if (notif.relatedPostId != null && notif.relatedPostId!.isNotEmpty) {
+        _dismissedNotificationIds.add(notif.relatedPostId!);
+      }
+      _notifications.removeAt(idx);
+      _invalidateDataCaches();
+      notifyListeners();
+      _scheduleLocalSave();
+    }
+  }
+
   void clearAllNotifications() {
     _notificationsCleared = true;
-    _notificationsClearedAt = DateTime.now();
+    final nowUtc = DateTime.now().toUtc();
+    _notificationsClearedAt = nowUtc;
+    for (final n in _notifications) {
+      _dismissedNotificationIds.add(n.id);
+      if (n.relatedPostId != null && n.relatedPostId!.isNotEmpty) {
+        _dismissedNotificationIds.add(n.relatedPostId!);
+      }
+    }
     _notifications.clear();
     _invalidateDataCaches();
     notifyListeners();
@@ -4663,7 +4819,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       unawaited(
         client
             .from('profiles')
-            .update({'notifications_cleared_at': _notificationsClearedAt!.toIso8601String()})
+            .update({'notifications_cleared_at': nowUtc.toIso8601String()})
             .eq('user_id', currentUser.id)
             .catchError((_) {}),
       );
@@ -4701,7 +4857,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     for (final role in expiredRoles) {
       if (_notificationsCleared &&
           _notificationsClearedAt != null &&
-          expirations[role]!.isBefore(_notificationsClearedAt!)) {
+          !expirations[role]!.toUtc().isAfter(_notificationsClearedAt!.toUtc())) {
         continue;
       }
       _notifications.insert(
@@ -4963,6 +5119,7 @@ class _LocalState {
     this.hadServerProfile = false,
     this.notificationsCleared = false,
     this.notificationsClearedAt,
+    this.dismissedNotificationIds = const {},
   });
 
   final UserModel currentUser;
@@ -4979,6 +5136,7 @@ class _LocalState {
   final bool hadServerProfile;
   final bool notificationsCleared;
   final DateTime? notificationsClearedAt;
+  final Set<String> dismissedNotificationIds;
 }
 
 Uint8List _decodeBase64Helper(String base64) => base64Decode(base64);

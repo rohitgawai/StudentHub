@@ -48,9 +48,9 @@ class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
 
-  // Current build numbers (synchronized with pubspec.yaml 1.4.6+39)
-  static const int currentVersionCode = 39;
-  static const String currentVersionName = '1.4.6';
+  // Current build numbers (synchronized with pubspec.yaml 1.4.10+43)
+  static const int currentVersionCode = 43;
+  static const String currentVersionName = '1.4.10';
 
   static const MethodChannel _installerChannel =
       MethodChannel('student_hub/installer');
@@ -91,6 +91,7 @@ class UpdateService {
   Future<AppUpdateInfo?> checkForUpdate(
     BuildContext context, {
     bool silent = false,
+    bool forceShow = false,
   }) async {
     if (_isChecking) return null;
     _isChecking = true;
@@ -106,6 +107,21 @@ class UpdateService {
 
       _isChecking = false;
       if (res == null) {
+        if (forceShow && context.mounted) {
+          // Construct fallback update info representing current build so dialog can open
+          final fallback = AppUpdateInfo(
+            id: 'current_build',
+            versionName: currentVersionName,
+            versionCode: currentVersionCode,
+            apkUrl: '',
+            fileSizeBytes: 0,
+            releaseNotes: 'You are on the latest version of StudentHub (v$currentVersionName).',
+            isMandatory: false,
+            createdAt: DateTime.now(),
+          );
+          showUpdateDialog(context, fallback);
+          return fallback;
+        }
         if (!silent && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -118,7 +134,7 @@ class UpdateService {
       }
 
       final latest = AppUpdateInfo.fromMap(res);
-      if (latest.versionCode > currentVersionCode) {
+      if (latest.versionCode > currentVersionCode || forceShow) {
         if (context.mounted) {
           showUpdateDialog(context, latest);
         }

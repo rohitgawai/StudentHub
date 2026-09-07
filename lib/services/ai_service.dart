@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/post_model.dart';
+import '../models/user_model.dart';
 
 class AiCitation {
   final String postId;
@@ -16,14 +17,34 @@ class AiCitation {
   });
 }
 
+class AiReferencedProfile {
+  final String authorId;
+  final String authorName;
+  final UserRole authorRole;
+  final String? authorAvatarUrl;
+  final String? department;
+  final String? year;
+
+  const AiReferencedProfile({
+    required this.authorId,
+    required this.authorName,
+    required this.authorRole,
+    this.authorAvatarUrl,
+    this.department,
+    this.year,
+  });
+}
+
 class AiResponse {
   final String text;
   final List<String> citedPostIds;
+  final List<AiReferencedProfile> referencedProfiles;
   final String providerUsed; // 'Gemini 3.6 Flash' or 'Groq (Llama/GPT)'
 
   const AiResponse({
     required this.text,
     required this.citedPostIds,
+    this.referencedProfiles = const [],
     required this.providerUsed,
   });
 }
@@ -68,7 +89,11 @@ STRICT OPERATIONAL GUIDELINES & BOUNDARIES:
    - Only when a post genuinely matches the user's query, provide accurate details:
      • For events/workshops: state the title, date, venue, registration deadline, and coordinator name/department. Never provide personal phone numbers or private email addresses.
      • For notices with attachments: mention the document title and note that the student can view or download it from the post card.
-8. FORMATTING & PRESENTATION:
+8. MULTIPLE EVENTS / POSTS CONTEXT (MANDATORY):
+   - When the user inquires about campus events, sports celebrations, competitions, workshops, or notices, and there is more than 1 matching or ongoing post (e.g., 2, 3, or more events):
+     • ALWAYS provide clear, upfront context stating how many events are active or scheduled (e.g., "There are currently 2 sports events/celebrations on campus. Here is what is happening:" or "There are 3 events matching your query:").
+     • Briefly introduce each event clearly with its title and key details so the user is fully aware of all matching events.
+9. FORMATTING & PRESENTATION:
    - Use clean, proper Markdown headings (`### Subtitle` or `## Headline`) for sections rather than raw asterisks.
    - Use bullet points with `-` or numbered lists.
    - Bold key terms with `**text**` cleanly.
@@ -177,9 +202,14 @@ STRICT OPERATIONAL GUIDELINES & BOUNDARIES:
     return buffer.toString();
   }
 
-  /// Finds relevant post IDs to present as clickable citation cards in the UI.
-  /// Strictly avoids attaching irrelevant posts or test records.
-  List<String> _extractCitations(String query, String aiAnswer, List<PostModel> posts) {
+  /// Finds relevant post IDs to present as in-built interactive post cards in the UI.
+  /// Uses normalized title matching, word overlap, and follow-up conversation history.
+  List<String> _extractCitations(
+    String query,
+    String aiAnswer,
+    List<PostModel> posts, {
+    List<Map<String, String>> history = const [],
+  }) {
     final lowerQ = query.toLowerCase();
     final lowerAns = aiAnswer.toLowerCase();
 
@@ -206,25 +236,160 @@ STRICT OPERATIONAL GUIDELINES & BOUNDARIES:
 
     final matchedIds = <String>{};
 
+    String cleanString(String s) {
+      return s.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    }
+
+    final cleanedAns = cleanString(aiAnswer);
+    final cleanedQ = cleanString(query);
+
     for (final p in posts) {
       if (_isDummyPost(p)) continue;
-      final pTitle = p.title.trim().toLowerCase();
-      if (pTitle.length < 4) continue;
+      final cleanTitle = cleanString(p.title);
+      if (cleanTitle.length < 4) continue;
 
-      // Check if AI explicitly mentions the post title in quotes, bold, or as a distinct phrase
-      final isQuotedOrBold = lowerAns.contains('**$pTitle**') ||
-          lowerAns.contains('"$pTitle"') ||
-          lowerAns.contains('\'$pTitle\'');
-
-      final hasExactTitle = lowerAns.contains(pTitle) &&
-          (pTitle.length >= 8 || isQuotedOrBold);
-
-      if (hasExactTitle) {
+      // 1. Direct clean substring match
+      if (cleanedAns.contains(cleanTitle)) {
         matchedIds.add(p.id);
+        continue;
+      }
+
+      // 2. Exact match in answer
+      final pTitleLower = p.title.trim().toLowerCase();
+      if (lowerAns.contains(pTitleLower)) {
+        matchedIds.add(p.id);
+        continue;
+      }
+
+      // 3. Significant word overlap (e.g. "Campus Sports Squad Wins Inter-College Basketball Trophy")
+      final words = cleanTitle.split(' ').where((w) => w.length >= 4).toList();
+      if (words.length >= 3) {
+        int matchCount = 0;
+        for (final w in words) {
+          if (cleanedAns.contains(w)) matchCount++;
+        }
+        if (matchCount >= 3 && matchCount / words.length >= 0.5) {
+          matchedIds.add(p.id);
+          continue;
+        }
+      }
+
+      // 4. Follow-up query asking to see/open the post (e.g. "can i see this post?", "show me this post")
+      final isFollowupAskingForPost = cleanedQ.contains('see this post') ||
+          cleanedQ.contains('show this post') ||
+          cleanedQ.contains('open this post') ||
+          cleanedQ.contains('see post') ||
+          cleanedQ.contains('view this post');
+
+      if (isFollowupAskingForPost && history.isNotEmpty) {
+        final lastAssistantMsg = history.reversed.firstWhere(
+          (h) => h['role'] == 'model' || h['role'] == 'assistant',
+          orElse: () => {},
+        )['text'] ?? '';
+        final cleanedLastMsg = cleanString(lastAssistantMsg);
+        if (cleanedLastMsg.contains(cleanTitle)) {
+          matchedIds.add(p.id);
+          continue;
+        }
+        if (words.length >= 3) {
+          int matchCount = 0;
+          for (final w in words) {
+            if (cleanedLastMsg.contains(w)) matchCount++;
+          }
+          if (matchCount >= 3 && matchCount / words.length >= 0.5) {
+            matchedIds.add(p.id);
+            continue;
+          }
+        }
       }
     }
 
     return matchedIds.take(3).toList();
+  }
+
+  /// Extracts referenced student/coordinator/faculty profiles from the response
+  /// so users can click a smooth in-built "View Profile" option right in the response.
+  List<AiReferencedProfile> _extractReferencedProfiles(
+    String query,
+    String aiAnswer,
+    List<PostModel> posts,
+  ) {
+    final lowerQ = query.toLowerCase();
+    final lowerAns = aiAnswer.toLowerCase();
+
+    // Avoid extracting profiles on generic non-person queries
+    if (lowerQ.contains('tired') ||
+        lowerQ.contains('feeling') ||
+        lowerQ.contains('how to pass') ||
+        lowerQ.contains('tip to get pass')) {
+      return [];
+    }
+
+    final matched = <String, AiReferencedProfile>{};
+
+    for (final p in posts) {
+      if (_isDummyPost(p)) continue;
+      final name = p.authorName.trim();
+      if (name.isEmpty || name.length < 3) continue;
+
+      final lowerName = name.toLowerCase();
+      final parts = lowerName.split(RegExp(r'\s+')).where((s) => s.length >= 3).toList();
+
+      final mentionsFullName = lowerAns.contains(lowerName) || lowerQ.contains(lowerName);
+      final mentionsKeyParts = parts.length >= 2 &&
+          parts.every((part) => lowerAns.contains(part) || lowerQ.contains(part));
+
+      if (mentionsFullName || mentionsKeyParts) {
+        final cached = _profileCache[p.authorId];
+        final dept = cached?['department']?.toString() ?? p.department;
+        final year = cached?['year']?.toString();
+
+        matched[p.authorId] = AiReferencedProfile(
+          authorId: p.authorId,
+          authorName: p.authorName,
+          authorRole: p.authorRole,
+          authorAvatarUrl: p.authorAvatarUrl,
+          department: dept.isNotEmpty ? dept : null,
+          year: year != null && year.isNotEmpty ? year : null,
+        );
+      }
+    }
+
+    // Also check profiles cached in _profileCache even if not the primary post author
+    for (final entry in _profileCache.entries) {
+      final uid = entry.key;
+      if (matched.containsKey(uid)) continue;
+      final prof = entry.value;
+      final name = prof['name']?.toString() ?? '';
+      if (name.length < 3) continue;
+      final lowerName = name.toLowerCase();
+      final parts = lowerName.split(RegExp(r'\s+')).where((s) => s.length >= 3).toList();
+
+      final mentionsFullName = lowerAns.contains(lowerName) || lowerQ.contains(lowerName);
+      final mentionsKeyParts = parts.length >= 2 &&
+          parts.every((part) => lowerAns.contains(part) || lowerQ.contains(part));
+
+      if (mentionsFullName || mentionsKeyParts) {
+        UserRole role = UserRole.student;
+        final rolesList = prof['roles'];
+        if (rolesList is List && rolesList.isNotEmpty) {
+          final rStr = rolesList.first.toString();
+          role = UserRole.values.firstWhere(
+            (r) => r.name.toLowerCase() == rStr.toLowerCase(),
+            orElse: () => UserRole.student,
+          );
+        }
+        matched[uid] = AiReferencedProfile(
+          authorId: uid,
+          authorName: name,
+          authorRole: role,
+          department: prof['department']?.toString(),
+          year: prof['year']?.toString(),
+        );
+      }
+    }
+
+    return matched.values.take(2).toList();
   }
 
   /// Sends the prompt to Google Gemini 3.6 Flash.
@@ -389,10 +554,12 @@ Please answer according to the campus instructions and guidelines.
         client: client,
       );
       if (geminiReply != null && geminiReply.isNotEmpty) {
-        final citations = _extractCitations(query, geminiReply, posts);
+        final citations = _extractCitations(query, geminiReply, posts, history: history);
+        final profiles = _extractReferencedProfiles(query, geminiReply, posts);
         return AiResponse(
           text: geminiReply,
           citedPostIds: citations,
+          referencedProfiles: profiles,
           providerUsed: 'Gemini 3.6 Flash',
         );
       }
@@ -410,10 +577,12 @@ Please answer according to the campus instructions and guidelines.
         client: client,
       );
       if (groqReply != null && groqReply.isNotEmpty) {
-        final citations = _extractCitations(query, groqReply, posts);
+        final citations = _extractCitations(query, groqReply, posts, history: history);
+        final profiles = _extractReferencedProfiles(query, groqReply, posts);
         return AiResponse(
           text: groqReply,
           citedPostIds: citations,
+          referencedProfiles: profiles,
           providerUsed: 'Groq Cloud',
         );
       }

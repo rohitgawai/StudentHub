@@ -17,18 +17,31 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   String selectedCat = 'All';
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<MockDataService>().syncNow();
+      }
+    });
+  }
+
+  bool _isAppUpdateNotif(NotificationModel n) {
+    return n.relatedPostId == 'app_update' ||
+        n.id.contains('update') ||
+        n.title.toLowerCase().contains('update') ||
+        n.body.toLowerCase().contains('what\'s new');
+  }
+
   void _handleNotificationTap(BuildContext context, NotificationModel n) {
     final dataService = context.read<MockDataService>();
     if (!n.isRead) {
       dataService.markNotificationRead(n.id);
     }
 
-    final isUpdateNotif = n.title.toLowerCase().contains('update') ||
-        n.body.toLowerCase().contains('update') ||
-        n.body.toLowerCase().contains('what\'s new');
-
-    if (isUpdateNotif) {
-      UpdateService.instance.checkForUpdate(context, silent: false);
+    if (_isAppUpdateNotif(n)) {
+      UpdateService.instance.checkForUpdate(context, silent: false, forceShow: true);
       return;
     }
 
@@ -216,7 +229,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       label: const Text('Update Now'),
                       onPressed: () {
                         Navigator.of(ctx).pop();
-                        UpdateService.instance.checkForUpdate(context, silent: false);
+                        UpdateService.instance.checkForUpdate(context, silent: false, forceShow: true);
                       },
                     ),
                     const SizedBox(width: 10),
@@ -388,174 +401,253 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
           // Dynamic Modern Social Feed List
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+            child: RefreshIndicator(
+              onRefresh: () => dataService.syncNow(),
+              child: filtered.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       children: [
-                        Icon(
-                          Icons.notifications_none_rounded,
-                          size: 64,
-                          color: isDark ? const Color(0xFF52525B) : Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No notifications in $selectedCat',
-                          style: TextStyle(
-                            color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.45,
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.notifications_none_rounded,
+                                  size: 64,
+                                  color: isDark ? const Color(0xFF52525B) : Colors.grey.shade400,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No notifications in $selectedCat',
+                                  style: TextStyle(
+                                    color: isDark ? const Color(0xFFA1A1AA) : Colors.grey.shade600,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: filtered.length,
-                    separatorBuilder: (context, index) => Divider(
-                      height: 1,
-                      indent: 72,
-                      endIndent: 16,
-                      color: isDark ? const Color(0xFF262626) : const Color(0xFFF1F5F9),
-                    ),
-                    itemBuilder: (context, index) {
-                      final n = filtered[index];
-                      final catColor = _getCatColor(n.category);
-                      final isUnread = !n.isRead;
-                      final isAdminAnnounce = _isAdminAnnouncement(n, dataService);
-                      final hasPost = n.relatedPostId != null &&
-                          n.relatedPostId!.isNotEmpty &&
-                          !_isRoleNotif(n);
+                    )
+                  : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: filtered.length,
+                      separatorBuilder: (context, index) => Divider(
+                        height: 1,
+                        indent: 72,
+                        endIndent: 16,
+                        color: isDark ? const Color(0xFF262626) : const Color(0xFFF1F5F9),
+                      ),
+                      itemBuilder: (context, index) {
+                        final n = filtered[index];
+                        final isUpdate = _isAppUpdateNotif(n);
+                        final catColor = isUpdate ? const Color(0xFF2563EB) : _getCatColor(n.category);
+                        final isUnread = !n.isRead;
+                        final isAdminAnnounce = _isAdminAnnouncement(n, dataService);
+                        final hasPost = n.relatedPostId != null &&
+                            n.relatedPostId!.isNotEmpty &&
+                            !_isRoleNotif(n);
 
-                      return InkWell(
-                        onTap: () => _handleNotificationTap(context, n),
-                        child: Container(
-                          color: isUnread
-                              ? (isDark ? const Color(0xFF1E1E28) : const Color(0xFFF0F9FF))
-                              : Colors.transparent,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Avatar Badge with Category Icon
-                              Stack(
-                                alignment: Alignment.bottomRight,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 22,
-                                    backgroundColor: catColor.withValues(alpha: isDark ? 0.25 : 0.12),
-                                    child: Icon(
-                                      _getNotificationIcon(n),
-                                      color: catColor,
-                                      size: 22,
-                                    ),
+                        return Dismissible(
+                          key: ValueKey(n.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            color: Colors.red.shade600,
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Delete',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
                                   ),
-                                  if (isUnread)
-                                    Positioned(
-                                      top: 0,
-                                      right: 0,
-                                      child: Container(
-                                        width: 10,
-                                        height: 10,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF2563EB),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: isDark ? const Color(0xFF121212) : Colors.white,
-                                            width: 1.5,
-                                          ),
-                                        ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          onDismissed: (_) {
+                            dataService.deleteNotification(n.id);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Notification removed.'),
+                                duration: Duration(seconds: 1),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                          child: InkWell(
+                            onTap: () => _handleNotificationTap(context, n),
+                          child: Container(
+                            color: isUnread
+                                ? (isDark ? const Color(0xFF1E1E28) : const Color(0xFFF0F9FF))
+                                : Colors.transparent,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Avatar Badge with Category Icon
+                                Stack(
+                                  alignment: Alignment.bottomRight,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 22,
+                                      backgroundColor: catColor.withValues(alpha: isDark ? 0.25 : 0.12),
+                                      child: Icon(
+                                        _getNotificationIcon(n),
+                                        color: catColor,
+                                        size: 22,
                                       ),
                                     ),
-                                ],
-                              ),
-                              const SizedBox(width: 12),
-
-                              // Notification Text Content
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            n.title,
-                                            style: TextStyle(
-                                              fontWeight: isUnread
-                                                  ? FontWeight.w800
-                                                  : FontWeight.w600,
-                                              fontSize: 14,
-                                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    if (isUnread)
+                                      Positioned(
+                                        top: 0,
+                                        right: 0,
+                                        child: Container(
+                                          width: 10,
+                                          height: 10,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF2563EB),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: isDark ? const Color(0xFF121212) : Colors.white,
+                                              width: 1.5,
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          _formatTime(n.timestamp),
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: isUnread
-                                                ? const Color(0xFF3B82F6)
-                                                : (isDark ? const Color(0xFF71717A) : Colors.grey.shade500),
-                                            fontWeight: isUnread
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      n.body,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        height: 1.35,
-                                        color: isUnread
-                                            ? (isDark ? const Color(0xFFE4E4E7) : const Color(0xFF1E293B))
-                                            : (isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B)),
-                                        fontWeight: isUnread
-                                            ? FontWeight.w500
-                                            : FontWeight.normal,
                                       ),
-                                    ),
-                                    if (hasPost && !isAdminAnnounce) ...[
-                                      const SizedBox(height: 6),
+                                  ],
+                                ),
+                                const SizedBox(width: 12),
+
+                                // Notification Text Content
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
                                       Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Icon(
-                                            Icons.open_in_new_rounded,
-                                            size: 13,
-                                            color: catColor,
+                                          Expanded(
+                                            child: Text(
+                                              n.title,
+                                              style: TextStyle(
+                                                fontWeight: isUnread
+                                                    ? FontWeight.w800
+                                                    : FontWeight.w600,
+                                                fontSize: 14,
+                                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                              ),
+                                            ),
                                           ),
-                                          const SizedBox(width: 4),
+                                          const SizedBox(width: 8),
                                           Text(
-                                            'Tap to view post',
+                                            _formatTime(n.timestamp),
                                             style: TextStyle(
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: catColor,
+                                              fontSize: 11,
+                                              color: isUnread
+                                                  ? const Color(0xFF3B82F6)
+                                                  : (isDark ? const Color(0xFF71717A) : Colors.grey.shade500),
+                                              fontWeight: isUnread
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
                                             ),
                                           ),
                                         ],
                                       ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        n.body,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          height: 1.35,
+                                          color: isUnread
+                                              ? (isDark ? const Color(0xFFE4E4E7) : const Color(0xFF1E293B))
+                                              : (isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B)),
+                                          fontWeight: isUnread
+                                              ? FontWeight.w500
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                      if (isUpdate) ...[
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF2563EB).withValues(alpha: isDark ? 0.25 : 0.12),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: const Color(0xFF2563EB).withValues(alpha: 0.4),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.rocket_launch_rounded, size: 13, color: Color(0xFF2563EB)),
+                                                  const SizedBox(width: 5),
+                                                  Text(
+                                                    'App Update • Tap to view & install',
+                                                    style: TextStyle(
+                                                      fontSize: 11.5,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ] else if (hasPost && !isAdminAnnounce) ...[
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.open_in_new_rounded,
+                                              size: 13,
+                                              color: catColor,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Tap to view post',
+                                              style: TextStyle(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: catColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ],
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       );
-                    },
-                  ),
+                      },
+                    ),
+            ),
           ),
         ],
       ),
@@ -576,6 +668,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   IconData _getNotificationIcon(NotificationModel n) {
+    if (_isAppUpdateNotif(n)) {
+      return Icons.rocket_launch_rounded;
+    }
     if (_isRoleNotif(n)) {
       final t = n.title.toLowerCase();
       if (t.contains('rejected') || t.contains('removed')) {

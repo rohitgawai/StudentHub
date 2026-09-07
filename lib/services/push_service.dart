@@ -34,8 +34,11 @@ class PushService {
   /// Set when user opens an account ban/unban notification
   final ValueNotifier<String?> accountNotice = ValueNotifier<String?>(null);
 
-  /// Set when user taps an announcement / app update notification to open notification bell
+  /// Set when user taps an announcement notification to open notification bell
   final ValueNotifier<bool> openNotifications = ValueNotifier<bool>(false);
+
+  /// Set when user taps an app update push notification to directly open update dialog
+  final ValueNotifier<bool> triggerAppUpdate = ValueNotifier<bool>(false);
 
   MockDataService? _dataService;
   bool _initialized = false;
@@ -44,6 +47,7 @@ class PushService {
     final category = message.data['category'];
     final type = message.data['type'];
     final postId = message.data['post_id']?.toString();
+    final title = message.notification?.title ?? message.data['title']?.toString() ?? '';
     final body = message.notification?.body ?? message.data['body']?.toString();
 
     if (type == 'account_ban' || (postId != null && postId.startsWith('ban_'))) {
@@ -52,6 +56,22 @@ class PushService {
     }
     if (type == 'account_unban') {
       accountNotice.value = body ?? 'Your account has been unbanned. Welcome back!';
+      return;
+    }
+
+    // Direct app update trigger when user taps app update push notification
+    final isAppUpdate = (postId != null &&
+            (postId.startsWith('announcement_update_') ||
+                postId.toLowerCase().contains('update'))) ||
+        (type == 'app_update') ||
+        title.toLowerCase().contains('update') ||
+        (body != null &&
+            (body.toLowerCase().contains('update') ||
+                body.toLowerCase().contains('what\'s new')));
+
+    if (isAppUpdate) {
+      triggerAppUpdate.value = true;
+      _maybeSyncAfterPush(message.data);
       return;
     }
 
@@ -114,15 +134,20 @@ class PushService {
       settings: settings,
       onDidReceiveNotificationResponse: (response) {
         final payload = response.payload;
-        if (payload != null &&
-            payload.isNotEmpty &&
-            !payload.startsWith('ban_') &&
-            !payload.startsWith('role_removal_')) {
+        if (payload != null && payload.isNotEmpty) {
+          if (payload.startsWith('announcement_update_') ||
+              payload.toLowerCase().contains('update')) {
+            triggerAppUpdate.value = true;
+            return;
+          }
+          if (payload.startsWith('ban_') || payload.startsWith('role_removal_')) {
+            return;
+          }
           if (payload.startsWith('announcement_')) {
             openNotifications.value = true;
-          } else {
-            targetPostId.value = payload;
+            return;
           }
+          targetPostId.value = payload;
         }
       },
     );
@@ -261,12 +286,19 @@ class PushService {
         ),
       );
 
+      final isUpdate = type == 'app_update' ||
+          (postId != null && (postId.startsWith('announcement_update_') || postId.toLowerCase().contains('update'))) ||
+          title.toLowerCase().contains('update');
+      final notifPayload = isUpdate
+          ? ((postId != null && postId.isNotEmpty) ? postId : 'announcement_update_latest')
+          : postId;
+
       await _localNotifications.show(
         id: DateTime.now().microsecondsSinceEpoch.remainder(1 << 31),
         title: title,
         body: body ?? '',
         notificationDetails: details,
-        payload: postId,
+        payload: notifPayload,
       );
     }
 
@@ -299,7 +331,8 @@ class PushService {
         type != 'registration_confirmed' &&
         type != 'registrations_closed' &&
         type != 'role_update' &&
-        type != 'announcement') {
+        type != 'announcement' &&
+        type != 'app_update') {
       return;
     }
     unawaited(service.syncNow());

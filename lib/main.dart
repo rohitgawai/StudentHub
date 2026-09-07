@@ -162,9 +162,24 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> with 
     PushService.instance.openCategory.addListener(_handlePushTap);
     PushService.instance.targetPostId.addListener(_handlePushTap);
     PushService.instance.openNotifications.addListener(_handleNotificationsPushTap);
+    PushService.instance.triggerAppUpdate.addListener(_handleAppUpdatePushTap);
 
     // Initialize OTA auto-update listener (notices delivered as push & in-app bell text)
     UpdateService.instance.initialize(() => context);
+
+    // If app was opened from terminated state by tapping a push notification:
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        if (PushService.instance.triggerAppUpdate.value) {
+          _handleAppUpdatePushTap();
+        } else if (PushService.instance.openNotifications.value) {
+          _handleNotificationsPushTap();
+        } else if (PushService.instance.targetPostId.value != null &&
+            PushService.instance.targetPostId.value!.isNotEmpty) {
+          _handlePushTap();
+        }
+      }
+    });
   }
 
   @override
@@ -178,7 +193,19 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> with 
     PushService.instance.openCategory.removeListener(_handlePushTap);
     PushService.instance.targetPostId.removeListener(_handlePushTap);
     PushService.instance.openNotifications.removeListener(_handleNotificationsPushTap);
+    PushService.instance.triggerAppUpdate.removeListener(_handleAppUpdatePushTap);
     super.dispose();
+  }
+
+  void _handleAppUpdatePushTap() {
+    if (PushService.instance.triggerAppUpdate.value) {
+      PushService.instance.triggerAppUpdate.value = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          UpdateService.instance.checkForUpdate(context, silent: false, forceShow: true);
+        }
+      });
+    }
   }
 
   void _handleNotificationsPushTap() {

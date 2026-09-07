@@ -40,16 +40,22 @@ class NotificationModel {
   });
 
   NotificationModel copyWith({
+    String? id,
+    String? title,
+    String? body,
+    NotificationCategory? category,
+    DateTime? timestamp,
     bool? isRead,
+    String? relatedPostId,
   }) {
     return NotificationModel(
-      id: id,
-      title: title,
-      body: body,
-      category: category,
-      timestamp: timestamp,
+      id: id ?? this.id,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      category: category ?? this.category,
+      timestamp: timestamp ?? this.timestamp,
       isRead: isRead ?? this.isRead,
-      relatedPostId: relatedPostId,
+      relatedPostId: relatedPostId ?? this.relatedPostId,
     );
   }
 }

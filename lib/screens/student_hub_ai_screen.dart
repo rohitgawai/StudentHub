@@ -7,6 +7,7 @@ import '../models/post_model.dart';
 import '../services/ai_service.dart';
 import '../services/mock_data_service.dart';
 import 'post_detail_screen.dart';
+import 'user_profile_screen.dart';
 
 class _ChatMessage {
   final String id;
@@ -14,6 +15,7 @@ class _ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final List<PostModel> citations;
+  final List<AiReferencedProfile> referencedProfiles;
 
   _ChatMessage({
     required this.id,
@@ -21,6 +23,7 @@ class _ChatMessage {
     required this.isUser,
     required this.timestamp,
     this.citations = const [],
+    this.referencedProfiles = const [],
   });
 }
 
@@ -215,6 +218,7 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen>
         isUser: false,
         timestamp: DateTime.now(),
         citations: matchedPosts,
+        referencedProfiles: aiResponse.referencedProfiles,
       );
 
       setState(() {
@@ -263,57 +267,16 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen>
               child: ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                itemCount: _messages.length,
+                itemCount: _messages.length + (_isTyping ? 1 : 0),
                 itemBuilder: (context, index) {
+                  if (index == _messages.length) {
+                    return _buildThinkingIndicator(isDark, primaryColor);
+                  }
                   final msg = _messages[index];
                   return _buildMessageItem(msg, isDark, primaryColor);
                 },
               ),
             ),
-
-            if (_isTyping)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1F1F24) : Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: isDark ? const Color(0xFF2B2B33) : Colors.grey.shade200,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            'StudentHub AI is analyzing campus data...',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
 
             // Quick suggestion chips
             if (_messages.length <= 2)
@@ -473,31 +436,7 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen>
       ),
       child: Row(
         children: [
-          // Glowing Gradient AI Logo Icon
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2563EB).withValues(alpha: 0.35),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.auto_awesome,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
+          // Title & Live Status Indicator (header logo hidden for now)
 
           // Title & Live Status Indicator
           Expanded(
@@ -611,6 +550,79 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen>
     );
   }
 
+  Widget _buildThinkingIndicator(bool isDark, Color primaryColor) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16, right: 24),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.auto_awesome,
+                size: 14,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1A1A20) : Colors.white,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(18),
+                ),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF272730) : Colors.grey.shade200,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: primaryColor,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'StudentHub AI is analyzing campus data...',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageItem(_ChatMessage msg, bool isDark, Color primaryColor) {
     if (msg.isUser) {
       return Align(
@@ -674,7 +686,7 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF1A1A20) : Colors.white,
                       borderRadius: const BorderRadius.only(
@@ -697,33 +709,7 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Top action bar (copy button only, no model badge)
-                        Align(
-                          alignment: Alignment.topRight,
-                          child: IconButton(
-                            constraints: const BoxConstraints(),
-                            padding: EdgeInsets.zero,
-                            icon: Icon(
-                              Icons.copy_rounded,
-                              size: 14,
-                              color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-                            ),
-                            tooltip: 'Copy answer',
-                            onPressed: () {
-                              Clipboard.setData(ClipboardData(text: msg.text));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Copied response to clipboard'),
-                                  duration: Duration(seconds: 1),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-
-                        // Styled Markdown rendering for headlines, subtitles, bullets, and clean bold text
+                        // Styled Markdown rendering starting immediately at top (no empty model space)
                         MarkdownBody(
                           data: msg.text,
                           selectable: true,
@@ -788,79 +774,354 @@ class _StudentHubAiScreenState extends State<StudentHubAiScreen>
                             ),
                           ),
                         ),
+
+                        // In-built interactive post cards directly inside the bubble
+                        if (msg.citations.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF22222C) : const Color(0xFFEEF2F6),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.article_rounded,
+                                  size: 12,
+                                  color: isDark ? Colors.blue.shade300 : const Color(0xFF2563EB),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Linked Campus Posts & Events (Tap to Open)',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? Colors.blue.shade200 : const Color(0xFF1E40AF),
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ...msg.citations.map((post) {
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    PostDetailScreen.navigateTo(context, post.id);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF141419) : const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isDark ? const Color(0xFF2E2E38) : const Color(0xFFE2E8F0),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: (post.isEvent ? Colors.purple : const Color(0xFF2563EB)).withValues(alpha: 0.15),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            post.isEvent ? Icons.event : Icons.campaign_rounded,
+                                            size: 16,
+                                            color: post.isEvent ? (isDark ? Colors.purple.shade300 : Colors.purple) : const Color(0xFF2563EB),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                post.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                '${post.department} • ${post.authorName}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                'Open',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 2),
+                                              Icon(
+                                                Icons.arrow_forward_rounded,
+                                                size: 11,
+                                                color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+
+                        // In-built interactive profile cards directly inside the bubble
+                        if (msg.referencedProfiles.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF22222C) : const Color(0xFFEEF2F6),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.person_rounded,
+                                  size: 12,
+                                  color: isDark ? Colors.blue.shade300 : const Color(0xFF2563EB),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Referenced Profile (Tap to View)',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? Colors.blue.shade200 : const Color(0xFF1E40AF),
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ...msg.referencedProfiles.map((prof) {
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (c) => UserProfileScreen(
+                                          authorId: prof.authorId,
+                                          authorName: prof.authorName,
+                                          authorRole: prof.authorRole,
+                                          authorAvatarUrl: prof.authorAvatarUrl,
+                                          department: prof.department,
+                                          year: prof.year,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: isDark
+                                            ? [const Color(0xFF16161F), const Color(0xFF111116)]
+                                            : [const Color(0xFFF8FAFC), const Color(0xFFF1F5F9)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isDark ? const Color(0xFF2D2D38) : const Color(0xFFE2E8F0),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 38,
+                                          height: 38,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            gradient: const LinearGradient(
+                                              colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
+                                            ),
+                                            image: (prof.authorAvatarUrl != null && prof.authorAvatarUrl!.isNotEmpty)
+                                                ? DecorationImage(
+                                                    image: NetworkImage(prof.authorAvatarUrl!),
+                                                    fit: BoxFit.cover,
+                                                  )
+                                                : null,
+                                          ),
+                                          child: (prof.authorAvatarUrl == null || prof.authorAvatarUrl!.isEmpty)
+                                              ? Center(
+                                                  child: Text(
+                                                    prof.authorName.isNotEmpty
+                                                        ? prof.authorName[0].toUpperCase()
+                                                        : 'U',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 15,
+                                                    ),
+                                                  ),
+                                                )
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                prof.authorName,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                [
+                                                  prof.authorRole.name.toUpperCase(),
+                                                  if (prof.department != null && prof.department!.isNotEmpty)
+                                                    prof.department,
+                                                  if (prof.year != null && prof.year!.isNotEmpty)
+                                                    prof.year,
+                                                ].join(' • '),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                'Profile',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 2),
+                                              Icon(
+                                                Icons.arrow_forward_rounded,
+                                                size: 11,
+                                                color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+
+                        // Bottom action footer with copy button
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            InkWell(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () {
+                                Clipboard.setData(ClipboardData(text: msg.text));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Copied response to clipboard'),
+                                    duration: Duration(seconds: 1),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.copy_rounded,
+                                      size: 13,
+                                      color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Copy',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                        color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
                 ),
               ],
             ),
-
-            // Interactive clickable citation cards linking directly to the standalone post page
-            if (msg.citations.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.only(left: 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '📌 Cited Campus Resources (Tap to View):',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
-                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ...msg.citations.map((post) {
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () {
-                          // Opens individual post page
-                          PostDetailScreen.navigateTo(context, post.id);
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF202028) : const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isDark ? const Color(0xFF2E2E38) : Colors.grey.shade300,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                post.isEvent ? Icons.event : Icons.article_outlined,
-                                size: 18,
-                                color: post.isEvent ? Colors.purple : primaryColor,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  post.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              const Icon(Icons.arrow_forward_ios_rounded, size: 11, color: Colors.grey),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),
