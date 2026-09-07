@@ -16,6 +16,7 @@ class _UpdateModalState extends State<UpdateModal> {
   int _downloadedBytes = 0;
   int _totalBytes = 0;
   String? _errorMessage;
+  bool _isOfflineError = false;
 
   String _formatBytes(int bytes) {
     if (bytes <= 0) return '0 MB';
@@ -27,6 +28,7 @@ class _UpdateModalState extends State<UpdateModal> {
     setState(() {
       _isDownloading = true;
       _errorMessage = null;
+      _isOfflineError = false;
       _progress = 0.0;
     });
 
@@ -51,9 +53,17 @@ class _UpdateModalState extends State<UpdateModal> {
       }
     } catch (e) {
       if (mounted) {
+        final isOffline = (e is UpdateDownloadException && e.isOffline) ||
+            e.toString().toLowerCase().contains('network') ||
+            e.toString().toLowerCase().contains('connection') ||
+            e.toString().toLowerCase().contains('socket') ||
+            e.toString().toLowerCase().contains('offline') ||
+            e.toString().toLowerCase().contains('host lookup') ||
+            e.toString().toLowerCase().contains('timeout');
         setState(() {
           _isDownloading = false;
-          _errorMessage = e.toString();
+          _isOfflineError = isOffline;
+          _errorMessage = e is UpdateDownloadException ? e.message : e.toString();
         });
       }
     }
@@ -423,20 +433,55 @@ class _UpdateModalState extends State<UpdateModal> {
 
                         if (!isAlreadyUpToDate && _errorMessage != null) ...[
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                              color: _isOfflineError
+                                  ? Colors.amber.withValues(alpha: isDark ? 0.18 : 0.1)
+                                  : Colors.red.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _isOfflineError
+                                    ? Colors.amber.withValues(alpha: 0.45)
+                                    : Colors.red.withValues(alpha: 0.3),
+                              ),
                             ),
                             child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.error_outline, size: 18, color: Colors.red),
-                                const SizedBox(width: 8),
+                                Icon(
+                                  _isOfflineError ? Icons.wifi_off_rounded : Icons.error_outline,
+                                  size: 19,
+                                  color: _isOfflineError
+                                      ? (isDark ? Colors.amber.shade300 : const Color(0xFFD97706))
+                                      : Colors.red,
+                                ),
+                                const SizedBox(width: 10),
                                 Expanded(
-                                  child: Text(
-                                    _errorMessage!,
-                                    style: const TextStyle(fontSize: 11.5, color: Colors.red),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (_isOfflineError) ...[
+                                        Text(
+                                          'Connection Lost (Offline)',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                      ],
+                                      Text(
+                                        _errorMessage!,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          height: 1.35,
+                                          color: _isOfflineError
+                                              ? (isDark ? const Color(0xFFFDE68A) : const Color(0xFF78350F))
+                                              : Colors.red,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -520,14 +565,19 @@ class _UpdateModalState extends State<UpdateModal> {
                                 child: Container(
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
-                                      colors: isMandatory
-                                          ? [const Color(0xFFF59E0B), const Color(0xFFEA580C)]
-                                          : [const Color(0xFF2563EB), const Color(0xFF7C3AED)],
+                                      colors: _isOfflineError
+                                          ? [const Color(0xFFD97706), const Color(0xFFEA580C)]
+                                          : (isMandatory
+                                              ? [const Color(0xFFF59E0B), const Color(0xFFEA580C)]
+                                              : [const Color(0xFF2563EB), const Color(0xFF7C3AED)]),
                                     ),
                                     borderRadius: BorderRadius.circular(14),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: primaryColor.withValues(alpha: 0.35),
+                                        color: (_isOfflineError
+                                                ? const Color(0xFFD97706)
+                                                : primaryColor)
+                                            .withValues(alpha: 0.35),
                                         blurRadius: 12,
                                         offset: const Offset(0, 4),
                                       ),
@@ -553,11 +603,22 @@ class _UpdateModalState extends State<UpdateModal> {
                                               color: Colors.white,
                                             ),
                                           )
-                                        : const Icon(Icons.download_rounded, size: 18),
+                                        : Icon(
+                                            _isOfflineError
+                                                ? Icons.refresh_rounded
+                                                : (_errorMessage != null
+                                                    ? Icons.refresh_rounded
+                                                    : Icons.download_rounded),
+                                            size: 18,
+                                          ),
                                     label: Text(
                                       _isDownloading
                                           ? 'Downloading...'
-                                          : (_errorMessage != null ? 'Retry Download' : 'Update Now'),
+                                          : (_isOfflineError
+                                              ? 'Retry Download'
+                                              : (_errorMessage != null
+                                                  ? 'Retry Download'
+                                                  : 'Update Now')),
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,

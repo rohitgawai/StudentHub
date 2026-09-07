@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/post_model.dart';
 import 'mock_data_service.dart';
+import 'update_service.dart';
 
 /// Handles OS-level (FCM) push notifications so new posts, events and
 /// announcements appear in the system tray even while the app is closed.
@@ -135,6 +136,11 @@ class PushService {
       onDidReceiveNotificationResponse: (response) {
         final payload = response.payload;
         if (payload != null && payload.isNotEmpty) {
+          if (payload.startsWith('install_apk_')) {
+            final filePath = payload.substring('install_apk_'.length);
+            UpdateService.instance.launchInstaller(filePath);
+            return;
+          }
           if (payload.startsWith('announcement_update_') ||
               payload.toLowerCase().contains('update')) {
             triggerAppUpdate.value = true;
@@ -192,6 +198,13 @@ class PushService {
         description: 'Live campus events, workshops and registrations',
         importance: Importance.max,
         showBadge: true,
+      ),
+      AndroidNotificationChannel(
+        'app_downloads',
+        'App Updates & Downloads',
+        description: 'Download progress and completion alerts for StudentHub updates',
+        importance: Importance.low,
+        showBadge: false,
       ),
     ];
     for (final channel in channels) {

@@ -2,10 +2,21 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/update_modal.dart';
+
+class UpdateDownloadException implements Exception {
+  final String message;
+  final bool isOffline;
+
+  UpdateDownloadException(this.message, {this.isOffline = false});
+
+  @override
+  String toString() => message;
+}
 
 class AppUpdateInfo {
   final String id;
@@ -48,9 +59,9 @@ class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
 
-  // Current build numbers (synchronized with pubspec.yaml 1.4.11+44)
-  static const int currentVersionCode = 44;
-  static const String currentVersionName = '1.4.11';
+  // Current build numbers (synchronized with pubspec.yaml 1.4.13+46)
+  static const int currentVersionCode = 46;
+  static const String currentVersionName = '1.4.13';
 
   /// Compares semantic versions e.g. "1.4.10" vs "1.4.9".
   /// Returns > 0 if v1 > v2, < 0 if v1 < v2, 0 if equal.
@@ -211,15 +222,122 @@ class UpdateService {
     });
   }
 
-  /// Downloads the APK from CDN and invokes Android PackageInstaller
+  final FlutterLocalNotificationsPlugin _notificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  static const int _downloadNotifId = 9898;
+  static const String _downloadChannelId = 'app_downloads';
+  int _lastReportedPercent = -1;
+
+  /// Launches native PackageInstaller with the downloaded APK file
+  Future<void> launchInstaller(String filePath) async {
+    try {
+      await _installerChannel.invokeMethod('installApk', {
+        'filePath': filePath,
+      });
+    } catch (e) {
+      debugPrint('StudentHub: Error launching native installer: $e');
+    }
+  }
+
+  /// Posts an ongoing progress notification in the Android system drawer
+  Future<void> _showDownloadProgressNotification({
+    required String versionName,
+    required double progress,
+    required int downloaded,
+    required int total,
+  }) async {
+    try {
+      final percent = (progress * 100).toInt().clamp(0, 100);
+      if (percent == _lastReportedPercent && percent != 0 && percent != 100) {
+        return;
+      }
+      _lastReportedPercent = percent;
+
+      final downloadedMb = (downloaded / (1024 * 1024)).toStringAsFixed(1);
+      final totalMb = (total > 0 ? total / (1024 * 1024) : 0.0).toStringAsFixed(1);
+
+      final androidDetails = AndroidNotificationDetails(
+        _downloadChannelId,
+        'App Updates & Downloads',
+        channelDescription: 'Download progress for StudentHub in-app updates',
+        importance: Importance.low,
+        priority: Priority.low,
+        showProgress: true,
+        maxProgress: 100,
+        progress: percent,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        icon: '@mipmap/ic_launcher',
+      );
+
+      await _notificationsPlugin.show(
+        id: _downloadNotifId,
+        title: 'Downloading StudentHub v$versionName',
+        body: '$percent% • $downloadedMb MB / $totalMb MB',
+        notificationDetails: NotificationDetails(android: androidDetails),
+        payload: 'announcement_update',
+      );
+    } catch (_) {
+      // Notification failed silently without interrupting download
+    }
+  }
+
+  /// Posts completion alert in the notification drawer with one-tap installation
+  Future<void> _showDownloadCompleteNotification({
+    required String versionName,
+    required String filePath,
+  }) async {
+    try {
+      _lastReportedPercent = -1;
+      final androidDetails = const AndroidNotificationDetails(
+        _downloadChannelId,
+        'App Updates & Downloads',
+        channelDescription: 'Download progress for StudentHub in-app updates',
+        importance: Importance.high,
+        priority: Priority.high,
+        ongoing: false,
+        autoCancel: true,
+        icon: '@mipmap/ic_launcher',
+      );
+
+      await _notificationsPlugin.show(
+        id: _downloadNotifId,
+        title: '✅ StudentHub v$versionName Ready',
+        body: 'Download complete. Tap to install the update.',
+        notificationDetails: NotificationDetails(android: androidDetails),
+        payload: 'install_apk_$filePath',
+      );
+    } catch (_) {}
+  }
+
+  /// Clears active download progress notification
+  Future<void> _cancelDownloadNotification() async {
+    _lastReportedPercent = -1;
+    try {
+      await _notificationsPlugin.cancel(id: _downloadNotifId);
+    } catch (_) {}
+  }
+
+  /// Downloads the APK from CDN, publishes live progress to the UI & system notification drawer,
+  /// and automatically invokes the Android PackageInstaller once complete.
   Future<void> downloadAndInstall({
     required AppUpdateInfo update,
     required void Function(double progress, int downloaded, int total) onProgress,
   }) async {
     final client = http.Client();
     try {
+      _lastReportedPercent = -1;
       final request = http.Request('GET', Uri.parse(update.apkUrl));
       final response = await client.send(request);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw UpdateDownloadException(
+          'Server returned status code ${response.statusCode} while downloading update.',
+          isOffline: false,
+        );
+      }
 
       final totalBytes = response.contentLength ?? update.fileSizeBytes;
       int downloadedBytes = 0;
@@ -235,6 +353,14 @@ class UpdateService {
 
       final sink = apkFile.openWrite();
 
+      // Show initial notification
+      await _showDownloadProgressNotification(
+        versionName: update.versionName,
+        progress: 0.0,
+        downloaded: 0,
+        total: totalBytes,
+      );
+
       await response.stream.listen(
         (chunk) {
           sink.add(chunk);
@@ -242,6 +368,12 @@ class UpdateService {
           final progress =
               totalBytes > 0 ? (downloadedBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
           onProgress(progress, downloadedBytes, totalBytes);
+          _showDownloadProgressNotification(
+            versionName: update.versionName,
+            progress: progress,
+            downloaded: downloadedBytes,
+            total: totalBytes,
+          );
         },
         cancelOnError: true,
       ).asFuture();
@@ -249,10 +381,48 @@ class UpdateService {
       await sink.flush();
       await sink.close();
 
-      // Launch native PackageInstaller
-      await _installerChannel.invokeMethod('installApk', {
-        'filePath': apkFile.path,
-      });
+      // Post completion notification
+      await _showDownloadCompleteNotification(
+        versionName: update.versionName,
+        filePath: apkFile.path,
+      );
+
+      // Launch native Android PackageInstaller
+      await launchInstaller(apkFile.path);
+    } on SocketException catch (_) {
+      await _cancelDownloadNotification();
+      throw UpdateDownloadException(
+        'Internet connection lost. Please check your network and try again.',
+        isOffline: true,
+      );
+    } on http.ClientException catch (_) {
+      await _cancelDownloadNotification();
+      throw UpdateDownloadException(
+        'Connection interrupted during download. Please check your internet connection.',
+        isOffline: true,
+      );
+    } on TimeoutException catch (_) {
+      await _cancelDownloadNotification();
+      throw UpdateDownloadException(
+        'Download request timed out. Please check your connection and retry.',
+        isOffline: true,
+      );
+    } catch (e) {
+      await _cancelDownloadNotification();
+      final errStr = e.toString().toLowerCase();
+      final isOffline = errStr.contains('socket') ||
+          errStr.contains('network') ||
+          errStr.contains('connection') ||
+          errStr.contains('failed host lookup') ||
+          errStr.contains('offline') ||
+          errStr.contains('timeout');
+      if (isOffline) {
+        throw UpdateDownloadException(
+          'Internet connection lost. Please check your network and try again.',
+          isOffline: true,
+        );
+      }
+      rethrow;
     } finally {
       client.close();
     }
