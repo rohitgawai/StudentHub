@@ -217,6 +217,7 @@ class _UserDirectoryScreenState extends State<UserDirectoryScreen> {
                       final service = Provider.of<AdminSupabaseService>(context, listen: false);
                       final res = await service.adminResetUserPassword(
                         email: user.email,
+                        userId: user.id,
                         newPassword: clearMode ? null : passwordCtrl.text.trim(),
                         clearPassword: clearMode,
                       );

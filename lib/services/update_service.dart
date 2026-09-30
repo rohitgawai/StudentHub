@@ -59,9 +59,9 @@ class UpdateService {
   UpdateService._();
   static final UpdateService instance = UpdateService._();
 
-  // Current build numbers (synchronized with pubspec.yaml 1.4.13+46)
-  static const int currentVersionCode = 46;
-  static const String currentVersionName = '1.4.13';
+  // Current build numbers (synchronized with pubspec.yaml 1.4.16+49)
+  static const int currentVersionCode = 49;
+  static const String currentVersionName = '1.4.16';
 
   /// Compares semantic versions e.g. "1.4.10" vs "1.4.9".
   /// Returns > 0 if v1 > v2, < 0 if v1 < v2, 0 if equal.

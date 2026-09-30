@@ -249,16 +249,18 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> with 
     final isLoggedOut = dataService.isLoggedOut;
 
     if (isLoggedOut) {
-      if (dataService.logoutReason != null) {
+      if (dataService.logoutReason != null && !dataService.wasLoggedOutFromAnotherDevice) {
         final reason = dataService.logoutReason;
         dataService.logoutReason = null;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('📱 $reason'),
-                backgroundColor: Colors.orange.shade900,
-                duration: const Duration(seconds: 5),
+                content: Text(reason ?? ''),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                backgroundColor: const Color(0xFF1E293B),
+                duration: const Duration(seconds: 4),
               ),
             );
           }

@@ -1031,10 +1031,38 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 duration: Duration(seconds: 4),
                               ),
                             );
+                        } on PasswordRequiredException {
+                          try {
+                            await dataService.setPasswordForLogin(
+                              name: dataService.currentUser.name,
+                              email: email,
+                              mobileNumber: dataService.currentUser.mobileNumber,
+                              password: newPassword,
+                            );
+                            if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context)
+                              ..hideCurrentSnackBar()
+                              ..showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    '✅ Password set successfully! '
+                                    'You can now log in with your new password.',
+                                  ),
+                                  backgroundColor: Colors.green,
+                                  duration: Duration(seconds: 4),
+                                ),
+                              );
+                          } catch (err) {
+                            setDialogState(() {
+                              isResetting = false;
+                              errorText = err.toString().replaceAll('Exception: ', '');
+                            });
+                          }
                         } catch (e) {
                           setDialogState(() {
                             isResetting = false;
-                            errorText = e.toString();
+                            errorText = e.toString().replaceAll('Exception: ', '');
                           });
                         }
                       },

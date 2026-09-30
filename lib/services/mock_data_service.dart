@@ -882,28 +882,29 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           final hasPassword = r['has_password'] as bool? ?? false;
           final serverActiveDeviceId = r['active_device_id']?.toString() ?? '';
 
-          if (hasPassword &&
-              serverActiveDeviceId.isNotEmpty &&
-              serverActiveDeviceId != deviceId) {
-            // A password was set from another device: verify it here.
+          if (hasPassword) {
+            if (serverActiveDeviceId.isNotEmpty &&
+                serverActiveDeviceId == deviceId) {
+              // Same device that is already active on the server: log in as before, no prompt.
+              await _adoptServerProfile(
+                client,
+                r,
+                name: name,
+                email: email,
+                mobileNumber: mobileNumber,
+                deviceId: deviceId,
+              );
+              return;
+            }
+
+            // Different device, new device, or session reset (e.g. after admin temporary password):
+            // user must enter the password to verify identity!
             throw PasswordRequiredException(
               mode: PasswordMode.enter,
               email: email.trim().toLowerCase(),
               userId: r['user_id']?.toString() ?? '',
               accountName: r['name']?.toString() ?? name.trim(),
             );
-          }
-          if (hasPassword) {
-            // Same device that set the password: log in as before, no prompt.
-            await _adoptServerProfile(
-              client,
-              r,
-              name: name,
-              email: email,
-              mobileNumber: mobileNumber,
-              deviceId: deviceId,
-            );
-            return;
           }
           // Legacy account that never set a password: force it now so every
           // account ends up protected.
@@ -1254,8 +1255,10 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       case 'account_not_found':
         throw Exception('Account not found on server. Please check the email.');
       case 'credentials_missing':
-        throw Exception(
-          'No password is set for this account yet. Log in without a password first to set one.',
+        throw PasswordRequiredException(
+          mode: PasswordMode.set,
+          email: email.trim().toLowerCase(),
+          isExistingAccount: true,
         );
       default:
         throw Exception('Login failed (${res.statusCode}). Please try again.');
@@ -1368,12 +1371,21 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   UserModel? lastKnownUser;
+  bool wasLoggedOutFromAnotherDevice = false;
 
-  Future<void> logout({String? reason, bool keepAsLastKnown = true}) async {
+  Future<void> logout({
+    String? reason,
+    bool keepAsLastKnown = true,
+    bool fromAnotherDevice = false,
+  }) async {
     _isLoggedOut = true;
     logoutReason = reason;
+    wasLoggedOutFromAnotherDevice = fromAnotherDevice;
     _syncedDeviceId = null;
-    if (keepAsLastKnown &&
+    if (fromAnotherDevice) {
+      // Never offer "Continue as..." when another device actively owns the session
+      lastKnownUser = null;
+    } else if (keepAsLastKnown &&
         currentUser.name.isNotEmpty &&
         currentUser.email.isNotEmpty) {
       lastKnownUser = currentUser;
@@ -2333,18 +2345,22 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           _syncedDeviceId == currentDeviceId &&
           _kickedForDeviceId != serverActiveDeviceId) {
         _kickedForDeviceId = serverActiveDeviceId;
-        debugPrint('StudentHub: Active device changed on server. Triggering auto-logout & security notification.');
+        debugPrint('StudentHub: Active device rotated to $serverActiveDeviceId. Signing out this device smoothly.');
         _notifications.insert(
           0,
           NotificationModel(
-            id: 'notif_sec_${DateTime.now().microsecondsSinceEpoch}',
-            title: '🚨 Security Alert: New Device Login',
-            body: 'Someone logged into your account from another device. For safety, this previous session was automatically terminated.',
+            id: 'notif_dev_${DateTime.now().microsecondsSinceEpoch}',
+            title: 'Logged in on Another Device',
+            body: 'Your account is now active on another device. For single-device security, this device was signed out.',
             category: NotificationCategory.personal,
             timestamp: DateTime.now(),
           ),
         );
-        unawaited(logout(reason: '🚨 Security Alert: Someone logged into your account from another device. Session terminated for safety.'));
+        unawaited(logout(
+          reason: 'Your account is currently active on another device.',
+          keepAsLastKnown: false,
+          fromAnotherDevice: true,
+        ));
         return true;
       } else {
         try {

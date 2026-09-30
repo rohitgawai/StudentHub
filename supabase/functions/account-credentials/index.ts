@@ -28,11 +28,15 @@ interface RequestPayload {
   password?: string
   device_id?: string
   admin_user_id?: string
+  user_id?: string
 }
 
 interface ProfileRow {
   user_id: string
   has_password: boolean
+  roles?: string[]
+  student_or_employee_id?: string
+  is_verified?: boolean
 }
 
 interface CredentialRow {
@@ -89,6 +93,7 @@ Deno.serve(async (req: Request) => {
   const email = (payload.email ?? '').trim().toLowerCase()
   const password = payload.password ?? ''
   const deviceId = (payload.device_id ?? '').trim()
+  const explicitUserId = (payload.user_id ?? '').trim()
 
   if (!email || !password || !deviceId) {
     return errorResponse('Missing email, password, or device_id', 400)
@@ -100,47 +105,85 @@ Deno.serve(async (req: Request) => {
     return errorResponse('Invalid action', 400)
   }
 
-  const { data: profiles, error: profileError } = await supabase
+  let profileQuery = supabase
     .from('profiles')
-    .select('user_id, has_password')
-    .eq('email', email)
-    .limit(1)
+    .select('user_id, has_password, roles, student_or_employee_id, is_verified')
+  
+  if (explicitUserId) {
+    profileQuery = profileQuery.eq('user_id', explicitUserId)
+  } else {
+    profileQuery = profileQuery.eq('email', email)
+  }
+
+  const { data: profiles, error: profileError } = await profileQuery.limit(5)
 
   if (profileError) {
     console.error('account-credentials profile lookup failed', profileError.message)
-    return errorResponse('Internal error', 500)
+    return errorResponse('Internal error: ' + profileError.message, 500)
   }
   if (!profiles || profiles.length === 0) {
     return errorResponse('account_not_found', 404)
   }
 
-  const profile = profiles[0] as ProfileRow
-  const userId = String(profile.user_id)
-  const hasPassword = Boolean(profile.has_password)
+  // Filter out soft-deleted profiles if multiple rows exist
+  let bestProfile: ProfileRow = profiles[0] as ProfileRow
+  if (profiles.length > 1) {
+    let bestScore = -1
+    for (const p of profiles as ProfileRow[]) {
+      const roles = p.roles ?? []
+      if (roles.includes('deleted')) continue
+      let score = 0
+      if ((p.student_or_employee_id ?? '').length > 0) score += 4
+      if (p.is_verified) score += 1
+      if (score > bestScore) {
+        bestScore = score
+        bestProfile = p
+      }
+    }
+  }
+
+  const userId = String(bestProfile.user_id)
+  const hasPassword = Boolean(bestProfile.has_password)
 
   if (action === 'admin_clear_password') {
-    await supabase.from('profile_credentials').delete().eq('user_id', userId)
-    await supabase
+    const { error: delError } = await supabase.from('profile_credentials').delete().eq('user_id', userId)
+    if (delError) {
+      console.error('admin_clear_password cred delete failed', delError.message)
+      return errorResponse('Database error clearing credentials: ' + delError.message, 500)
+    }
+    const { error: profError } = await supabase
       .from('profiles')
-      .update({ has_password: false, active_device_id: null, updated_at: new Date().toISOString() })
+      .update({ has_password: false, active_device_id: '', updated_at: new Date().toISOString() })
       .eq('user_id', userId)
-    return jsonResponse({ ok: true, user_id: userId, message: 'Password cleared. User will set a new one on next login.' })
+    if (profError) {
+      console.error('admin_clear_password profile update failed', profError.message)
+      return errorResponse('Database error updating profile: ' + profError.message, 500)
+    }
+    return jsonResponse({ ok: true, user_id: userId, message: 'Password requirement wiped. Student can set a new password on their next login.' })
   }
 
   if (action === 'admin_reset_password') {
     const newHash = bcrypt.hashSync(password, 10)
-    await supabase.from('profile_credentials').upsert(
+    const { error: credError } = await supabase.from('profile_credentials').upsert(
       {
         user_id: userId,
         password_hash: newHash,
-        created_device_id: null,
+        created_device_id: '', // Empty string, never null (satisfies NOT NULL default '')
       },
       { onConflict: 'user_id' },
     )
-    await supabase
+    if (credError) {
+      console.error('admin_reset_password cred upsert failed', credError.message)
+      return errorResponse('Database error resetting credentials: ' + credError.message, 500)
+    }
+    const { error: profError } = await supabase
       .from('profiles')
-      .update({ has_password: true, updated_at: new Date().toISOString() })
+      .update({ has_password: true, active_device_id: '', updated_at: new Date().toISOString() })
       .eq('user_id', userId)
+    if (profError) {
+      console.error('admin_reset_password profile update failed', profError.message)
+      return errorResponse('Database error updating profile: ' + profError.message, 500)
+    }
     return jsonResponse({ ok: true, user_id: userId, message: 'Password reset successfully by admin.' })
   }
 
@@ -183,6 +226,26 @@ Deno.serve(async (req: Request) => {
     return errorResponse('Internal error', 500)
   }
   if (!creds || creds.length === 0) {
+    if (action === 'reset_password') {
+      const newHash = bcrypt.hashSync(password, 10)
+      const { error: upsertError } = await supabase.from('profile_credentials').upsert(
+        {
+          user_id: userId,
+          password_hash: newHash,
+          created_device_id: deviceId,
+        },
+        { onConflict: 'user_id' },
+      )
+      if (upsertError) {
+        console.error('account-credentials reset upsert failed', upsertError.message)
+        return errorResponse('Internal error: ' + upsertError.message, 500)
+      }
+      await supabase
+        .from('profiles')
+        .update({ active_device_id: deviceId, has_password: true, updated_at: new Date().toISOString() })
+        .eq('user_id', userId)
+      return jsonResponse({ ok: true, user_id: userId })
+    }
     return errorResponse('credentials_missing', 409)
   }
 
@@ -220,6 +283,15 @@ Deno.serve(async (req: Request) => {
   if (!bcrypt.compareSync(password, hash)) {
     await new Promise((r) => setTimeout(r, 1000))
     return errorResponse('wrong_password', 401)
+  }
+
+  // If created_device_id was empty (e.g. wiped or set by admin for lost device recovery),
+  // adopt this logging-in device as the new primary device.
+  if (!createdDeviceId) {
+    await supabase
+      .from('profile_credentials')
+      .update({ created_device_id: deviceId, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
   }
 
   const { error: deviceError } = await supabase

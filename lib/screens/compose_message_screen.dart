@@ -27,43 +27,76 @@ class _ComposeMessageScreenState extends State<ComposeMessageScreen> {
     super.dispose();
   }
 
-  void _send() {
-    final service = Provider.of<MockDataService>(context, listen: false);
+  Set<String> _getRecipientIds(MockDataService service, PostModel post) {
+    return <String>{
+      ...post.registeredUserIds,
+      ...service
+          .submissionsForPost(post.id)
+          .map((s) => s.userId),
+    }..removeWhere((id) => id.isEmpty);
+  }
+
+  Future<void> _send() async {
     final title = _titleCtrl.text.trim();
     final body = _bodyCtrl.text.trim();
-    if (title.isEmpty && body.isEmpty) {
+
+    if (title.isEmpty || body.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Write a short message before sending.'),
+          content: Text('Please enter both a title and message body.'),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
+
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final service = Provider.of<MockDataService>(context, listen: false);
+    final recipientCount = _getRecipientIds(service, widget.post).length;
+
     setState(() => _sending = true);
-    service.sendMessageToRegistrants(
-      post: widget.post,
-      title: title,
-      body: body,
-    );
-    Navigator.of(context).pop(true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '📨 Message sent to ${service.submissionsForPost(widget.post.id).length} '
-          '${widget.post.isEvent ? 'registered students' : 'respondents'}.',
+
+    try {
+      await service.sendMessageToRegistrants(
+        post: widget.post,
+        title: title,
+        body: body,
+      );
+
+      navigator.pop(true);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '📨 Message sent to $recipientCount '
+            '${widget.post.isEvent ? 'registered students' : 'respondents'}.',
+          ),
+          backgroundColor: Colors.green,
         ),
-        backgroundColor: Colors.green,
-      ),
-    );
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _sending = false);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to send message: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<MockDataService>(context);
-    final post = widget.post;
-    final count = service.submissionsForPost(post.id).length;
+    final post = service.posts.firstWhere(
+      (p) => p.id == widget.post.id,
+      orElse: () => widget.post,
+    );
+    final recipientCount = _getRecipientIds(service, post).length;
     final accent = post.isEvent ? service.config.eventColor : service.config.primaryColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -95,10 +128,14 @@ class _ComposeMessageScreenState extends State<ComposeMessageScreen> {
                   )
                 : const Icon(Icons.send_outlined, size: 19),
             label: Text(
-              _sending ? 'Sending…' : 'Send to $count students',
+              _sending
+                  ? 'Sending…'
+                  : recipientCount == 0
+                      ? 'No recipients registered'
+                      : 'Send to $recipientCount students',
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
-            onPressed: _sending ? null : _send,
+            onPressed: (_sending || recipientCount == 0) ? null : _send,
           ),
         ),
       ),
@@ -118,11 +155,13 @@ class _ComposeMessageScreenState extends State<ComposeMessageScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Recipients: $count students who registered for "${post.title}"',
+                    recipientCount == 0
+                        ? 'No students have registered for "${post.title}" yet.'
+                        : 'Recipients: $recipientCount students who registered for "${post.title}"',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      color: isDark ? Colors.white70 : Colors.black87,
                     ),
                   ),
                 ),

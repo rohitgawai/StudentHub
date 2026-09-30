@@ -38,6 +38,117 @@ class _AuthScreenState extends State<AuthScreen> {
   final confirmPasswordController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final dataService = Provider.of<MockDataService>(context, listen: false);
+      if (dataService.wasLoggedOutFromAnotherDevice) {
+        dataService.wasLoggedOutFromAnotherDevice = false;
+        _showAnotherDeviceNotice(context);
+      }
+    });
+  }
+
+  void _showAnotherDeviceNotice(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF18181B) : Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isDark ? const Color(0xFF27272A) : const Color(0xFFE2E8F0),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.12),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Grab handle
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Icon Badge
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2563EB).withValues(alpha: isDark ? 0.2 : 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.devices_rounded,
+                  color: Color(0xFF2563EB),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Signed in on Another Device',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Your account is now active on another phone. For single-device security, you have been signed out on this device.\n\nTo use StudentHub here, simply log in again with your password.',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text(
+                    'Log In on This Device',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   void dispose() {
     nameController.dispose();
     emailController.dispose();
@@ -366,6 +477,24 @@ class _AuthScreenState extends State<AuthScreen> {
                               ),
                             );
                           }
+                        } on PasswordRequiredException catch (e) {
+                          if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                          if (mounted) {
+                            setState(() {
+                              _passwordMode = e.mode;
+                              _passwordError = '';
+                              passwordController.clear();
+                              confirmPasswordController.clear();
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Password requirement was wiped by Admin. Please set your new password below.',
+                                ),
+                                backgroundColor: Color(0xFF2563EB),
+                              ),
+                            );
+                          }
                         } catch (e) {
                           if (dialogCtx.mounted) {
                             setDialogState(() {
@@ -407,7 +536,9 @@ class _AuthScreenState extends State<AuthScreen> {
             ? storedLast
             : null) ??
         sessionCandidate;
-    final hasLastUser = lastUser != null && lastUser.email.isNotEmpty;
+    final hasLastUser = lastUser != null &&
+        lastUser.email.isNotEmpty &&
+        !dataService.wasLoggedOutFromAnotherDevice;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(

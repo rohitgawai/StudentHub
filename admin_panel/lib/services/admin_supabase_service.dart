@@ -617,6 +617,7 @@ class AdminSupabaseService extends ChangeNotifier {
   // --- 6. Admin Password Reset / Wipe ---
   Future<({bool success, String message})> adminResetUserPassword({
     required String email,
+    String? userId,
     String? newPassword,
     bool clearPassword = false,
   }) async {
@@ -627,6 +628,7 @@ class AdminSupabaseService extends ChangeNotifier {
         {
           'action': action,
           'email': email,
+          if (userId != null && userId.isNotEmpty) 'user_id': userId,
           'password': newPassword ?? '123456',
           'device_id': 'admin_panel',
         },
@@ -639,9 +641,14 @@ class AdminSupabaseService extends ChangeNotifier {
           message: data['message']?.toString() ?? 'Password updated successfully.',
         );
       } else {
+        String serverMsg = 'Server responded with code ${res.statusCode}';
+        try {
+          final data = jsonDecode(res.body);
+          if (data['error'] != null) serverMsg = data['error'].toString();
+        } catch (_) {}
         return (
           success: false,
-          message: 'Server responded with code ${res.statusCode}: ${res.body}',
+          message: serverMsg,
         );
       }
     } catch (e) {
