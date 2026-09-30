@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/api_keys.dart';
 import '../models/post_model.dart';
 import '../models/user_model.dart';
 
@@ -53,10 +54,8 @@ class AiService {
   AiService._();
   static final AiService instance = AiService._();
 
-  static const String _geminiApiKey =
-      'AQ.Ab8RN6K0bzZoLiVVqA6wCwDsd8y9CYeNxjXDyArse7bfcnRVXQ';
-  static const String _groqApiKey =
-      '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';
+  static const String _geminiApiKey = ApiKeys.geminiApiKey;
+  static const String _groqApiKey = ApiKeys.groqApiKey;
 
   // Cache for fetched profile records to enrich coordinator information
   final Map<String, Map<String, dynamic>> _profileCache = {};

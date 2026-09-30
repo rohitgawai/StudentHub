@@ -46,3 +46,6 @@ app.*.map.json
 
 # Local dev reference docs that contain the shared secret
 /windows/follow-up/
+
+# Private API keys (Gemini, Groq, etc.) - DO NOT COMMIT TO PUBLIC REPO
+lib/config/api_keys.dart

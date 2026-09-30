@@ -1,0 +1,18 @@
+// Example configuration for API keys.
+// Copy this file to `lib/config/api_keys.dart` and fill in your keys.
+
+class ApiKeys {
+  const ApiKeys._();
+
+  /// Google Gemini API Key for campus AI assistant.
+  static const String geminiApiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: 'YOUR_GEMINI_API_KEY_HERE',
+  );
+
+  /// Groq API Key for fallback AI generation.
+  static const String groqApiKey = String.fromEnvironment(
+    'GROQ_API_KEY',
+    defaultValue: 'YOUR_GROQ_API_KEY_HERE',
+  );
+}
