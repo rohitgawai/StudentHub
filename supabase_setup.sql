@@ -44,6 +44,7 @@ alter table public.posts add column if not exists like_count integer not null de
 alter table public.posts add column if not exists liked_user_ids text[] not null default '{}';
 alter table public.posts add column if not exists links text not null default '[]';
 alter table public.posts add column if not exists form text not null default '{}';
+alter table public.posts add column if not exists author_avatar_url text not null default '';
 
 alter table public.posts enable row level security;
 
@@ -87,6 +88,7 @@ alter table public.profiles add column if not exists mobile_number text not null
 alter table public.profiles add column if not exists active_device_id text not null default '';
 alter table public.profiles add column if not exists has_completed_progressive_form boolean not null default false;
 alter table public.profiles add column if not exists liked_post_ids text[] not null default '{}';
+alter table public.profiles add column if not exists interests text[] not null default '{}';
 
 create index if not exists idx_profiles_email on public.profiles (email);
 
@@ -205,3 +207,6 @@ create policy "documents_select_anon" on storage.objects for select using (bucke
 
 drop policy if exists "documents_delete_anon" on storage.objects;
 create policy "documents_delete_anon" on storage.objects for delete using (bucket_id = 'documents');
+
+drop policy if exists "documents_update_anon" on storage.objects;
+create policy "documents_update_anon" on storage.objects for update to anon, authenticated using (bucket_id = 'documents');

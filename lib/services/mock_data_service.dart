@@ -1755,12 +1755,14 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
             changed = true;
           }
           if (avatar.isNotEmpty) {
+            final oldAvatar = _authorAvatarCache[uid];
+            if (oldAvatar != null && oldAvatar != avatar) {
+              clearCachedImage(oldAvatar);
+              clearCachedImage(avatar);
+            }
             _authorAvatarCache[uid] = avatar;
             for (var i = 0; i < _posts.length; i++) {
-              if (_posts[i].authorId == uid &&
-                  (_posts[i].authorAvatarUrl == null ||
-                      _posts[i].authorAvatarUrl!.isEmpty ||
-                      _posts[i].authorAvatarUrl != avatar)) {
+              if (_posts[i].authorId == uid && _posts[i].authorAvatarUrl != avatar) {
                 _posts[i] = _posts[i].copyWith(authorAvatarUrl: avatar);
                 changed = true;
               }
@@ -1925,6 +1927,35 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
                     notifyListeners();
                     _scheduleLocalSave();
                   }
+                }
+              } catch (_) {}
+            },
+          )
+          .onBroadcast(
+            event: 'profile_updated',
+            callback: (payload) {
+              try {
+                final targetUserId = payload['user_id']?.toString() ?? '';
+                final newAvatar = payload['avatar_url']?.toString() ?? '';
+                if (targetUserId.isNotEmpty && targetUserId != currentUser.id) {
+                  final sanitized = _sanitizeAvatarUrl(newAvatar) ?? '';
+                  final oldAvatar = _authorAvatarCache[targetUserId];
+                  if (oldAvatar != null && oldAvatar.isNotEmpty) {
+                    clearCachedImage(oldAvatar);
+                  }
+                  clearCachedImage(sanitized);
+                  _authorAvatarCache[targetUserId] = sanitized;
+                  if (_knownProfiles.containsKey(targetUserId)) {
+                    _knownProfiles[targetUserId] = _knownProfiles[targetUserId]!.copyWith(avatarUrl: sanitized);
+                  }
+                  for (var i = 0; i < _posts.length; i++) {
+                    if (_posts[i].authorId == targetUserId && _posts[i].authorAvatarUrl != sanitized) {
+                      _posts[i] = _posts[i].copyWith(authorAvatarUrl: sanitized);
+                    }
+                  }
+                  _invalidateDataCaches();
+                  notifyListeners();
+                  _scheduleLocalSave();
                 }
               } catch (_) {}
             },
@@ -2464,7 +2495,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     final currentDeviceId = await LocalStoreService.instance.getDeviceId();
     final rows = await client
         .from('profiles')
-        .select('user_id, roles, is_verified, active_device_id, has_password, has_completed_progressive_form, appreciated_by_user_ids, notifications_cleared_at')
+        .select('user_id, roles, is_verified, active_device_id, has_password, has_completed_progressive_form, appreciated_by_user_ids, notifications_cleared_at, avatar_url')
         .eq('user_id', currentUser.id)
         .limit(1)
         .timeout(const Duration(seconds: 12));
@@ -2588,9 +2619,17 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       _profileLikes[currentUser.id] = ownAppreciatedBy.length;
     }
 
+    final serverAvatar = _sanitizeAvatarUrl(row['avatar_url']?.toString()) ?? '';
+    final hasPendingLocalAvatar = currentUser.avatarUrl.startsWith('data:') ||
+        _localStore.isLocalRef(currentUser.avatarUrl);
+    final avatarChanged = serverAvatar.isNotEmpty &&
+        serverAvatar != currentUser.avatarUrl &&
+        !hasPendingLocalAvatar;
+
     if (!rolesChanged &&
         serverHasCompleted == currentUser.hasCompletedProgressiveForm &&
-        !appreciationChanged) {
+        !appreciationChanged &&
+        !avatarChanged) {
       return false;
     }
 
@@ -2599,10 +2638,20 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     // device without a re-login. An empty server list means "nothing granted
     // yet", so the local default (Student) survives for fresh profiles.
     final effectiveRoles = serverRoles.isEmpty ? currentUser.roles : serverRoles;
-    final serverAvatar = _sanitizeAvatarUrl(row['avatar_url']?.toString()) ?? '';
-    final avatarToSet = (serverAvatar.isNotEmpty && (currentUser.avatarUrl.isEmpty || !currentUser.avatarUrl.startsWith('http')))
+    final avatarToSet = (serverAvatar.isNotEmpty && !hasPendingLocalAvatar)
         ? serverAvatar
         : currentUser.avatarUrl;
+
+    if (avatarToSet != currentUser.avatarUrl) {
+      clearCachedImage(currentUser.avatarUrl);
+      clearCachedImage(avatarToSet);
+      _authorAvatarCache[currentUser.id] = avatarToSet;
+      for (var i = 0; i < _posts.length; i++) {
+        if (_posts[i].authorId == currentUser.id && _posts[i].authorAvatarUrl != avatarToSet) {
+          _posts[i] = _posts[i].copyWith(authorAvatarUrl: avatarToSet);
+        }
+      }
+    }
 
     currentUser = currentUser.copyWith(
       roles: effectiveRoles,
@@ -2633,12 +2682,14 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     final client = _client;
     if (client == null) return;
     try {
+      final oldAvatar = currentUser.avatarUrl;
       final avatar = await _uploadAvatarIfNeeded(client, currentUser.avatarUrl);
       if (avatar != currentUser.avatarUrl) {
         currentUser = currentUser.copyWith(avatarUrl: avatar);
+        clearCachedImage(oldAvatar);
       }
       final deviceId = await LocalStoreService.instance.getDeviceId();
-      await client.from('profiles').upsert({
+      final profilePayload = <String, dynamic>{
         'user_id': currentUser.id,
         'name': currentUser.name,
         'email': currentUser.email,
@@ -2656,25 +2707,40 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         'liked_post_ids': currentUser.likedPostIds,
         'is_verified': currentUser.isVerified,
         'updated_at': DateTime.now().toIso8601String(),
-      }, onConflict: 'user_id');
+      };
+      await client.from('profiles').upsert(profilePayload, onConflict: 'user_id');
       _syncedDeviceId = deviceId;
 
+      // Update author_avatar_url on all posts authored by this user in Supabase
+      try {
+        await client.from('posts').update({
+          'author_avatar_url': avatar,
+        }).eq('author_id', currentUser.id);
+      } catch (_) {}
+
       // Update authorAvatarUrl on all posts authored by this user locally
-      if (avatar.isNotEmpty) {
-        _authorAvatarCache[currentUser.id] = avatar;
-        var postsUpdated = false;
-        for (var i = 0; i < _posts.length; i++) {
-          if (_posts[i].authorId == currentUser.id && _posts[i].authorAvatarUrl != avatar) {
-            _posts[i] = _posts[i].copyWith(authorAvatarUrl: avatar);
-            postsUpdated = true;
-          }
-        }
-        if (postsUpdated) {
-          _invalidateDataCaches();
-          notifyListeners();
-          _scheduleLocalSave();
+      _authorAvatarCache[currentUser.id] = avatar;
+      for (var i = 0; i < _posts.length; i++) {
+        if (_posts[i].authorId == currentUser.id && _posts[i].authorAvatarUrl != avatar) {
+          _posts[i] = _posts[i].copyWith(authorAvatarUrl: avatar);
         }
       }
+      clearCachedImage(avatar);
+      _invalidateDataCaches();
+      notifyListeners();
+      _scheduleLocalSave();
+
+      // Broadcast profile update to other active devices in real-time
+      try {
+        client.channel('public:posts').sendBroadcastMessage(
+          event: 'profile_updated',
+          payload: {
+            'user_id': currentUser.id,
+            'user_name': currentUser.name,
+            'avatar_url': avatar,
+          },
+        );
+      } catch (_) {}
     } catch (e) {
       debugPrint('StudentHub: profile not persisted: $e');
     }
@@ -2696,7 +2762,8 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           : await _localStore.readLocalBlob(url);
       if (bytes == null || bytes.isEmpty) return url;
       final ext = _extFromDataUri(url);
-      final path = 'avatars/${currentUser.id}.$ext';
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final path = 'avatars/${currentUser.id}_$stamp.$ext';
       final ok = await _uploadBinaryWithRetry(
         client,
         path,
@@ -2705,10 +2772,10 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       );
       if (!ok) return url;
       final publicUrl = client.storage.from('documents').getPublicUrl(path);
-      final stamp = DateTime.now().millisecondsSinceEpoch;
       final stamped = '$publicUrl?v=$stamp';
       clearCachedImage(url);
       clearCachedImage(publicUrl);
+      clearCachedImage(stamped);
       return stamped;
     } catch (_) {
       return url;
@@ -2729,7 +2796,8 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           : await _localStore.readLocalBlob(url);
       if (bytes == null || bytes.isEmpty) return url;
       final ext = _extFromDataUri(url);
-      final path = 'avatars/$authorId.$ext';
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final path = 'avatars/${authorId}_$stamp.$ext';
       final ok = await _uploadBinaryWithRetry(
         client,
         path,
@@ -2738,10 +2806,10 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       );
       if (!ok) return null;
       final publicUrl = client.storage.from('documents').getPublicUrl(path);
-      final stamp = DateTime.now().millisecondsSinceEpoch;
       final stamped = '$publicUrl?v=$stamp';
       clearCachedImage(url);
       clearCachedImage(publicUrl);
+      clearCachedImage(stamped);
       return stamped;
     } catch (_) {
       return null;
@@ -3107,6 +3175,19 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         form = null;
       }
     }
+    final authorId = row['author_id']?.toString() ?? '';
+    final authorAvatar = _sanitizeAvatarUrl(
+      (row['author_avatar_url'] as String?)?.isNotEmpty == true
+          ? (row['author_avatar_url'] as String)
+          : _resolveAuthorAvatar(
+              authorId,
+              row['author_name']?.toString(),
+            ),
+    );
+    if (authorId.isNotEmpty && authorAvatar != null && authorAvatar.isNotEmpty) {
+      _authorAvatarCache[authorId] = authorAvatar;
+    }
+
     return PostModel(
       id: row['id']!.toString(),
       title: row['title']?.toString() ?? '',
@@ -3122,14 +3203,8 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         (r) => r.name == row['author_role'],
         orElse: () => UserRole.student,
       ),
-      authorId: row['author_id']?.toString() ?? '',
-      authorAvatarUrl: _sanitizeAvatarUrl(
-        (row['author_avatar_url'] as String?) ??
-            _resolveAuthorAvatar(
-              row['author_id']?.toString(),
-              row['author_name']?.toString(),
-            ),
-      ),
+      authorId: authorId,
+      authorAvatarUrl: authorAvatar,
       timestamp: _parseDate(row['created_at']) ?? DateTime.now(),
       imageUrl: (row['image_url'] is String && (row['image_url'] as String).trim().isNotEmpty)
           ? (row['image_url'] as String).trim()
@@ -3237,6 +3312,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       'author_name': p.authorName,
       'author_role': p.authorRole.name,
       'author_id': p.authorId,
+      'author_avatar_url': cleanUrl(p.authorAvatarUrl) ?? '',
       'image_url': cleanUrl(p.imageUrl),
       'image_urls': cleanGallery,
       'is_urgent': p.isUrgent,
@@ -4819,7 +4895,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       mobileNumber: (mobileNumber != null && mobileNumber.trim().isNotEmpty)
           ? mobileNumber.trim()
           : currentUser.mobileNumber,
-      avatarUrl: (avatarUrl != null && avatarUrl.trim().isNotEmpty)
+      avatarUrl: avatarUrl != null
           ? avatarUrl.trim()
           : currentUser.avatarUrl,
     );

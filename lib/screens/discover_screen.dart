@@ -317,7 +317,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         name: p.authorName,
         role: p.authorRole,
         dept: p.department,
-        avatarUrl: p.authorAvatarUrl,
+        avatarUrl: dataService.getAuthorAvatar(p.authorId, p.authorName) ?? p.authorAvatarUrl,
         postCount: nonEventPosts.where((x) => x.authorName == p.authorName).length,
       ));
     }

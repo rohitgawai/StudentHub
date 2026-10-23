@@ -18,6 +18,7 @@ class ProfileAvatarZoomDialog extends StatefulWidget {
 
 class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
   late String currentAvatar;
+  bool _isUpdating = false;
 
   @override
   void initState() {
@@ -26,11 +27,12 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
   }
 
   Future<void> _pickAvatarFromDevice() async {
+    if (_isUpdating) return;
     try {
       final picked = await pickImageFromDevice();
       if (picked != null && picked.source != null) {
         if (!mounted) return;
-        _updateAvatar(picked.source!);
+        await _updateAvatar(picked.source!);
       }
     } catch (e) {
       if (!mounted) return;
@@ -43,44 +45,81 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
     }
   }
 
-  void _updateAvatar(String newUrl) {
-    final dataService = Provider.of<MockDataService>(context, listen: false);
-    final u = dataService.currentUser;
-    dataService.updateUserProfile(
-      name: u.name,
-      department: u.department,
-      year: u.year,
-      avatarUrl: newUrl,
-    );
+  Future<void> _updateAvatar(String newUrl) async {
     setState(() {
-      currentAvatar = newUrl;
+      _isUpdating = true;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('📸 Profile picture updated successfully!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    try {
+      final dataService = Provider.of<MockDataService>(context, listen: false);
+      final u = dataService.currentUser;
+      await dataService.updateUserProfile(
+        name: u.name,
+        department: u.department,
+        year: u.year,
+        avatarUrl: newUrl,
+      );
+      if (!mounted) return;
+      setState(() {
+        currentAvatar = dataService.currentUser.avatarUrl;
+        _isUpdating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📸 Profile picture updated successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isUpdating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Failed to update profile picture: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  void _removeAvatar() {
-    final dataService = Provider.of<MockDataService>(context, listen: false);
-    final u = dataService.currentUser;
-    dataService.updateUserProfile(
-      name: u.name,
-      department: u.department,
-      year: u.year,
-      avatarUrl: '',
-    );
+  Future<void> _removeAvatar() async {
+    if (_isUpdating) return;
     setState(() {
-      currentAvatar = '';
+      _isUpdating = true;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Profile picture removed.'),
-        backgroundColor: Colors.orange,
-      ),
-    );
+    try {
+      final dataService = Provider.of<MockDataService>(context, listen: false);
+      final u = dataService.currentUser;
+      await dataService.updateUserProfile(
+        name: u.name,
+        department: u.department,
+        year: u.year,
+        avatarUrl: '',
+      );
+      if (!mounted) return;
+      setState(() {
+        currentAvatar = '';
+        _isUpdating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile picture removed.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isUpdating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Failed to remove profile picture: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -116,7 +155,7 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
                     tooltip: 'Back',
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: _isUpdating ? null : () => Navigator.of(context).pop(),
                   ),
                   const SizedBox(width: 8),
                   const Expanded(
@@ -137,36 +176,66 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
             SizedBox(
               width: squareBoxSize,
               height: squareBoxSize,
-              child: Container(
-                color: const Color(0xFF020617),
-                child: ClipRect(
-                  child: InteractiveViewer(
-                    minScale: 1.0,
-                    maxScale: 4.0,
-                    clipBehavior: Clip.hardEdge,
-                    child: currentAvatar.isNotEmpty
-                        ? AppImage(
-                            source: currentAvatar,
-                            fit: BoxFit.cover,
-                            width: squareBoxSize,
-                            height: squareBoxSize,
-                            errorChild: const Center(
-                              child: Icon(
-                                Icons.person,
-                                size: 120,
-                                color: Colors.white30,
+              child: Stack(
+                children: [
+                  Container(
+                    width: squareBoxSize,
+                    height: squareBoxSize,
+                    color: const Color(0xFF020617),
+                    child: ClipRect(
+                      child: InteractiveViewer(
+                        minScale: 1.0,
+                        maxScale: 4.0,
+                        clipBehavior: Clip.hardEdge,
+                        child: currentAvatar.isNotEmpty
+                            ? AppImage(
+                                key: ValueKey(currentAvatar),
+                                source: currentAvatar,
+                                fit: BoxFit.cover,
+                                width: squareBoxSize,
+                                height: squareBoxSize,
+                                errorChild: const Center(
+                                  child: Icon(
+                                    Icons.person,
+                                    size: 120,
+                                    color: Colors.white30,
+                                  ),
+                                ),
+                              )
+                            : const Center(
+                                child: Icon(
+                                  Icons.person,
+                                  size: 120,
+                                  color: Colors.white30,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                  if (_isUpdating)
+                    Container(
+                      width: squareBoxSize,
+                      height: squareBoxSize,
+                      color: Colors.black.withValues(alpha: 0.65),
+                      child: const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(color: Colors.white),
+                            SizedBox(height: 14),
+                            Text(
+                              'Saving to server...',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          )
-                        : const Center(
-                            child: Icon(
-                              Icons.person,
-                              size: 120,
-                              color: Colors.white30,
-                            ),
-                          ),
-                  ),
-                ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
 
@@ -178,12 +247,16 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   TextButton.icon(
-                    onPressed: _pickAvatarFromDevice,
-                    icon: const Icon(Icons.camera_alt_outlined, color: Colors.white70, size: 20),
-                    label: const Text(
+                    onPressed: _isUpdating ? null : _pickAvatarFromDevice,
+                    icon: Icon(
+                      Icons.camera_alt_outlined,
+                      color: _isUpdating ? Colors.white30 : Colors.white70,
+                      size: 20,
+                    ),
+                    label: Text(
                       'Edit Photo',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: _isUpdating ? Colors.white38 : Colors.white,
                         fontWeight: FontWeight.w600,
                         fontSize: 13.5,
                       ),
@@ -191,12 +264,16 @@ class _ProfileAvatarZoomDialogState extends State<ProfileAvatarZoomDialog> {
                   ),
                   if (currentAvatar.isNotEmpty)
                     TextButton.icon(
-                      onPressed: _removeAvatar,
-                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                      label: const Text(
+                      onPressed: _isUpdating ? null : _removeAvatar,
+                      icon: Icon(
+                        Icons.delete_outline,
+                        color: _isUpdating ? Colors.white30 : Colors.redAccent,
+                        size: 20,
+                      ),
+                      label: Text(
                         'Remove Photo',
                         style: TextStyle(
-                          color: Colors.redAccent,
+                          color: _isUpdating ? Colors.white38 : Colors.redAccent,
                           fontWeight: FontWeight.w600,
                           fontSize: 13.5,
                         ),

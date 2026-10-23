@@ -435,6 +435,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         alignment: Alignment.center,
                         children: [
                           CircleAvatar(
+                            key: ValueKey(user.avatarUrl),
                             radius: 46,
                             backgroundColor: cfg.primaryColor.withValues(alpha: 0.12),
                             backgroundImage: resolveImageProvider(

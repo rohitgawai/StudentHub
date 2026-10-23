@@ -206,12 +206,14 @@ ${post.isEvent && post.venue != null ? "📍 Venue: ${post.venue}\n" : ""}${post
                                   child: Builder(
                                     builder: (context) {
                                       final dataService = Provider.of<MockDataService>(context, listen: true);
-                                      final avatarUrl = (post.authorAvatarUrl != null && post.authorAvatarUrl!.isNotEmpty)
-                                          ? post.authorAvatarUrl!
-                                          : (dataService.getAuthorAvatar(post.authorId, post.authorName) ?? '');
+                                      final authorAvatar = dataService.getAuthorAvatar(post.authorId, post.authorName);
+                                      final avatarUrl = (authorAvatar != null && authorAvatar.isNotEmpty)
+                                          ? authorAvatar
+                                          : (post.authorAvatarUrl ?? '');
 
                                       if (avatarUrl.isNotEmpty) {
                                         return AppImage(
+                                          key: ValueKey(avatarUrl),
                                           source: avatarUrl,
                                           fit: BoxFit.cover,
                                           width: 38,
