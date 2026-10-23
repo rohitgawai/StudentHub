@@ -381,6 +381,9 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> with 
                 ),
             ],
           ),
+          if (currentIndex == 4) ...[
+            const ProfileOptionsMenu(),
+          ],
           const SizedBox(width: 8),
         ],
       ),

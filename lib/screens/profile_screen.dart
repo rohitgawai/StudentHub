@@ -19,6 +19,18 @@ import 'dashboards/event_host_dashboard_screen.dart';
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
+  static void showResetPasswordDialog(BuildContext context, MockDataService dataService, String email) {
+    _ProfileScreenState._showResetPasswordDialog(context, dataService, email);
+  }
+
+  static void showFeedScopeDialog(BuildContext context, MockDataService dataService, String userYear) {
+    _ProfileScreenState._showFeedScopeDialog(context, dataService, userYear);
+  }
+
+  static void showThemeDialog(BuildContext context, MockDataService dataService) {
+    _ProfileScreenState._showThemeDialog(context, dataService);
+  }
+
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -85,210 +97,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'My Profile',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            tooltip: 'Profile Options',
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 4,
-            surfaceTintColor: Colors.transparent,
-            onSelected: (val) {
-              if (val == 'theme') {
-                _showThemeDialog(context, dataService);
-              } else if (val == 'edit') {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => const EditProfileModal(),
-                );
-              } else if (val == 'feed_scope') {
-                _showFeedScopeDialog(context, dataService, user.year);
-              } else if (val == 'reset_password') {
-                _showResetPasswordDialog(context, dataService, user.email);
-              } else if (val == 'check_updates') {
-                UpdateService.instance.checkForUpdate(context, silent: false);
-              } else if (val == 'logout') {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    title: const Text('Log Out'),
-                    content: const Text('Are you sure you want to log out of StudentHub?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel'),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          dataService.logout();
-                        },
-                        child: const Text('Log Out', style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                );
-              }
-            },
-            itemBuilder: (ctx) {
-              final isHostOrFaculty =
-                  hasHostRole || hasFacultyRole || user.hasRole(UserRole.admin);
-              return [
-                PopupMenuItem(
-                  value: 'theme',
-                  child: Row(
-                    children: [
-                      Icon(Icons.palette_outlined, size: 18, color: cfg.primaryColor),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Theme & Appearance',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.edit_outlined,
-                        size: 18,
-                        color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Edit Profile Details',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isHostOrFaculty) ...[
-                  const PopupMenuDivider(),
-                  PopupMenuItem(
-                    value: 'feed_scope',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.tune_rounded,
-                          size: 18,
-                          color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text(
-                                'Feed Scope',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                dataService.showAllYearsFeed
-                                    ? 'All Academic Years'
-                                    : 'My Year (${user.year.isNotEmpty ? user.year : "Default"})',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'reset_password',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.lock_reset_rounded,
-                        size: 18,
-                        color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Reset Password',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'check_updates',
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.system_update_rounded,
-                        size: 18,
-                        color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0038D8),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Check for Updates (v${UpdateService.currentVersionName})',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'logout',
-                  child: Row(
-                    children: const [
-                      Icon(Icons.logout_rounded, size: 18, color: Colors.red),
-                      SizedBox(width: 10),
-                      Text(
-                        'Log Out',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ];
-            },
-          ),
-        ],
-      ),
       body: RefreshIndicator(
         onRefresh: () async {
           await dataService.refreshUserProfile();
@@ -894,7 +702,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  void _showResetPasswordDialog(
+  static void _showResetPasswordDialog(
     BuildContext context,
     MockDataService dataService,
     String email,
@@ -1085,7 +893,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  void _showFeedScopeDialog(
+  static void _showFeedScopeDialog(
     BuildContext context,
     MockDataService dataService,
     String userYear,
@@ -1286,7 +1094,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  void _showThemeDialog(BuildContext context, MockDataService dataService) {
+  static void _showThemeDialog(BuildContext context, MockDataService dataService) {
     final currentMode = dataService.themeMode;
     showModalBottomSheet(
       context: context,
@@ -1366,7 +1174,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _themeOptionTile(
+  static Widget _themeOptionTile(
     BuildContext ctx,
     MockDataService dataService, {
     required String title,
@@ -1481,3 +1289,212 @@ class _ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
     return oldDelegate.tabBar != tabBar;
   }
 }
+
+class ProfileOptionsMenu extends StatelessWidget {
+  const ProfileOptionsMenu({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final dataService = context.watch<MockDataService>();
+    final user = dataService.currentUser;
+    final cfg = dataService.config;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasHostRole = user.hasRole(UserRole.eventHost);
+    final hasFacultyRole = user.hasRole(UserRole.faculty);
+    final isHostOrFaculty = hasHostRole || hasFacultyRole || user.hasRole(UserRole.admin);
+
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert),
+      tooltip: 'Profile Options',
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 4,
+      surfaceTintColor: Colors.transparent,
+      onSelected: (val) {
+        if (val == 'theme') {
+          ProfileScreen.showThemeDialog(context, dataService);
+        } else if (val == 'edit') {
+          showDialog(
+            context: context,
+            builder: (ctx) => const EditProfileModal(),
+          );
+        } else if (val == 'feed_scope') {
+          ProfileScreen.showFeedScopeDialog(context, dataService, user.year);
+        } else if (val == 'reset_password') {
+          ProfileScreen.showResetPasswordDialog(context, dataService, user.email);
+        } else if (val == 'check_updates') {
+          UpdateService.instance.checkForUpdate(context, silent: false);
+        } else if (val == 'logout') {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Log Out'),
+              content: const Text('Are you sure you want to log out of StudentHub?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    dataService.logout();
+                  },
+                  child: const Text('Log Out', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+        }
+      },
+      itemBuilder: (ctx) {
+        return [
+          PopupMenuItem(
+            value: 'theme',
+            child: Row(
+              children: [
+                Icon(Icons.palette_outlined, size: 18, color: cfg.primaryColor),
+                const SizedBox(width: 10),
+                const Text(
+                  'Theme & Appearance',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'edit',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'Edit Profile Details',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isHostOrFaculty) ...[
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              value: 'feed_scope',
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.tune_rounded,
+                    size: 18,
+                    color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Feed Scope',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          dataService.showAllYearsFeed
+                              ? 'All Academic Years'
+                              : 'My Year (${user.year.isNotEmpty ? user.year : "Default"})',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'reset_password',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.lock_reset_rounded,
+                  size: 18,
+                  color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'Reset Password',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'check_updates',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.system_update_rounded,
+                  size: 18,
+                  color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF0038D8),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Check for Updates (v${UpdateService.currentVersionName})',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'logout',
+            child: Row(
+              children: const [
+                Icon(Icons.logout_rounded, size: 18, color: Colors.red),
+                SizedBox(width: 10),
+                Text(
+                  'Log Out',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ];
+      },
+    );
+  }
+}
+

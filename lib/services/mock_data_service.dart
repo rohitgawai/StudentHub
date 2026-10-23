@@ -14,6 +14,7 @@ import '../models/role_request_model.dart';
 import '../models/notification_model.dart';
 import '../models/form_models.dart';
 import 'local_store_service.dart';
+import 'update_service.dart';
 
 /// Which password interaction the login form must show next.
 enum PasswordMode {
@@ -267,11 +268,21 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       _dismissedNotificationIds
         ..clear()
         ..addAll(restored.dismissedNotificationIds);
+      // Ensure 'app_update' category tag was not mistakenly saved as a dismissed notification ID
+      _dismissedNotificationIds.remove('app_update');
+      _dismissedNotificationIds.remove('announcement_update');
+      _dismissedNotificationIds.remove('announcement_update_latest');
       if (_notificationsCleared && _notificationsClearedAt != null) {
         final cutoff = _notificationsClearedAt!.toUtc();
         _notifications.removeWhere((n) {
           if (_dismissedNotificationIds.contains(n.id)) return true;
-          if (n.relatedPostId != null && _dismissedNotificationIds.contains(n.relatedPostId)) return true;
+          if (n.relatedPostId != null &&
+              n.relatedPostId != 'app_update' &&
+              _dismissedNotificationIds.contains(n.relatedPostId)) {
+            return true;
+          }
+          // App updates must never be cleared by time cutoff
+          if (n.relatedPostId == 'app_update' || n.id.contains('update')) return false;
           return !n.timestamp.toUtc().isAfter(cutoff);
         });
       }
@@ -2364,6 +2375,10 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         debugPrint('StudentHub: broadcast sync failed: $e');
         return false;
       }),
+      _syncAppUpdateNotification(client).catchError((e) {
+        debugPrint('StudentHub: app update notif sync failed: $e');
+        return false;
+      }),
     ]);
     if (extras.any((changedExtra) => changedExtra)) changed = true;
     if (changed) {
@@ -2407,12 +2422,14 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         final isUpdate = id.startsWith('announcement_update_') ||
             title.toLowerCase().contains('update');
 
-        if (_notificationsCleared && _notificationsClearedAt != null) {
-          if (!createdAt.isAfter(_notificationsClearedAt!.toUtc())) {
+        if (!isUpdate) {
+          if (_notificationsCleared && _notificationsClearedAt != null) {
+            if (!createdAt.isAfter(_notificationsClearedAt!.toUtc())) {
+              continue;
+            }
+          } else if (createdAt.isBefore(defaultCutoff)) {
             continue;
           }
-        } else if (createdAt.isBefore(defaultCutoff)) {
-          continue;
         }
 
         final existingIndex = _notifications.indexWhere((n) => n.id == broadcastNotifId);
@@ -2454,6 +2471,73 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       return changed;
     } catch (e) {
       debugPrint('StudentHub: _syncAdminBroadcasts failed: $e');
+      return false;
+    }
+  }
+
+  /// Ensures the latest app release from Supabase [app_updates] is present in the notification bell
+  /// and never disappears upon pull-to-refresh or background sync.
+  Future<bool> _syncAppUpdateNotification(SupabaseClient client) async {
+    try {
+      final res = await client
+          .from('app_updates')
+          .select()
+          .order('version_code', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (res == null) return false;
+
+      final versionCode = int.tryParse(res['version_code']?.toString() ?? '') ?? 0;
+      final versionName = res['version_name']?.toString() ?? '';
+      if (versionCode <= 0 || versionName.isEmpty) return false;
+
+      final notifId = 'notif_app_update_$versionCode';
+      final broadcastId = 'announcement_update_$versionCode';
+      final fullBroadcastId = 'notif_admin_broadcast_$broadcastId';
+
+      if (_dismissedNotificationIds.contains(notifId) ||
+          _dismissedNotificationIds.contains(broadcastId) ||
+          _dismissedNotificationIds.contains(fullBroadcastId)) {
+        return false;
+      }
+
+      final releaseNotes = res['release_notes']?.toString() ?? 'Bug fixes and performance improvements.';
+      final isNewer = versionCode > UpdateService.currentVersionCode;
+      final title = isNewer
+          ? '🚀 New App Update Available: v$versionName'
+          : '🚀 StudentHub v$versionName (Installed)';
+      final body = isNewer
+          ? "A new update is available!\n\nWhat's new:\n$releaseNotes"
+          : "You're on the latest build (v$versionName).\n\nWhat's new:\n$releaseNotes";
+
+      final createdAt = _parseDate(res['created_at']) ?? DateTime.now();
+
+      final notif = NotificationModel(
+        id: notifId,
+        title: title,
+        body: body,
+        category: NotificationCategory.general,
+        timestamp: createdAt,
+        relatedPostId: 'app_update',
+        isRead: !isNewer,
+      );
+
+      final existingIndex = _notifications.indexWhere(
+        (n) => n.id == notifId || n.id == fullBroadcastId || (n.relatedPostId == 'app_update' && n.id.contains('$versionCode')),
+      );
+
+      if (existingIndex != -1) {
+        if (_notifications[existingIndex].title != title || _notifications[existingIndex].body != body) {
+          _notifications[existingIndex] = notif;
+          return true;
+        }
+        return false;
+      } else {
+        _notifications.insert(0, notif);
+        return true;
+      }
+    } catch (e) {
+      debugPrint('StudentHub: _syncAppUpdateNotification error: $e');
       return false;
     }
   }
@@ -2533,7 +2617,13 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       final beforeLen = _notifications.length;
       _notifications.removeWhere((n) {
         if (_dismissedNotificationIds.contains(n.id)) return true;
-        if (n.relatedPostId != null && _dismissedNotificationIds.contains(n.relatedPostId)) return true;
+        if (n.relatedPostId != null &&
+            n.relatedPostId != 'app_update' &&
+            _dismissedNotificationIds.contains(n.relatedPostId)) {
+          return true;
+        }
+        // App update notifications must NEVER be auto-purged on refresh or by cutoff!
+        if (n.relatedPostId == 'app_update' || n.id.contains('update')) return false;
         return !n.timestamp.toUtc().isAfter(cutoff);
       });
       if (_notifications.length != beforeLen) {
@@ -4020,10 +4110,14 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           'p_liker_user_id': currentUser.id,
         },
       );
-      final serverCount = count is num
-          ? count.toInt()
-          : int.tryParse(count?.toString() ?? '') ?? 0;
-      _profileLikes[authorId] = math.max(0, serverCount);
+      if (count != null) {
+        final serverCount = count is num
+            ? count.toInt()
+            : int.tryParse(count.toString());
+        if (serverCount != null) {
+          _profileLikes[authorId] = math.max(0, serverCount);
+        }
+      }
 
       // Broadcast appreciation to the creator's device for a live notification
       // (best-effort; counts are now reconciled from the server on next sync).
@@ -4068,7 +4162,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           .whereType<String>()
           .toList();
       var changed = false;
-      if (_profileLikes[authorId] != appreciatedBy.length) {
+      if (appreciatedBy.isNotEmpty && _profileLikes[authorId] != appreciatedBy.length) {
         _profileLikes[authorId] = appreciatedBy.length;
         changed = true;
       }
@@ -4076,7 +4170,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       if (meInList && !_likedProfileAuthorIds.contains(authorId)) {
         _likedProfileAuthorIds.add(authorId);
         changed = true;
-      } else if (!meInList && _likedProfileAuthorIds.contains(authorId)) {
+      } else if (!meInList && _likedProfileAuthorIds.contains(authorId) && appreciatedBy.isNotEmpty) {
         _likedProfileAuthorIds.remove(authorId);
         changed = true;
       }
@@ -4088,6 +4182,45 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     } catch (_) {
       // Best-effort: the local state remains and the periodic sync retries.
     }
+  }
+
+  /// Searches known creators and user accounts across the campus directory
+  /// by name, department, employee/student id, email, or role.
+  List<UserModel> searchUsers(String query) {
+    final clean = query.trim().toLowerCase();
+    if (clean.isEmpty) return const [];
+    final tokens = clean.split(' ').where((t) => t.isNotEmpty).toList();
+
+    // Pool all known profiles, current user, and distinct authors from posts
+    final Map<String, UserModel> pool = Map.from(_knownProfiles);
+    pool[currentUser.id] = currentUser;
+
+    for (final p in _posts) {
+      final key = p.authorId.isNotEmpty ? p.authorId : p.authorName;
+      if (!pool.containsKey(key) && p.authorName.trim().isNotEmpty) {
+        pool[key] = UserModel(
+          id: p.authorId,
+          name: p.authorName,
+          email: '',
+          studentOrEmployeeId: '',
+          department: p.department,
+          year: p.targetYear ?? '',
+          mobileNumber: '',
+          avatarUrl: p.authorAvatarUrl ?? '',
+          roles: [p.authorRole],
+          savedPostIds: const [],
+          registeredEventIds: const [],
+          congratulatedPostIds: const [],
+          likedPostIds: const [],
+          isVerified: true,
+        );
+      }
+    }
+
+    return pool.values.where((u) {
+      final textToMatch = '${u.name} ${u.department} ${u.studentOrEmployeeId} ${u.email} ${u.roles.map((r) => r.displayName).join(" ")}'.toLowerCase();
+      return tokens.every((token) => textToMatch.contains(token));
+    }).toList();
   }
 
   void toggleEventRegistration(String postId) {
@@ -4638,14 +4771,21 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         : post.category == PostCategory.urgent
             ? NotificationCategory.academic
             : NotificationCategory.general;
+    final authorPrefix = post.authorName.isNotEmpty ? '${post.authorName}: ' : '';
     return NotificationModel(
       id: 'notif_${DateTime.now().microsecondsSinceEpoch}_${post.id}',
       title: publishedByMe
           ? (isEvent ? '🎉 Your event is live!' : '📢 Your post is live!')
-          : (isEvent ? '🎉 New event posted' : '📢 New post: ${post.title}'),
+          : (isEvent
+              ? '🎉 $authorPrefix${post.title}'
+              : '📢 $authorPrefix${post.title}'),
       body: publishedByMe
           ? '"${post.title}" is now on the campus feed.'
-          : (post.description.isEmpty ? post.title : post.description),
+          : (post.description.isNotEmpty
+              ? post.description
+              : (isEvent
+                  ? 'Event scheduled for ${post.eventDate ?? "upcoming"}'
+                  : 'Tap to view full post details.')),
       category: category,
       timestamp: post.timestamp,
       relatedPostId: post.id,
@@ -5089,7 +5229,9 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     if (idx != -1) {
       final notif = _notifications[idx];
       _dismissedNotificationIds.add(notif.id);
-      if (notif.relatedPostId != null && notif.relatedPostId!.isNotEmpty) {
+      if (notif.relatedPostId != null &&
+          notif.relatedPostId!.isNotEmpty &&
+          notif.relatedPostId != 'app_update') {
         _dismissedNotificationIds.add(notif.relatedPostId!);
       }
       _notifications.removeAt(idx);
@@ -5105,7 +5247,9 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     _notificationsClearedAt = nowUtc;
     for (final n in _notifications) {
       _dismissedNotificationIds.add(n.id);
-      if (n.relatedPostId != null && n.relatedPostId!.isNotEmpty) {
+      if (n.relatedPostId != null &&
+          n.relatedPostId!.isNotEmpty &&
+          n.relatedPostId != 'app_update') {
         _dismissedNotificationIds.add(n.relatedPostId!);
       }
     }

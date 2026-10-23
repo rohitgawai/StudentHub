@@ -318,14 +318,18 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     final studentId = widget.studentOrEmployeeId ??
         (isMe ? dataService.currentUser.studentOrEmployeeId : '');
 
-    // Posts for the bottom tabs
+    // Creator's posts & events
     final allPosts = dataService.posts;
-    final userSavedPosts = allPosts
-        .where((p) => dataService.currentUser.savedPostIds.contains(p.id))
-        .toList();
-    final userLikedPosts = allPosts
-        .where((p) => dataService.currentUser.likedPostIds.contains(p.id))
-        .toList();
+    bool isAuthorMatch(PostModel p) {
+      if (widget.authorId.isNotEmpty && p.authorId == widget.authorId) return true;
+      if (widget.authorName.trim().isNotEmpty &&
+          p.authorName.trim().toLowerCase() == widget.authorName.trim().toLowerCase()) {
+        return true;
+      }
+      return false;
+    }
+    final creatorPosts = allPosts.where((p) => isAuthorMatch(p) && !p.isEvent).toList();
+    final creatorEvents = allPosts.where((p) => isAuthorMatch(p) && p.isEvent).toList();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -342,429 +346,393 @@ class _UserProfileScreenState extends State<UserProfileScreen>
             fontSize: 18,
           ),
         ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.green.shade900.withValues(alpha: 0.3)
-                  : Colors.green.shade50,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isDark ? Colors.green.shade700 : Colors.green.shade200,
-                width: 0.8,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.lock_outline_rounded,
-                    size: 14,
-                    color: isDark ? Colors.green.shade300 : Colors.green.shade700),
-                const SizedBox(width: 4),
-                Text(
-                  'Protected',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.green.shade300 : Colors.green.shade700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
-      body: ListView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        children: [
-          // Clean Modern Profile Card (No huge blue block)
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF121212) : Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
-                  blurRadius: 14,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                // Avatar with Zoom Tap & Verified Badge
-                Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        _showAvatarZoomDialog(context, avatar);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: cfg.primaryColor.withValues(alpha: 0.4),
-                            width: 2.5,
-                          ),
-                        ),
-                        child: CircleAvatar(
-                          radius: 46,
-                          backgroundColor: isDark
-                              ? const Color(0xFF18181B)
-                              : const Color(0xFFF1F5F9),
-                          child: ClipOval(
-                            child: avatar.isNotEmpty
-                                ? AppImage(
-                                    source: avatar,
-                                    fit: BoxFit.cover,
-                                    width: 92,
-                                    height: 92,
-                                    errorChild: Text(
-                                      widget.authorName.isNotEmpty
-                                          ? widget.authorName.substring(0, 1).toUpperCase()
-                                          : '?',
-                                      style: TextStyle(
-                                        fontSize: 34,
-                                        fontWeight: FontWeight.w900,
-                                        color: isDark ? Colors.white70 : const Color(0xFF334155),
-                                      ),
-                                    ),
-                                  )
-                                : Text(
-                                    widget.authorName.isNotEmpty
-                                        ? widget.authorName.substring(0, 1).toUpperCase()
-                                        : '?',
-                                    style: TextStyle(
-                                      fontSize: 34,
-                                      fontWeight: FontWeight.w900,
-                                      color: isDark ? Colors.white70 : const Color(0xFF334155),
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 2,
-                      right: 2,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isDark ? const Color(0xFF121212) : Colors.white,
-                            width: 2,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.verified_rounded,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                      ),
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF121212) : Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-
-                // Name
-                Text(
-                  widget.authorName,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const SizedBox(height: 6),
-
-                // Role Badge
-                RoleBadge(role: widget.authorRole),
-                const SizedBox(height: 12),
-
-                // Department & Year Tag Pills
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
+                child: Column(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF18181B) : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
-                          width: 0.8,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.school_rounded,
-                              size: 14,
-                              color: isDark ? const Color(0xFFA1A1AA) : const Color(0xFF475569)),
-                          const SizedBox(width: 6),
-                          Text(
-                            dept,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? const Color(0xFFE4E4E7) : const Color(0xFF334155),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (academicYear.isNotEmpty &&
-                        academicYear != 'N/A' &&
-                        academicYear.toLowerCase() != 'all' &&
-                        academicYear.toLowerCase() != 'all academic years' &&
-                        academicYear.toLowerCase() != 'campus student')
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF18181B) : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
-                            width: 0.8,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.calendar_month_outlined,
-                                size: 14,
-                                color: isDark ? Colors.grey.shade400 : const Color(0xFF475569)),
-                            const SizedBox(width: 6),
-                            Text(
-                              academicYear,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.grey.shade300 : const Color(0xFF334155),
+                    // Avatar with Zoom Tap & Verified Badge
+                    Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            _showAvatarZoomDialog(context, avatar);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(2.5),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: cfg.primaryColor.withValues(alpha: 0.4),
+                                width: 2,
                               ),
                             ),
-                          ],
+                            child: CircleAvatar(
+                              radius: 36,
+                              backgroundColor: isDark
+                                  ? const Color(0xFF18181B)
+                                  : const Color(0xFFF1F5F9),
+                              child: ClipOval(
+                                child: avatar.isNotEmpty
+                                    ? AppImage(
+                                        source: avatar,
+                                        fit: BoxFit.cover,
+                                        width: 72,
+                                        height: 72,
+                                        errorChild: Text(
+                                          widget.authorName.isNotEmpty
+                                              ? widget.authorName.substring(0, 1).toUpperCase()
+                                              : '?',
+                                          style: TextStyle(
+                                            fontSize: 26,
+                                            fontWeight: FontWeight.w900,
+                                            color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                          ),
+                                        ),
+                                      )
+                                    : Text(
+                                        widget.authorName.isNotEmpty
+                                            ? widget.authorName.substring(0, 1).toUpperCase()
+                                            : '?',
+                                        style: TextStyle(
+                                          fontSize: 26,
+                                          fontWeight: FontWeight.w900,
+                                          color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                  ],
-                ),
-
-                if (studentId.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'ID: $studentId',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ],
-
-                if (email.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    email,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 18),
-
-                // If viewing own profile: show dedicated read-only Appreciations Count badge
-                // If viewing another creator's profile: show interactive animated Appreciate button
-                if (isMe) ...[
-                  Container(
-                    width: double.infinity,
-                    constraints: const BoxConstraints(maxWidth: 320),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFFE11D48).withValues(alpha: 0.15)
-                          : const Color(0xFFFFF1F2),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? const Color(0xFFE11D48).withValues(alpha: 0.4)
-                            : const Color(0xFFFDA4AF),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.favorite_rounded,
-                          color: Color(0xFFE11D48),
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            '$profileLikesCount Appreciations',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFE11D48),
+                        Positioned(
+                          bottom: 1,
+                          right: 1,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2563EB),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isDark ? const Color(0xFF121212) : Colors.white,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.verified_rounded,
+                              size: 13,
+                              color: Colors.white,
                             ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ] else ...[
-                  // Animated Profile Like / Appreciate Button
-                  ScaleTransition(
-                    scale: _likeScaleAnim,
-                    child: Container(
-                      width: double.infinity,
-                      constraints: const BoxConstraints(maxWidth: 320),
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                          backgroundColor: isLiked
-                              ? (isDark
-                                  ? const Color(0xFFE11D48).withValues(alpha: 0.2)
-                                  : const Color(0xFFFFF1F2))
-                              : cfg.primaryColor,
-                          foregroundColor: isLiked ? const Color(0xFFE11D48) : Colors.white,
-                          elevation: isLiked ? 0 : 2,
-                          side: isLiked
-                              ? BorderSide(
-                                  color: isDark
-                                      ? const Color(0xFFE11D48).withValues(alpha: 0.5)
-                                      : const Color(0xFFFDA4AF),
-                                  width: 1.5,
-                                )
-                              : BorderSide.none,
-                          shape: RoundedRectangleBorder(
+                    const SizedBox(height: 8),
+
+                    // Name
+                    Text(
+                      widget.authorName,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Role Badge
+                    RoleBadge(role: widget.authorRole),
+                    const SizedBox(height: 8),
+
+                    // Department & Year Tag Pills
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF18181B) : const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.school_rounded,
+                                  size: 13,
+                                  color: isDark ? const Color(0xFFA1A1AA) : const Color(0xFF475569)),
+                              const SizedBox(width: 4),
+                              Text(
+                                dept,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? const Color(0xFFE4E4E7) : const Color(0xFF334155),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        onPressed: () => _onLikeTapped(dataService),
-                        icon: Icon(
-                          isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                          color: isLiked ? const Color(0xFFE11D48) : Colors.white,
-                          size: 20,
+                        if (academicYear.isNotEmpty &&
+                            academicYear != 'N/A' &&
+                            academicYear.toLowerCase() != 'all' &&
+                            academicYear.toLowerCase() != 'all academic years' &&
+                            academicYear.toLowerCase() != 'campus student')
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF18181B) : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isDark ? const Color(0xFF262626) : const Color(0xFFE2E8F0),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.calendar_month_outlined,
+                                    size: 13,
+                                    color: isDark ? Colors.grey.shade400 : const Color(0xFF475569)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  academicYear,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? Colors.grey.shade300 : const Color(0xFF334155),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+
+                    if (studentId.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'ID: $studentId',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                          letterSpacing: 0.3,
                         ),
-                        label: Text(
-                          isLiked
-                              ? 'Appreciated ($profileLikesCount)'
-                              : 'Appreciate ($profileLikesCount)',
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w700,
-                            color: isLiked ? const Color(0xFFE11D48) : Colors.white,
+                      ),
+                    ],
+
+                    if (email.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        email,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 12),
+
+                    // If viewing own profile: show dedicated read-only Appreciations Count badge
+                    // If viewing another creator's profile: show interactive animated Appreciate button
+                    if (isMe) ...[
+                      Container(
+                        width: double.infinity,
+                        constraints: const BoxConstraints(maxWidth: 260),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFFE11D48).withValues(alpha: 0.15)
+                              : const Color(0xFFFFF1F2),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isDark
+                                ? const Color(0xFFE11D48).withValues(alpha: 0.4)
+                                : const Color(0xFFFDA4AF),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.favorite_rounded,
+                              color: Color(0xFFE11D48),
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                '$profileLikesCount Appreciations',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFE11D48),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      // Animated Profile Like / Appreciate Button
+                      ScaleTransition(
+                        scale: _likeScaleAnim,
+                        child: Container(
+                          width: double.infinity,
+                          constraints: const BoxConstraints(maxWidth: 260),
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              backgroundColor: isLiked
+                                  ? (isDark
+                                      ? const Color(0xFFE11D48).withValues(alpha: 0.2)
+                                      : const Color(0xFFFFF1F2))
+                                  : cfg.primaryColor,
+                              foregroundColor: isLiked ? const Color(0xFFE11D48) : Colors.white,
+                              elevation: isLiked ? 0 : 2,
+                              side: isLiked
+                                  ? BorderSide(
+                                      color: isDark
+                                          ? const Color(0xFFE11D48).withValues(alpha: 0.5)
+                                          : const Color(0xFFFDA4AF),
+                                      width: 1.2,
+                                    )
+                                  : BorderSide.none,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: () => _onLikeTapped(dataService),
+                            icon: Icon(
+                              isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                              color: isLiked ? const Color(0xFFE11D48) : Colors.white,
+                              size: 18,
+                            ),
+                            label: Text(
+                              isLiked
+                                  ? 'Appreciated ($profileLikesCount)'
+                                  : 'Appreciate ($profileLikesCount)',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: isLiked ? const Color(0xFFE11D48) : Colors.white,
+                              ),
+                            ),
                           ),
                         ),
                       ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Pinned Tab Bar for Creator Posts & Events
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _CreatorTabBarDelegate(
+              tabBar: TabBar(
+                controller: _tabController,
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  color: cfg.primaryColor.withValues(alpha: isDark ? 0.2 : 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: cfg.primaryColor.withValues(alpha: isDark ? 0.5 : 0.25),
+                    width: 1,
+                  ),
+                ),
+                labelColor: cfg.primaryColor,
+                unselectedLabelColor: isDark ? Colors.grey.shade400 : const Color(0xFF64748B),
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                tabs: [
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.grid_view_rounded, size: 15),
+                        const SizedBox(width: 7),
+                        Text('Posts (${creatorPosts.length})'),
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.event_available_rounded, size: 15),
+                        const SizedBox(width: 7),
+                        Text('Events (${creatorEvents.length})'),
+                      ],
                     ),
                   ),
                 ],
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Tab Bar for Liked Posts & Saved Posts
-          Container(
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark ? const Color(0xFF334155) : Colors.transparent,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorSize: TabBarIndicatorSize.tab,
-              dividerColor: Colors.transparent,
-              indicator: BoxDecoration(
-                color: cfg.primaryColor.withValues(alpha: isDark ? 0.2 : 0.1),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: cfg.primaryColor.withValues(alpha: isDark ? 0.5 : 0.25),
-                  width: 1,
-                ),
-              ),
-              labelColor: cfg.primaryColor,
-              unselectedLabelColor: isDark ? Colors.grey.shade400 : const Color(0xFF64748B),
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              tabs: [
-                Tab(
-                  icon: const Icon(Icons.favorite_rounded, size: 18),
-                  text: 'Liked (${userLikedPosts.length})',
-                ),
-                Tab(
-                  icon: const Icon(Icons.bookmark_rounded, size: 18),
-                  text: 'Saved (${userSavedPosts.length})',
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-          // Tab View Posts Container
-          SizedBox(
-            height: 480,
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                // Liked Posts Tab
-                _buildPostList(
-                  context,
-                  posts: userLikedPosts,
-                  cfg: cfg,
-                  dataService: dataService,
-                  emptyMessage: 'No liked posts to show.',
-                  emptyIcon: Icons.favorite_border_rounded,
-                ),
-
-                // Saved Posts Tab
-                _buildPostList(
-                  context,
-                  posts: userSavedPosts,
-                  cfg: cfg,
-                  dataService: dataService,
-                  emptyMessage: 'No saved posts to show.',
-                  emptyIcon: Icons.bookmark_border_rounded,
-                ),
-              ],
+              isDark: isDark,
             ),
           ),
         ],
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            // Creator's Posts Tab
+            _buildPostList(
+              context,
+              posts: creatorPosts,
+              cfg: cfg,
+              dataService: dataService,
+              emptyMessage: 'No posts published yet.',
+              emptyIcon: Icons.article_outlined,
+            ),
+
+            // Creator's Events Tab
+            _buildPostList(
+              context,
+              posts: creatorEvents,
+              cfg: cfg,
+              dataService: dataService,
+              emptyMessage: 'No events hosted yet.',
+              emptyIcon: Icons.event_seat_outlined,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -815,5 +783,49 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         );
       },
     );
+  }
+}
+
+class _CreatorTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+  final bool isDark;
+
+  _CreatorTabBarDelegate({required this.tabBar, required this.isDark});
+
+  @override
+  double get minExtent => 52;
+
+  @override
+  double get maxExtent => 52;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark ? const Color(0xFF334155) : Colors.grey.shade200,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: tabBar,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _CreatorTabBarDelegate oldDelegate) {
+    return oldDelegate.tabBar != tabBar || oldDelegate.isDark != isDark;
   }
 }

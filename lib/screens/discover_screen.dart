@@ -115,15 +115,14 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         });
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Discover')),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: searchField,
+        body: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: searchField,
+              ),
             ),
-          ),
           if (searchQuery.isNotEmpty) ...[
             SliverToBoxAdapter(
               child: Padding(

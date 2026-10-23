@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/notification_model.dart';
 import '../models/post_model.dart';
-import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
 import '../services/update_service.dart';
 import '../widgets/post_detail_modal.dart';
+import '../widgets/app_image.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -100,24 +100,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   bool _isAdminAnnouncement(NotificationModel n, MockDataService dataService) {
     if (n.id.startsWith('notif_admin_broadcast_') ||
-        n.id.startsWith('announcement_') ||
-        n.title.toLowerCase().contains('admin') ||
-        n.body.toLowerCase().contains('admin') ||
-        n.title.toLowerCase().contains('announcement') ||
-        n.title.toLowerCase().contains('update') ||
-        n.title.toLowerCase().contains('notice')) {
+        n.id.startsWith('announcement_update_') ||
+        n.relatedPostId == 'app_update') {
       return true;
     }
+    // If the notification references an actual post on campus, it is a real post!
     if (n.relatedPostId != null && n.relatedPostId!.isNotEmpty) {
-      final post = dataService.posts.cast<PostModel?>().firstWhere(
-            (p) => p?.id == n.relatedPostId,
-            orElse: () => null,
-          );
-      if (post != null &&
-          (post.authorRole == UserRole.admin ||
-              post.category == PostCategory.announcement)) {
-        return true;
-      }
+      final hasRealPost = dataService.posts.any((p) => p.id == n.relatedPostId);
+      if (hasRealPost) return false;
+    }
+    if ((n.title.toLowerCase().contains('admin broadcast') ||
+            n.body.toLowerCase().contains('by admin')) &&
+        (n.relatedPostId == null || n.relatedPostId!.isEmpty)) {
+      return true;
     }
     return false;
   }
@@ -125,6 +120,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void _showNotificationDetail(BuildContext context, NotificationModel n) {
     final catColor = _getCatColor(n.category);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final dataService = context.read<MockDataService>();
+    final post = (n.relatedPostId != null &&
+            n.relatedPostId!.isNotEmpty &&
+            !_isRoleNotif(n) &&
+            !_isAppUpdateNotif(n))
+        ? dataService.posts.cast<PostModel?>().firstWhere(
+            (p) => p?.id == n.relatedPostId,
+            orElse: () => null,
+          )
+        : null;
+    final firstImage = post != null
+        ? ((post.imageUrl != null && post.imageUrl!.isNotEmpty)
+            ? post.imageUrl!
+            : (post.imageUrls.isNotEmpty ? post.imageUrls.first : ''))
+        : '';
 
     showDialog(
       context: context,
@@ -138,115 +149,231 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             width: 1.2,
           ),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Designed decorative header banner with ambient gradient
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 18, 14, 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [
-                          catColor.withValues(alpha: 0.24),
-                          const Color(0xFF18181B),
-                        ]
-                      : [
-                          catColor.withValues(alpha: 0.12),
-                          Colors.white,
-                        ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: catColor.withValues(alpha: isDark ? 0.3 : 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(_getNotificationIcon(n), color: catColor, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          n.category.displayName.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.8,
-                            color: catColor,
-                          ),
-                        ),
-                        Text(
-                          _formatFullDateTime(n.timestamp),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDark ? const Color(0xFF71717A) : Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.close,
-                      size: 20,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                    onPressed: () => Navigator.of(ctx).pop(),
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: isDark ? const Color(0xFF262626) : Colors.grey.shade200),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-              SelectableText(
-                n.title,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 12),
-
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Designed decorative header banner with ambient gradient
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(20, 18, 14, 16),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [
+                            catColor.withValues(alpha: 0.24),
+                            const Color(0xFF18181B),
+                          ]
+                        : [
+                            catColor.withValues(alpha: 0.12),
+                            Colors.white,
+                          ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
-                child: SelectableText(
-                  n.body,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.5,
-                    color: isDark ? const Color(0xFFE4E4E7) : const Color(0xFF334155),
-                  ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: catColor.withValues(alpha: isDark ? 0.3 : 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(_getNotificationIcon(n), color: catColor, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            post != null
+                                ? (post.isEvent ? 'CAMPUS EVENT' : post.category.displayName.toUpperCase())
+                                : n.category.displayName.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                              color: catColor,
+                            ),
+                          ),
+                          Text(
+                            _formatFullDateTime(n.timestamp),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? const Color(0xFF71717A) : Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        size: 20,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
+              Divider(height: 1, color: isDark ? const Color(0xFF262626) : Colors.grey.shade200),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (post != null) ...[
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: (post.isEvent ? Colors.purple : catColor)
+                                  .withValues(alpha: isDark ? 0.25 : 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              post.isEvent ? 'EVENT' : post.category.displayName.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                color: post.isEvent ? (isDark ? Colors.purple.shade200 : Colors.purple) : catColor,
+                              ),
+                            ),
+                          ),
+                          if (post.authorName.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'By ${post.authorName} • ${post.department}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                    ],
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
+                    SelectableText(
+                      post != null ? post.title : n.title,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    if (firstImage.isNotEmpty) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: AppImage(
+                            source: firstImage,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    if (post != null && post.isEvent && (post.eventDate != null || (post.venue != null && post.venue!.isNotEmpty))) ...[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E1E28) : const Color(0xFFF3E8FF),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            if (post.eventDate != null) ...[
+                              Icon(Icons.calendar_month, size: 14, color: isDark ? Colors.purple.shade200 : Colors.purple),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${post.eventDate!.day}/${post.eventDate!.month}/${post.eventDate!.year}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.grey.shade200 : const Color(0xFF334155),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                            if (post.venue != null && post.venue!.isNotEmpty) ...[
+                              Icon(Icons.location_on, size: 14, color: isDark ? Colors.purple.shade200 : Colors.purple),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  post.venue!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.grey.shade300 : const Color(0xFF334155),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF262626) : Colors.grey.shade200,
+                        ),
+                      ),
+                      child: SelectableText(
+                        post != null && post.description.isNotEmpty ? post.description : n.body,
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: isDark ? const Color(0xFFE4E4E7) : const Color(0xFF334155),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (post != null) ...[
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: catColor,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                            label: const Text('View Full Post'),
+                            onPressed: () {
+                              Navigator.of(ctx).pop();
+                              PostDetailModal.show(context, post.id);
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                        ],
                   if (n.title.toLowerCase().contains('update') ||
                       n.body.toLowerCase().contains('what\'s new') ||
                       _isAppUpdateNotif(n)) ...[
@@ -305,6 +432,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ],
     ),
   ),
+),
 );
 }
 
@@ -509,6 +637,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         final hasPost = n.relatedPostId != null &&
                             n.relatedPostId!.isNotEmpty &&
                             !_isRoleNotif(n);
+                        final post = (hasPost && !isAdminAnnounce && !isUpdate)
+                            ? dataService.posts.cast<PostModel?>().firstWhere(
+                                  (p) => p?.id == n.relatedPostId,
+                                  orElse: () => null,
+                                )
+                            : null;
+                        final firstImage = post != null
+                            ? ((post.imageUrl != null && post.imageUrl!.isNotEmpty)
+                                ? post.imageUrl!
+                                : (post.imageUrls.isNotEmpty ? post.imageUrls.first : ''))
+                            : '';
 
                         return Dismissible(
                           key: ValueKey(n.id),
@@ -550,9 +689,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 ? (isDark ? const Color(0xFF1E1E28) : const Color(0xFFF0F9FF))
                                 : Colors.transparent,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -564,7 +703,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                       radius: 22,
                                       backgroundColor: catColor.withValues(alpha: isDark ? 0.25 : 0.12),
                                       child: Icon(
-                                        _getNotificationIcon(n),
+                                        post != null
+                                            ? (post.isEvent
+                                                ? Icons.event
+                                                : post.category == PostCategory.announcement
+                                                    ? Icons.campaign
+                                                    : Icons.article_outlined)
+                                            : _getNotificationIcon(n),
                                         color: catColor,
                                         size: 22,
                                       ),
@@ -595,12 +740,77 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
+                                      // If associated with a campus post: show post type chip & author details
+                                      if (post != null) ...[
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: (post.isEvent ? Colors.purple : catColor)
+                                                    .withValues(alpha: isDark ? 0.25 : 0.12),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    post.isEvent
+                                                        ? Icons.event
+                                                        : post.category == PostCategory.announcement
+                                                            ? Icons.campaign
+                                                            : Icons.article_outlined,
+                                                    size: 11,
+                                                    color: post.isEvent
+                                                        ? (isDark ? Colors.purple.shade200 : Colors.purple)
+                                                        : catColor,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    post.isEvent
+                                                        ? 'EVENT'
+                                                        : post.category.displayName.toUpperCase(),
+                                                    style: TextStyle(
+                                                      fontSize: 9.5,
+                                                      fontWeight: FontWeight.w800,
+                                                      letterSpacing: 0.5,
+                                                      color: post.isEvent
+                                                          ? (isDark ? Colors.purple.shade200 : Colors.purple)
+                                                          : catColor,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (post.authorName.isNotEmpty) ...[
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  '${post.authorName} • ${post.department.isNotEmpty ? post.department : "Campus"}',
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                      ],
+
                                       Row(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Expanded(
                                             child: Text(
-                                              n.title,
+                                              post != null ? post.title : n.title,
                                               style: TextStyle(
                                                 fontWeight: isUnread
                                                     ? FontWeight.w800
@@ -627,7 +837,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        n.body,
+                                        post != null && post.description.isNotEmpty
+                                            ? post.description
+                                            : n.body,
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
@@ -636,82 +848,120 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           color: isUnread
                                               ? (isDark ? const Color(0xFFE4E4E7) : const Color(0xFF1E293B))
                                               : (isDark ? const Color(0xFFA1A1AA) : const Color(0xFF64748B)),
-                                            fontWeight: isUnread
-                                                ? FontWeight.w500
-                                                : FontWeight.normal,
-                                          ),
+                                          fontWeight: isUnread
+                                              ? FontWeight.w500
+                                              : FontWeight.normal,
                                         ),
-                                        if (isUpdate) ...[
-                                         const SizedBox(height: 8),
-                                         Row(
-                                           children: [
-                                             Container(
-                                               padding: const EdgeInsets.symmetric(
-                                                 horizontal: 10,
-                                                 vertical: 4,
-                                               ),
-                                               decoration: BoxDecoration(
-                                                 color: (isInstalled
-                                                         ? const Color(0xFF10B981)
-                                                         : const Color(0xFF2563EB))
-                                                     .withValues(
-                                                       alpha: isDark ? 0.25 : 0.12,
-                                                     ),
-                                                 borderRadius: BorderRadius.circular(8),
-                                                 border: Border.all(
-                                                   color: (isInstalled
-                                                           ? const Color(0xFF10B981)
-                                                           : const Color(0xFF2563EB))
-                                                       .withValues(alpha: 0.4),
-                                                   width: 1,
-                                                 ),
-                                               ),
-                                               child: Row(
-                                                 mainAxisSize: MainAxisSize.min,
-                                                 children: [
-                                                   Icon(
-                                                     isInstalled
-                                                         ? Icons.check_circle_rounded
-                                                         : Icons.rocket_launch_rounded,
-                                                     size: 13,
-                                                     color: isInstalled
-                                                         ? const Color(0xFF10B981)
-                                                         : const Color(0xFF2563EB),
-                                                   ),
-                                                   const SizedBox(width: 5),
-                                                   Text(
-                                                     isInstalled
-                                                         ? '✓ Installed (v${_extractNotificationVersion(n)}) • Up to date'
-                                                         : 'App Update • Tap to view & install',
-                                                     style: TextStyle(
-                                                       fontSize: 11.5,
-                                                       fontWeight: FontWeight.w700,
-                                                       color: isInstalled
-                                                           ? (isDark
-                                                               ? const Color(0xFF34D399)
-                                                               : const Color(0xFF059669))
-                                                           : (isDark
-                                                               ? const Color(0xFF60A5FA)
-                                                               : const Color(0xFF1D4ED8)),
-                                                     ),
-                                                   ),
-                                                 ],
-                                               ),
-                                             ),
-                                           ],
-                                         ),
+                                      ),
+
+                                      // Event Date & Venue snippet
+                                      if (post != null && post.isEvent && (post.eventDate != null || (post.venue != null && post.venue!.isNotEmpty))) ...[
+                                        const SizedBox(height: 5),
+                                        Row(
+                                          children: [
+                                            if (post.eventDate != null) ...[
+                                              Icon(Icons.calendar_month_rounded, size: 12, color: isDark ? Colors.purple.shade200 : Colors.purple),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                '${post.eventDate!.day}/${post.eventDate!.month}/${post.eventDate!.year}',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isDark ? Colors.grey.shade300 : const Color(0xFF334155),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                            ],
+                                            if (post.venue != null && post.venue!.isNotEmpty) ...[
+                                              Icon(Icons.location_on_rounded, size: 12, color: isDark ? Colors.purple.shade200 : Colors.purple),
+                                              const SizedBox(width: 3),
+                                              Expanded(
+                                                child: Text(
+                                                  post.venue!,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ],
+
+                                      if (isUpdate) ...[
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: (isInstalled
+                                                        ? const Color(0xFF10B981)
+                                                        : const Color(0xFF2563EB))
+                                                    .withValues(
+                                                      alpha: isDark ? 0.25 : 0.12,
+                                                    ),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: (isInstalled
+                                                          ? const Color(0xFF10B981)
+                                                          : const Color(0xFF2563EB))
+                                                      .withValues(alpha: 0.4),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    isInstalled
+                                                        ? Icons.check_circle_rounded
+                                                        : Icons.rocket_launch_rounded,
+                                                    size: 13,
+                                                    color: isInstalled
+                                                        ? const Color(0xFF10B981)
+                                                        : const Color(0xFF2563EB),
+                                                  ),
+                                                  const SizedBox(width: 5),
+                                                  Text(
+                                                    isInstalled
+                                                        ? '✓ Installed (v${_extractNotificationVersion(n)}) • Up to date'
+                                                        : 'App Update • Tap to view & install',
+                                                    style: TextStyle(
+                                                      fontSize: 11.5,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: isInstalled
+                                                          ? (isDark
+                                                              ? const Color(0xFF34D399)
+                                                              : const Color(0xFF059669))
+                                                          : (isDark
+                                                              ? const Color(0xFF60A5FA)
+                                                              : const Color(0xFF1D4ED8)),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ] else if (hasPost && !isAdminAnnounce) ...[
                                         const SizedBox(height: 6),
                                         Row(
                                           children: [
                                             Icon(
                                               Icons.open_in_new_rounded,
-                                              size: 13,
+                                              size: 12,
                                               color: catColor,
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
-                                              'Tap to view post',
+                                              post?.isEvent == true ? 'Tap to view event details' : 'Tap to view post',
                                               style: TextStyle(
                                                 fontSize: 11.5,
                                                 fontWeight: FontWeight.w700,
@@ -724,6 +974,37 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     ],
                                   ),
                                 ),
+
+                                // Image Thumbnail Preview on the Right (if post has images)
+                                if (firstImage.isNotEmpty) ...[
+                                  const SizedBox(width: 10),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Container(
+                                      width: 54,
+                                      height: 54,
+                                      decoration: BoxDecoration(
+                                        color: isDark ? const Color(0xFF24242A) : Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: isDark ? const Color(0xFF33333E) : Colors.grey.shade200,
+                                          width: 0.8,
+                                        ),
+                                      ),
+                                      child: AppImage(
+                                        source: firstImage,
+                                        width: 54,
+                                        height: 54,
+                                        fit: BoxFit.cover,
+                                        errorChild: Icon(
+                                          post?.isEvent == true ? Icons.event : Icons.image_outlined,
+                                          size: 22,
+                                          color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),

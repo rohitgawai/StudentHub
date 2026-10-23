@@ -88,20 +88,10 @@ class _EventsScreenState extends State<EventsScreen>
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text(
-          'Events & Workshops',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        centerTitle: false,
-        backgroundColor: isDark ? const Color(0xFF000000) : Colors.white,
-        foregroundColor: isDark ? Colors.white : const Color(0xFF0F172A),
-        elevation: 0,
-        scrolledUnderElevation: 1,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      body: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF121212) : Colors.grey.shade100,
               borderRadius: BorderRadius.circular(12),
@@ -138,10 +128,9 @@ class _EventsScreenState extends State<EventsScreen>
               ],
             ),
           ),
-        ),
-      ),
-      body: TabBarView(
-        controller: tabController,
+          Expanded(
+            child: TabBarView(
+              controller: tabController,
         children: [
           _buildEventList(
             context,
@@ -181,6 +170,9 @@ class _EventsScreenState extends State<EventsScreen>
             dataService: dataService,
             emptyMessage: 'You have not registered for any events yet.',
             onRefresh: () => _handleRefresh(dataService),
+          ),
+        ],
+            ),
           ),
         ],
       ),

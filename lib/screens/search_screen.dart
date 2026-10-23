@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/post_model.dart';
+import '../models/user_model.dart';
 import '../services/mock_data_service.dart';
+import '../widgets/role_badge.dart';
+import '../widgets/app_image.dart';
 import 'post_detail_screen.dart';
+import 'user_profile_screen.dart';
 
 /// Instagram / X (Twitter) style full-page dedicated search screen.
 /// Opens with a blank/clean backdrop, auto-focused search bar, recent search history,
@@ -158,6 +162,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = dataService.config.primaryColor;
     final matchingPosts = _filterPosts(dataService.posts);
+    final matchingUsers = dataService.searchUsers(_query);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F0F12) : Colors.white,
@@ -220,7 +225,9 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
       ),
-      body: _query.trim().isEmpty ? _buildBlankState(isDark, primaryColor) : _buildSearchResults(isDark, primaryColor, matchingPosts),
+      body: _query.trim().isEmpty
+          ? _buildBlankState(isDark, primaryColor)
+          : _buildSearchResults(context, isDark, primaryColor, matchingPosts, matchingUsers, dataService),
     );
   }
 
@@ -327,9 +334,142 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  Widget _buildUserAccountTile(
+    BuildContext context,
+    UserModel user,
+    bool isDark,
+    Color primaryColor,
+    MockDataService dataService,
+  ) {
+    final avatar = dataService.getAuthorAvatar(user.id, user.name) ?? user.avatarUrl;
+    final role = user.roles.isNotEmpty ? user.roles.first : UserRole.student;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () {
+        _onSearchSubmitted(_query);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (c) => UserProfileScreen(
+              authorId: user.id,
+              authorName: user.name,
+              authorRole: role,
+              authorAvatarUrl: avatar,
+              department: user.department,
+              year: user.year,
+              email: user.email,
+              studentOrEmployeeId: user.studentOrEmployeeId,
+            ),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+              child: ClipOval(
+                child: avatar.isNotEmpty
+                    ? AppImage(
+                        source: avatar,
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                        errorChild: Text(
+                          user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: isDark ? Colors.white : const Color(0xFF1E293B),
+                          ),
+                        ),
+                      )
+                    : Text(
+                        user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: isDark ? Colors.white : const Color(0xFF1E293B),
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          user.name,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.verified_rounded, size: 14, color: Color(0xFF2563EB)),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      RoleBadge(role: role),
+                      if (user.department.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            user.department,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Results view with filter pills and individual post navigation
-  Widget _buildSearchResults(bool isDark, Color primaryColor, List<PostModel> posts) {
-    const filters = ['All', 'Events', 'Notices', 'Scholarships', 'Academic'];
+  Widget _buildSearchResults(
+    BuildContext context,
+    bool isDark,
+    Color primaryColor,
+    List<PostModel> posts,
+    List<UserModel> users,
+    MockDataService dataService,
+  ) {
+    const filters = ['All', 'Accounts', 'Events', 'Notices', 'Scholarships', 'Academic'];
+
+    final showAccountsOnly = _selectedFilter == 'Accounts';
+    final hasNoResults = showAccountsOnly
+        ? users.isEmpty
+        : (_selectedFilter == 'All' ? (users.isEmpty && posts.isEmpty) : posts.isEmpty);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -345,7 +485,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 padding: const EdgeInsets.only(right: 8),
                 child: FilterChip(
                   selected: isSelected,
-                  label: Text(filter),
+                  label: Text(filter == 'Accounts' && users.isNotEmpty ? 'Accounts (${users.length})' : filter),
                   labelStyle: TextStyle(
                     fontSize: 12,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
@@ -381,7 +521,7 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
         // Results list
         Expanded(
-          child: posts.isEmpty
+          child: hasNoResults
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24.0),
@@ -395,7 +535,9 @@ class _SearchScreenState extends State<SearchScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'No campus results for "$_query"',
+                          showAccountsOnly
+                              ? 'No accounts matching "$_query"'
+                              : 'No campus results for "$_query"',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -405,7 +547,9 @@ class _SearchScreenState extends State<SearchScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Try searching for hackathons, department notices, or faculty names.',
+                          showAccountsOnly
+                              ? 'Try searching by student/faculty name, department, or student ID.'
+                              : 'Try searching for creators, hackathons, notices, or scholarships.',
                           style: TextStyle(
                             fontSize: 12.5,
                             color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -416,16 +560,98 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                   ),
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: posts.length,
-                  separatorBuilder: (ctx, i) => Divider(
-                    height: 16,
-                    color: isDark ? const Color(0xFF202025) : Colors.grey.shade100,
-                  ),
-                  itemBuilder: (context, index) {
-                    final post = posts[index];
-                    return InkWell(
+              : showAccountsOnly
+                  ? ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      itemCount: users.length,
+                      separatorBuilder: (ctx, i) => Divider(
+                        height: 12,
+                        color: isDark ? const Color(0xFF202025) : Colors.grey.shade100,
+                      ),
+                      itemBuilder: (context, index) {
+                        return _buildUserAccountTile(
+                          context,
+                          users[index],
+                          isDark,
+                          primaryColor,
+                          dataService,
+                        );
+                      },
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      children: [
+                        // If in 'All' view and matching users exist, show prominent Social Media People section at top
+                        if (users.isNotEmpty) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'People & Accounts (${users.length})',
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                ),
+                              ),
+                              if (users.length > 3)
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedFilter = 'Accounts';
+                                    });
+                                  },
+                                  child: Text(
+                                    'See all',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: primaryColor,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          ...users.take(3).map(
+                                (u) => _buildUserAccountTile(
+                                  context,
+                                  u,
+                                  isDark,
+                                  primaryColor,
+                                  dataService,
+                                ),
+                              ),
+                          const SizedBox(height: 10),
+                          Divider(
+                            height: 16,
+                            color: isDark ? const Color(0xFF202025) : Colors.grey.shade200,
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                        if (posts.isNotEmpty) ...[
+                          if (users.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                'Posts & Events (${posts.length})',
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                ),
+                              ),
+                            ),
+                          ...List.generate(posts.length, (index) {
+                            final post = posts[index];
+                            return Column(
+                              children: [
+                                if (index > 0)
+                                  Divider(
+                                    height: 16,
+                                    color: isDark ? const Color(0xFF202025) : Colors.grey.shade100,
+                                  ),
+                                InkWell(
                       borderRadius: BorderRadius.circular(12),
                       onTap: () {
                         _onSearchSubmitted(_query);
@@ -536,9 +762,13 @@ class _SearchScreenState extends State<SearchScreen> {
                           ],
                         ),
                       ),
-                    );
-                  },
-                ),
+                                ),
+                              ],
+                            );
+                          }),
+                        ],
+                      ],
+                    ),
         ),
       ],
     );
