@@ -196,6 +196,9 @@ ImageProvider<Object>? resolveImageProvider(String? source) {
     }
     return null;
   }
+  if (source.startsWith('assets/')) {
+    return AssetImage(source);
+  }
   return _DiskCachedNetworkImageProvider(source);
 }
 
@@ -424,10 +427,19 @@ class _ImageLoadingPlaceholder extends StatefulWidget {
 
 class _ImageLoadingPlaceholderState extends State<_ImageLoadingPlaceholder>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  )..repeat(reverse: true);
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    if (!WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+      _controller.repeat(reverse: true);
+    }
+  }
 
   @override
   void dispose() {

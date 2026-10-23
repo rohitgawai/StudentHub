@@ -218,6 +218,8 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     final restored = await _loadLocalState();
     if (_isDisposed) return;
 
+    _seedKnownProfiles();
+
     if (restored != null) {
       final cleanUserAvatar = _sanitizeAvatarUrl(restored.currentUser.avatarUrl) ?? '';
       currentUser = restored.currentUser.copyWith(avatarUrl: cleanUserAvatar);
@@ -237,6 +239,26 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         final clean = _sanitizeAvatarUrl(p.authorAvatarUrl);
         return clean != p.authorAvatarUrl ? p.copyWith(authorAvatarUrl: clean) : p;
       }).toList();
+      for (final seed in _samplePostsList()) {
+        final idx = _posts.indexWhere((p) => p.id == seed.id);
+        if (idx == -1) {
+          _posts.add(seed);
+        } else {
+          _posts[idx] = seed.copyWith(
+            saveCount: math.max(_posts[idx].saveCount, seed.saveCount),
+            likeCount: math.max(_posts[idx].likeCount, seed.likeCount),
+            congratulateCount: math.max(_posts[idx].congratulateCount, seed.congratulateCount),
+            likedUserIds: _posts[idx].likedUserIds,
+            congratulatedUserIds: _posts[idx].congratulatedUserIds,
+            registeredUserIds: _posts[idx].registeredUserIds,
+            authorAvatarUrl: seed.authorAvatarUrl,
+            imageUrl: seed.imageUrl,
+            targetYear: seed.targetYear,
+            registrationDeadline: seed.registrationDeadline,
+            eventDate: seed.eventDate,
+          );
+        }
+      }
       _notifications = restored.notifications
           .where((n) => !n.id.startsWith('notif_save_'))
           .toList();
@@ -333,33 +355,198 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       id: 'usr_101',
       name: 'Aarav Sharma',
       email: 'aarav.sharma@studenthub.edu',
-      studentOrEmployeeId: 'MIT/CS/2023/042',
+      studentOrEmployeeId: 'MIT23-A-01-UG-CSE-101',
       department: 'Computer Science & Engineering',
       year: 'Third Year',
       mobileNumber: '+91 98765 43210',
       avatarUrl: '',
       roles: const [UserRole.student, UserRole.eventHost],
-      savedPostIds: const ['pst_001'],
-      registeredEventIds: const ['pst_004'],
-      congratulatedPostIds: const ['pst_005'],
-      likedPostIds: const ['pst_001'],
+      savedPostIds: const [],
+      registeredEventIds: const [],
+      congratulatedPostIds: const [],
+      likedPostIds: const [],
       isVerified: true,
     );
 
     activeRole = UserRole.student;
 
+    _seedKnownProfiles();
     _generateMockPosts();
     _generateMockRoleRequests();
     _generateMockNotifications();
     _generateMockSubmissions();
 
     _profileLikes.addAll({
-      'fac_101': 48,
-      'fac_102': 32,
-      'fac_103': 64,
-      'host_202': 115,
-      'adm_001': 89,
-      'usr_101': 24,
+      'fac_director_mit': 148,
+      'fac_hod_smita': 96,
+      'usr_vedant_tawade': 135,
+      'usr_abhishek_chavan': 118,
+      'fac_tpo_sanjay': 104,
+      'host_rohan_deshpande': 77,
+      'usr_ananya_joshi': 210,
+      'usr_pooja_gaikwad': 195,
+      'usr_aditya_shinde': 142,
+      'fac_rajesh_deshmukh': 68,
+      'usr_101': 35,
+    });
+  }
+
+  void _seedKnownProfiles() {
+    _authorAvatarCache.addAll({
+      'usr_vedant_tawade': 'assets/images/avatars/vedant_tawade.png',
+      'fac_director_mit': 'assets/images/avatars/dr_nilesh_patil.png',
+      'fac_hod_smita': 'assets/images/avatars/dr_smita_kasar.png',
+      'fac_coordinator': 'assets/images/avatars/dr_bharati_chaudhari.png',
+      'usr_abhishek_chavan': 'assets/images/avatars/abhishek_chavan.png',
+      'fac_tpo_sanjay': 'assets/images/avatars/prof_sanjay_kulkarni.png',
+      'host_rohan_deshpande': 'assets/images/avatars/rohan_deshpande.png',
+      'usr_ananya_joshi': 'assets/images/avatars/ananya_joshi.png',
+      'usr_pooja_gaikwad': 'assets/images/avatars/pooja_gaikwad.png',
+      'usr_aditya_shinde': 'assets/images/avatars/aditya_shinde.png',
+      'fac_rajesh_deshmukh': 'assets/images/avatars/prof_rajesh_deshmukh.png',
+    });
+
+    _knownProfiles.addAll({
+      'usr_vedant_tawade': UserModel(
+        id: 'usr_vedant_tawade',
+        name: 'Vedant Tawade',
+        email: 'vedant.tawade@csn.mit.asia',
+        studentOrEmployeeId: 'MIT23-A-04-UG-CSE-089',
+        department: 'Computer Science & Engineering',
+        year: 'Final Year',
+        mobileNumber: '+91 75885 83192',
+        avatarUrl: 'assets/images/avatars/vedant_tawade.png',
+        roles: const [UserRole.student, UserRole.eventHost],
+        savedPostIds: const [],
+        registeredEventIds: const [],
+        isVerified: true,
+      ),
+      'fac_director_mit': UserModel(
+        id: 'fac_director_mit',
+        name: 'Dr. Nilesh Patil',
+        email: 'director.mitt@mit.asia',
+        studentOrEmployeeId: 'MIT-DIR-2018-001',
+        department: 'Administration',
+        year: 'Faculty',
+        mobileNumber: '+91 240 2375355',
+        avatarUrl: 'assets/images/avatars/dr_nilesh_patil.png',
+        roles: const [UserRole.admin, UserRole.faculty],
+        savedPostIds: const [],
+        registeredEventIds: const [],
+        isVerified: true,
+      ),
+      'fac_hod_smita': UserModel(
+        id: 'fac_hod_smita',
+        name: 'Dr. Smita Kasar',
+        email: 'hod.cse@mit.asia',
+        studentOrEmployeeId: 'MIT-EMP-CSE-102',
+        department: 'Computer Science & Engineering',
+        year: 'Faculty',
+        mobileNumber: '+91 94222 18765',
+        avatarUrl: 'assets/images/avatars/dr_smita_kasar.png',
+        roles: const [UserRole.faculty],
+        savedPostIds: const [],
+        registeredEventIds: const [],
+        isVerified: true,
+      ),
+      'usr_abhishek_chavan': UserModel(
+        id: 'usr_abhishek_chavan',
+        name: 'Abhishek Chavan',
+        email: 'abhishek.chavan@mgmu.ac.in',
+        studentOrEmployeeId: 'JNEC-2023-CS-045',
+        department: 'Computer Science & Engineering',
+        year: 'Final Year',
+        mobileNumber: '+91 88880 99011',
+        avatarUrl: 'assets/images/avatars/abhishek_chavan.png',
+        roles: const [UserRole.student, UserRole.eventHost],
+        savedPostIds: const [],
+        registeredEventIds: const [],
+        isVerified: true,
+      ),
+      'fac_tpo_sanjay': UserModel(
+        id: 'fac_tpo_sanjay',
+        name: 'Prof. Sanjay Kulkarni',
+        email: 'tpo@mit.asia',
+        studentOrEmployeeId: 'MIT-EMP-TPO-015',
+        department: 'Computer Science & Engineering',
+        year: 'Faculty',
+        mobileNumber: '+91 94231 67890',
+        avatarUrl: 'assets/images/avatars/prof_sanjay_kulkarni.png',
+        roles: const [UserRole.faculty],
+        savedPostIds: const [],
+        registeredEventIds: const [],
+        isVerified: true,
+      ),
+      'host_rohan_deshpande': UserModel(
+        id: 'host_rohan_deshpande',
+        name: 'Rohan Deshpande',
+        email: 'rohan.deshpande@studenthub.edu',
+        studentOrEmployeeId: 'MIT24-B-02-UG-ETC-033',
+        department: 'Electronics & Communication',
+        year: 'Third Year',
+        mobileNumber: '+91 97654 32109',
+        avatarUrl: 'assets/images/avatars/rohan_deshpande.png',
+        roles: const [UserRole.student, UserRole.eventHost],
+        savedPostIds: const [],
+        registeredEventIds: const [],
+        isVerified: true,
+      ),
+      'usr_ananya_joshi': UserModel(
+        id: 'usr_ananya_joshi',
+        name: 'Ananya Joshi',
+        email: 'ananya.joshi@studenthub.edu',
+        studentOrEmployeeId: 'MIT24-A-01-UG-IT-021',
+        department: 'Information Technology',
+        year: 'Third Year',
+        mobileNumber: '+91 98901 23456',
+        avatarUrl: 'assets/images/avatars/ananya_joshi.png',
+        roles: const [UserRole.student],
+        savedPostIds: const [],
+        registeredEventIds: const [],
+        isVerified: true,
+      ),
+      'usr_pooja_gaikwad': UserModel(
+        id: 'usr_pooja_gaikwad',
+        name: 'Pooja Gaikwad',
+        email: 'pooja.gaikwad@studenthub.edu',
+        studentOrEmployeeId: 'MIT24-A-03-UG-CSE-067',
+        department: 'Computer Science & Engineering',
+        year: 'Third Year',
+        mobileNumber: '+91 95456 78901',
+        avatarUrl: 'assets/images/avatars/pooja_gaikwad.png',
+        roles: const [UserRole.student],
+        savedPostIds: const [],
+        registeredEventIds: const [],
+        isVerified: true,
+      ),
+      'usr_aditya_shinde': UserModel(
+        id: 'usr_aditya_shinde',
+        name: 'Aditya Shinde',
+        email: 'aditya.shinde@studenthub.edu',
+        studentOrEmployeeId: 'MIT23-A-02-UG-CSE-112',
+        department: 'Computer Science & Engineering',
+        year: 'Final Year',
+        mobileNumber: '+91 91580 12345',
+        avatarUrl: 'assets/images/avatars/aditya_shinde.png',
+        roles: const [UserRole.student, UserRole.eventHost],
+        savedPostIds: const [],
+        registeredEventIds: const [],
+        isVerified: true,
+      ),
+      'fac_rajesh_deshmukh': UserModel(
+        id: 'fac_rajesh_deshmukh',
+        name: 'Prof. Rajesh Deshmukh',
+        email: 'innovation@mssu.ac.in',
+        studentOrEmployeeId: 'MSIS-GOV-2026-09',
+        department: 'Mechanical Engineering',
+        year: 'Faculty',
+        mobileNumber: '+91 98230 11223',
+        avatarUrl: 'assets/images/avatars/prof_rajesh_deshmukh.png',
+        roles: const [UserRole.faculty],
+        savedPostIds: const [],
+        registeredEventIds: const [],
+        isVerified: true,
+      ),
     });
   }
 
@@ -2982,6 +3169,15 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       final cached = _sanitizeAvatarUrl(_authorAvatarCache[authorId]);
       if (cached != null && cached.isNotEmpty) return cached;
     }
+    if (authorName != null && authorName.trim().isNotEmpty) {
+      for (final entry in _authorAvatarCache.entries) {
+        if (authorName.toLowerCase().contains(entry.key.toLowerCase()) ||
+            entry.key.toLowerCase().contains(authorName.toLowerCase())) {
+          final cached = _sanitizeAvatarUrl(entry.value);
+          if (cached != null && cached.isNotEmpty) return cached;
+        }
+      }
+    }
     if (authorId != null && _knownProfiles.containsKey(authorId)) {
       final profileAvatar = _sanitizeAvatarUrl(_knownProfiles[authorId]?.avatarUrl);
       if (profileAvatar != null && profileAvatar.isNotEmpty) return profileAvatar;
@@ -3593,16 +3789,21 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     List<String> userCongratulated = List.from(
       currentUser.congratulatedPostIds,
     );
-    final wasCongratulated = userCongratulated.contains(postId);
+    final wasCongratulated = userCongratulated.contains(postId) || postCongratulated.contains(currentUser.id);
+    int newCount = post.congratulateCount;
 
     if (wasCongratulated) {
       postCongratulated.remove(currentUser.id);
       userCongratulated.remove(postId);
+      newCount = (newCount > 0 ? newCount - 1 : 0);
     } else {
       if (!postCongratulated.contains(currentUser.id)) {
         postCongratulated.add(currentUser.id);
       }
-      userCongratulated.add(postId);
+      if (!userCongratulated.contains(postId)) {
+        userCongratulated.add(postId);
+      }
+      newCount = newCount + 1;
 
       // Broadcast congratulation to the creator's device only (never self-notify)
       if (post.authorId != currentUser.id &&
@@ -3629,7 +3830,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
 
     _posts[index] = post.copyWith(
       congratulatedUserIds: postCongratulated,
-      congratulateCount: postCongratulated.length,
+      congratulateCount: newCount,
     );
     currentUser = currentUser.copyWith(
       congratulatedPostIds: userCongratulated,
@@ -3647,13 +3848,21 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     PostModel post = _posts[index];
     List<String> liked = List.from(post.likedUserIds);
     List<String> userLiked = List.from(currentUser.likedPostIds);
+    final wasLiked = userLiked.contains(postId) || liked.contains(currentUser.id);
+    int newCount = post.likeCount;
 
-    if (liked.contains(currentUser.id)) {
+    if (wasLiked) {
       liked.remove(currentUser.id);
       userLiked.remove(postId);
+      newCount = (newCount > 0 ? newCount - 1 : 0);
     } else {
-      liked.add(currentUser.id);
-      userLiked.add(postId);
+      if (!liked.contains(currentUser.id)) {
+        liked.add(currentUser.id);
+      }
+      if (!userLiked.contains(postId)) {
+        userLiked.add(postId);
+      }
+      newCount = newCount + 1;
 
       // Broadcast like to the creator's device only (never self-notify)
       if (post.authorId != currentUser.id &&
@@ -3680,7 +3889,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
 
     _posts[index] = post.copyWith(
       likedUserIds: liked,
-      likeCount: liked.length,
+      likeCount: newCount,
     );
     currentUser = currentUser.copyWith(likedPostIds: userLiked);
     _persistPost(_posts[index]);
@@ -4899,146 +5108,622 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // --- Initial Mock Data Generators ---
-  void _generateMockPosts() {
+  List<PostModel> _samplePostsList() {
     final now = DateTime.now();
-    _posts = [
+    return [
+      // 1. URGENT SCHOLARSHIP NOTICE (From User Image/Notice)
       PostModel(
-        id: 'pst_001',
-        title: '🔥 Urgent: Mid-Semester Exam Schedule Revision (Autumn 2026)',
+        id: 'pst_scholarship_nsp_2026',
+        title: '🚨 URGENT NOTICE: Post-Matric Scholarship Scheme 2026-27 (Mandatory NSP Application)',
         description:
-            'All 3rd and 4th year CSE & IT students must review the revised examination timetable. Exams start on Monday at 09:00 AM in Block C.',
+            '''Gramaudyogik Shikshan Mandal's MAHARASHTRA INSTITUTE OF TECHNOLOGY, Chhatrapati Sambhajinagar
+(An Autonomous Institute | DTE Code: 2113 | AISHE: C-34399)
+Ref. No.: MIT/A/2026/526 | Date: 19-10-2026
+
+### ⚠️ :महत्वाची सूचना : (Important Notice)
+
+शैक्षणिक वर्ष 2026–27 या प्रथम वर्षात (FE / First Year Fresh) नविन प्रवेशित इतर मागास प्रवर्ग, विमुक्त भटक्या जमाती व विशेष मागास प्रवर्ग प्रवर्गातील (OBC, SBC, VJNT, OBC-GIRLS) विद्यार्थ्यांना सूचित करण्यात येते की, नॅशनल स्कॉलरशिप पोर्टल (National Scholarship Portal - NSP) या प्रणालीवर मॅट्रिकोत्तर शिष्यवृत्ती योजनांचे ऑनलाईन अर्ज भरण्याची प्रक्रिया सुरू झाली आहे.
+
+📌 Eligible Schemes Under PM YASASVI:
+1. इमाव (OBC) Post Matric Scholarship
+2. विमाप्र (SBC) Post Matric Scholarship
+3. विजाभज (VJNT) Post Matric Scholarship
+4. व्यावसायिक अभ्यासक्रमांमध्ये प्रवेश घेणाऱ्या इतर मागासवर्गिय मुलींसाठी (OBC-GIRLS) मॅट्रिकोत्तर शिष्यवृत्ती
+
+⚠️ अतिशय महत्वाचे बदल (Crucial Change):
+वरील चार योजनांसाठी फ्रेश अर्ज केवळ NSP पोर्टलवरच करावेत. यासाठी नवीन अर्ज करण्याची सुविधा MahaDBT पोर्टलवर असणार नाही याची गांभीर्याने नोंद घ्यावी!
+
+🔑 Mandatory Pre-requisites:
+• कौटुंबिक वार्षिक उत्पन्न रु. 2.50/- लाख रुपयांपेक्षा कमी असावे.
+• विद्यार्थ्याचा आधार नंबर बँक खात्याशी आणि मोबाईल नंबरशी जोडलेला असणे अनिवार्य आहे.
+• बँकेत जाऊन NPCI Mapping (DBT Active) करणे अत्यावश्यक आहे, अन्यथा शिष्यवृत्तीचा लाभ मिळणार नाही!''',
         category: PostCategory.urgent,
-        department: 'Computer Science & Engineering',
-        targetYear: 'Third Year',
-        authorName: 'Dr. Ramesh K. Verma (Dean Academics)',
-        authorRole: UserRole.faculty,
-        authorId: 'fac_101',
-        timestamp: now.subtract(const Duration(hours: 2)),
+        department: 'All Departments',
+        targetYear: 'All',
+        authorName: 'Dr. Nilesh Patil (Director & Principal)',
+        authorRole: UserRole.admin,
+        authorId: 'fac_director_mit',
+        authorAvatarUrl: 'assets/images/avatars/dr_nilesh_patil.png',
+        imageUrl: 'assets/images/scholarship_cover.jpg',
+        timestamp: now.subtract(const Duration(hours: 1)),
         isUrgent: true,
         isPinned: true,
+        saveCount: 420,
+        likeCount: 685,
         attachments: [
           PostAttachment(
-            title: 'Mid_Sem_Exam_Schedule_Autumn2026.pdf',
+            title: 'MIT_Scholarship_Notice_526_NSP.pdf',
             fileType: 'pdf',
-            url: 'assets/pdfs/mid_sem_exam_schedule.pdf',
-            fileSize: '1.4 MB',
+            url: 'assets/pdfs/nsp_scholarship_notice_2026.pdf',
+            fileSize: '416 KB',
           ),
         ],
-        saveCount: 142,
+        links: const [
+          PostLink(label: 'National Scholarship Portal (NSP)', url: 'https://scholarships.gov.in'),
+          PostLink(label: 'Check Aadhaar-NPCI Bank Seeding', url: 'https://myaadhaar.uidai.gov.in'),
+        ],
       ),
 
+      // 2. TECHयुग 2K26 (From User Image 1)
       PostModel(
-        id: 'pst_003',
-        title:
-            '📚 Academic Notice: Elective Selection Guidelines for Final Year',
+        id: 'pst_techyug_2026',
+        title: '🚀 TECHयुग 2K26: State-Level Project Exhibition & Competition (Hybrid Mode)',
         description:
-            'Please submit your preferences for Open Elective Course III before Friday 5:00 PM. Access the student portal to review syllabus descriptions.',
-        category: PostCategory.academic,
-        department: 'Information Technology',
-        targetYear: 'Final Year',
-        authorName: 'Prof. Ananya Sen',
-        authorRole: UserRole.faculty,
-        authorId: 'fac_102',
-        timestamp: now.subtract(const Duration(days: 1)),
-        attachments: [
-          PostAttachment(
-            title: 'Open_Elective_Syllabus_2026.pdf',
-            fileType: 'pdf',
-            url: 'assets/pdfs/open_elective_syllabus.pdf',
-            fileSize: '2.8 MB',
-          ),
-        ],
-        saveCount: 45,
-      ),
-      PostModel(
-        id: 'pst_004',
-        title: '🤖 Hands-on Workshop: Flutter & Mobile AI Apps',
-        description:
-            'Learn to build modern cross-platform mobile apps with Flutter, Supabase backend, and local AI model integration. Prerequisites: Basic OOP concepts.',
-        category: PostCategory.workshop,
+            '''G.S. Mandal's Maharashtra Institute of Technology (Autonomous), Chh. Sambhajinagar, Department of Computer Science & Engineering presents TECHयुग 2K26 - New Technological Era!
+
+⚡ Competition Themes:
+• AI & Data Science
+• Cyber Security & Ethical Hacking
+• IoT & Embedded Systems
+• Cloud Computing & DevOps
+• Emerging Technologies (Web3, AR/VR)
+
+👥 Team Size: 1–4 Members
+🏆 Exciting Cash Prizes, Trophies & Industry Mentorship from EduDiagno & SYMETRIQUE!
+📍 Note: Participants from CSN must participate in Offline mode.
+
+📞 Student Coordinators:
+• Vedant Tawade: +91 75885 83192
+• Shon Ambekar: +91 75880 89780
+
+🏛️ Faculty Coordinator: Dr. Bharati Chaudhari | HOD CSE: Dr. Smita Kasar | Director: Dr. Nilesh Patil''',
+        category: PostCategory.event,
         department: 'Computer Science & Engineering',
-        authorName: 'Mobile Dev Club',
+        targetYear: 'All',
+        authorName: 'Vedant Tawade (CSI Student Chapter Lead)',
         authorRole: UserRole.eventHost,
-        authorId: 'host_202',
-        timestamp: now.subtract(const Duration(days: 1, hours: 4)),
-        imageUrl:
-            'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=800',
-        venue: 'CS Lab 302',
-        eventDate: now.add(const Duration(days: 6)),
-        registrationDeadline: now.add(const Duration(days: 3)),
-        maxParticipants: 60,
-        registeredUserIds: ['usr_105'],
-        saveCount: 94,
+        authorId: 'usr_vedant_tawade',
+        authorAvatarUrl: 'assets/images/avatars/vedant_tawade.png',
+        imageUrl: 'assets/images/techyug_2k26.jpg',
+        timestamp: now.subtract(const Duration(hours: 4)),
+        isUrgent: false,
+        isPinned: true,
+        saveCount: 184,
+        likeCount: 312,
+        venue: 'MIT CSN Campus, Chh. Sambhajinagar (Hybrid for outside participants)',
+        eventDate: DateTime(2026, 11, 24, 10, 0),
+        registrationDeadline: DateTime(2026, 11, 20, 23, 59),
+        maxParticipants: 120,
+        registeredUserIds: const ['usr_101', 'usr_102', 'usr_105'],
+        links: const [
+          PostLink(label: 'Official Guidelines Brochure', url: 'https://mit.asia/cse/techyug2k26'),
+          PostLink(label: 'Registration Extended Portal', url: 'https://forms.gle/techyug2k26'),
+        ],
+        form: const FormDefinition(
+          id: 'frm_techyug_2026',
+          title: 'TECHयुग 2K26 Project Registration',
+          headerText: 'Register your project team for TECHयुग 2K26 State Level Exhibition',
+          fields: [
+            FormFieldSpec(
+              id: 'fld_techyug_project_title',
+              label: 'Project Title / Topic',
+              type: FormFieldType.shortText,
+              required: true,
+              hint: 'e.g. Smart Traffic Management using Edge AI',
+            ),
+            FormFieldSpec(
+              id: 'fld_techyug_theme',
+              label: 'Competition Domain / Theme',
+              type: FormFieldType.dropdown,
+              required: true,
+              options: [
+                'AI & Data Science',
+                'Cyber Security & Ethical Hacking',
+                'IoT & Embedded System',
+                'Cloud Computing',
+                'Emerging Technologies',
+              ],
+            ),
+            FormFieldSpec(
+              id: 'fld_techyug_team_size',
+              label: 'Number of Team Members',
+              type: FormFieldType.singleChoice,
+              required: true,
+              options: ['1 (Solo)', '2 Members', '3 Members', '4 Members'],
+            ),
+            FormFieldSpec(
+              id: 'fld_techyug_team_lead',
+              label: 'Team Leader Name & Roll / MIT ID',
+              type: FormFieldType.shortText,
+              required: true,
+              hint: 'Full name and MIT ID',
+            ),
+            FormFieldSpec(
+              id: 'fld_techyug_mode',
+              label: 'Mode of Participation',
+              type: FormFieldType.singleChoice,
+              required: true,
+              options: ['Offline (CSN Students Mandatory)', 'Online / Hybrid (Outside CSN only)'],
+            ),
+            FormFieldSpec(
+              id: 'fld_techyug_contact',
+              label: 'Leader WhatsApp Contact Number',
+              type: FormFieldType.phone,
+              required: true,
+            ),
+            FormFieldSpec(
+              id: 'fld_techyug_abstract',
+              label: 'Brief Abstract / GitHub Repo Link',
+              type: FormFieldType.longText,
+              hint: 'Outline problem statement, tech stack, and working demo link...',
+            ),
+          ],
+        ),
       ),
+
+      // 3. OPENFORGE HACKATHON (From User Image 3)
       PostModel(
-        id: 'pst_005',
-        title: '🏆 Campus Sports Squad Wins Inter-College Basketball Trophy!',
+        id: 'pst_openforge_hackathon',
+        title: '⚡ OPENFORGE HACKATHON: 10-Hour Live Build at JNEC Campus',
         description:
-            'Hearty congratulations to the MIT Eagles Basketball team for taking 1st place in the State Inter-University Championship 2026!',
-        category: PostCategory.achievement,
-        department: 'Management Studies',
-        authorName: 'Sports Directorate',
-        authorRole: UserRole.admin,
-        authorId: 'adm_001',
-        timestamp: now.subtract(const Duration(days: 2)),
-        imageUrl:
-            'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&q=80&w=800',
-        saveCount: 156,
-        congratulatedUserIds: ['usr_101'],
-        congratulateCount: 1,
+            '''Jawaharlal Nehru Engineering College (JNEC) & MGM University, Swayambhu 2026 presents OPENFORGE HACKATHON!
+
+🔥 Tagline: BUILD FAST. BUILD REAL. BUILD OPEN.
+⏱️ Format: 10-Hour Live Sprint Build
+👥 Team Size: 1–4 Members
+💰 Registration Fee: ₹200 / Team (Capacity: 40 Teams / ~150 Participants)
+
+🏆 Competition Tracks & Prize Pool (₹20,000 Total):
+• Track 1: Open Weight AI & Open Source Tools — ₹10,000 Winner Prize
+• Track 2: Play Lab (Game Dev & Creative Tech) — ₹10,000 Winner Prize
+🎁 Exclusive swags & vouchers from GDAI and DomAiyn Labs!
+
+📞 Student POCs:
+• Abhishek Chavan: +91 88880 99011
+• Joel Anthony: +91 70307 23724
+• Syed Umair: +91 98235 16789''',
+        category: PostCategory.event,
+        department: 'Computer Science & Engineering',
+        targetYear: 'All',
+        authorName: 'Abhishek Chavan (JNEC Tech Club Organizers)',
+        authorRole: UserRole.eventHost,
+        authorId: 'usr_abhishek_chavan',
+        authorAvatarUrl: 'assets/images/avatars/abhishek_chavan.png',
+        imageUrl: 'assets/images/openforge_hackathon.jpg',
+        timestamp: now.subtract(const Duration(hours: 12)),
+        isUrgent: false,
+        isPinned: false,
+        saveCount: 198,
+        likeCount: 375,
+        venue: 'JNEC Campus, Department Computer Labs & Computing Centres, Chh. Sambhajinagar',
+        eventDate: DateTime(2026, 11, 18, 7, 30),
+        registrationDeadline: DateTime(2026, 11, 15, 23, 59),
+        maxParticipants: 160,
+        registeredUserIds: const ['usr_101', 'usr_103'],
+        links: const [
+          PostLink(label: 'Register Team (JNEC Portal)', url: 'https://swayambhu.mgmu.ac.in/openforge'),
+          PostLink(label: 'Track Problem Statements', url: 'https://github.com/openforge-hackathon/tracks-2026'),
+        ],
       ),
+
+      // 4. SEVA FIRST INNOVATION CHALLENGE (From User Image 2)
       PostModel(
-        id: 'pst_006',
-        title: '💼 Campus Placement Drive: Google Cloud & Microsoft Tech Roles',
+        id: 'pst_seva_first_2026',
+        title: '💡 Seva First Innovation Challenge 2026 (₹5 Crore Financial Support Pool)',
         description:
-            'Eligible 4th year CSE, IT, and ECE students can register for upcoming technical interviews. Minimum CGPA required: 7.5.',
-        category: PostCategory.placement,
-        department: 'Electronics & Communication',
-        targetYear: 'Final Year',
-        authorName: 'Placement Cell',
+            '''Government of Maharashtra, Department of Skills, Employment, Entrepreneurship & Innovation in partnership with Maharashtra State Skills University announces the SEVA FIRST INNOVATION CHALLENGE 2026!
+
+"This is an era of creativity, investment and innovation. The youth power of the new era will play a crucial role in laying the foundation for a Viksit Bharat." — Hon. Prime Minister Narendra Modi
+
+💰 FINANCIAL SUPPORT OF ₹5 CRORE FOR WINNERS!
+
+🎯 10 Thrust Sectors (5 Sub-Themes each):
+1. Agriculture & Agritech
+2. Law and Order
+3. Women and Child Welfare
+4. Urban Development & Smart Cities
+5. Health and Medical Technologies
+6. Defence & Security
+7. Sustainability (Energy, Climate & Clean Tech)
+8. Infrastructure and Mobility
+9. Emerging Technologies (AI, Blockchain, Quantum)
+10. Education and Employability
+
+Submit your concept note and pitch deck before the submission deadline!''',
+        category: PostCategory.event,
+        department: 'All Departments',
+        targetYear: 'All',
+        authorName: 'Prof. Rajesh Deshmukh (Nodal Officer, Innovation Cell)',
         authorRole: UserRole.faculty,
-        authorId: 'fac_103',
-        timestamp: now.subtract(const Duration(days: 2, hours: 8)),
+        authorId: 'fac_rajesh_deshmukh',
+        authorAvatarUrl: 'assets/images/avatars/prof_rajesh_deshmukh.png',
+        imageUrl: 'assets/images/seva_first_challenge.jpg',
+        timestamp: now.subtract(const Duration(days: 1)),
+        isUrgent: false,
+        isPinned: false,
+        saveCount: 265,
+        likeCount: 428,
+        venue: 'Maharashtra State Innovation Society / Online Portal',
+        eventDate: DateTime(2026, 11, 28, 18, 0),
+        registrationDeadline: DateTime(2026, 11, 25, 23, 59),
+        maxParticipants: 500,
+        links: const [
+          PostLink(label: 'Seva Challenge Portal', url: 'http://sevainnovationchallenge.in/'),
+          PostLink(label: 'Concept Submission Guidelines', url: 'http://sevainnovationchallenge.in/rules'),
+        ],
+      ),
+
+      // 5. TCS DIGITAL & NINJA PLACEMENT DRIVE
+      PostModel(
+        id: 'pst_placement_tcs_2026',
+        title: '💼 Campus Placement Drive 2026: TCS Digital (₹9.0 LPA) & Ninja (₹4.5 LPA)',
+        description:
+            '''The Training & Placement Cell is pleased to announce the on-campus recruitment drive for Tata Consultancy Services (TCS) for batch 2026–27.
+
+🎯 Offered Profiles:
+• TCS Digital: ₹9.0 LPA to ₹11.5 LPA (Advanced Coding & System Architecture)
+• TCS Ninja: ₹3.8 LPA to ₹4.5 LPA (Core Engineering & Software Roles)
+
+📋 Eligibility Criteria:
+• B.Tech Final Year (CSE, IT, E&TC, Mechanical, Electrical)
+• Minimum 60.0% or 6.5 CGPA throughout 10th, 12th/Diploma, and undergraduate degree.
+• Maximum 1 active backlog permitted at the time of online assessment.
+
+🗓️ National Qualifier Test (NQT): Scheduled from 8th November 2026 in the campus online testing center (Lab 401 & 402).''',
+        category: PostCategory.placement,
+        department: 'Computer Science & Engineering',
+        targetYear: 'Final Year',
+        authorName: 'Prof. Sanjay Kulkarni (Head, Training & Placement Cell)',
+        authorRole: UserRole.faculty,
+        authorId: 'fac_tpo_sanjay',
+        authorAvatarUrl: 'assets/images/avatars/prof_sanjay_kulkarni.png',
+        timestamp: now.subtract(const Duration(days: 1, hours: 2)),
+        isUrgent: false,
+        isPinned: false,
+        saveCount: 340,
+        likeCount: 512,
+        venue: 'Lab 401 & 402, Academic Block B',
+        eventDate: DateTime(2026, 11, 8, 9, 0),
+        registrationDeadline: DateTime(2026, 11, 2, 23, 59),
+        maxParticipants: 250,
         attachments: [
           PostAttachment(
-            title: 'Placement_Drive_Eligibility_Details.pdf',
+            title: 'TCS_Campus_Hiring_Guidelines_2026.pdf',
             fileType: 'pdf',
             url: 'assets/pdfs/placement_eligibility.pdf',
             fileSize: '890 KB',
           ),
         ],
-        saveCount: 210,
+        links: const [
+          PostLink(label: 'TCS NextStep Portal Register', url: 'https://nextstep.tcs.com'),
+          PostLink(label: 'TPO Internal Hall Ticket Form', url: 'https://mit.asia/tpo/tcs-drive-2026'),
+        ],
+      ),
+
+      // 6. ROBOCLASH 2026 (Robotics Competition)
+      PostModel(
+        id: 'pst_roboclash_2026',
+        title: '🤖 RoboClash 2026: Annual Inter-College Line Follower & Robo-Wars Championship',
+        description:
+            '''The Robotics & Mechatronics Society invites all engineering enthusiasts to compete in the biggest robot combat arena in the region: RoboClash 2026!
+
+⚡ Championship Categories:
+1. Robo-Wars (15kg & 30kg Weight Class): High-torque spinners, lifters, and wedge bots in a reinforced poly-carbonate cage.
+2. Fastest Line Follower (Autonomous): PID tuned speed runs through sharp curves, bridges, and dead ends.
+3. Robo Soccer (Manual Wireless Control): 2 vs 2 bot soccer showdown with custom mechanical kicking modules.
+
+💰 Prize Pool: ₹35,000 cash prizes + certificates accredited by Robotics Society of India.
+
+Register your bot and team roster below!''',
+        category: PostCategory.event,
+        department: 'Electronics & Communication',
+        targetYear: 'All',
+        authorName: 'Rohan Deshpande (President, Robotics & Mechatronics Society)',
+        authorRole: UserRole.eventHost,
+        authorId: 'host_rohan_deshpande',
+        authorAvatarUrl: 'assets/images/avatars/rohan_deshpande.png',
+        imageUrl: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=800',
+        timestamp: now.subtract(const Duration(days: 1, hours: 8)),
+        isUrgent: false,
+        isPinned: false,
+        saveCount: 155,
+        likeCount: 289,
+        venue: 'Central Quadrangle Arena & OAT, MIT Campus',
+        eventDate: DateTime(2026, 12, 5, 9, 30),
+        registrationDeadline: DateTime(2026, 11, 30, 23, 59),
+        maxParticipants: 80,
+        links: const [
+          PostLink(label: 'Robot Arena Specifications PDF', url: 'https://mit.asia/robotics/roboclash2026-rulebook'),
+        ],
+        form: const FormDefinition(
+          id: 'frm_roboclash_2026',
+          title: 'RoboClash 2026 Battle Registration',
+          headerText: 'Submit your robot technical specifications and team roster',
+          fields: [
+            FormFieldSpec(
+              id: 'fld_bot_name',
+              label: 'Robot Name',
+              type: FormFieldType.shortText,
+              required: true,
+              hint: 'e.g. ThunderBolt v2',
+            ),
+            FormFieldSpec(
+              id: 'fld_bot_category',
+              label: 'Fight Category',
+              type: FormFieldType.singleChoice,
+              required: true,
+              options: [
+                'Robo-Wars (15kg Class)',
+                'Robo-Wars (30kg Heavyweight)',
+                'Fastest Line Follower (Autonomous)',
+                'Robo Soccer (2v2 Wireless)',
+              ],
+            ),
+            FormFieldSpec(
+              id: 'fld_bot_weight',
+              label: 'Measured Weight (in kg)',
+              type: FormFieldType.number,
+              required: true,
+              hint: 'e.g. 14.8',
+            ),
+            FormFieldSpec(
+              id: 'fld_bot_rf',
+              label: 'Radio Frequency / Remote Type',
+              type: FormFieldType.shortText,
+              required: true,
+              hint: 'e.g. 2.4 GHz DSMX / FlySky FS-i6',
+            ),
+          ],
+        ),
+      ),
+
+      // 7. LAB PRACTICAL EXAM TIMETABLE
+      PostModel(
+        id: 'pst_lab_exam_timetable_2026',
+        title: '📑 Academic Circular: Winter 2026 End-Semester Lab Practical Exam Timetable',
+        description:
+            '''All Third Year (TE CSE) students are informed that the End-Semester Practical & Oral Examinations for Winter 2026 have been scheduled between 10th November and 18th November 2026.
+
+📝 Subjects Covered:
+• Database Management Systems Lab (DBMS)
+• Computer Networks & Security Lab (CNS)
+• Full-Stack Web Development & Cloud Lab
+• Mini-Project 2B Review (Phase II Evaluation)
+
+⚠️ Mandatory Guidelines:
+1. Certified journals with signatures of respective batch mentors must be presented before entering the examination hall.
+2. Late entry beyond 15 minutes of the assigned batch reporting time will strictly not be entertained.
+3. External university examiners will be present for oral examinations.''',
+        category: PostCategory.academic,
+        department: 'Computer Science & Engineering',
+        targetYear: 'Third Year',
+        authorName: 'Dr. Smita Kasar (HOD, Computer Science & Engineering)',
+        authorRole: UserRole.faculty,
+        authorId: 'fac_hod_smita',
+        authorAvatarUrl: 'assets/images/avatars/dr_smita_kasar.png',
+        timestamp: now.subtract(const Duration(days: 1, hours: 14)),
+        isUrgent: false,
+        isPinned: false,
+        saveCount: 290,
+        likeCount: 195,
+        venue: 'CSE Department Computer Labs 1 to 4',
+        eventDate: DateTime(2026, 11, 10, 9, 0),
+        attachments: [
+          PostAttachment(
+            title: 'CS_TE_Lab_Exam_Timetable_Winter2026.pdf',
+            fileType: 'pdf',
+            url: 'assets/pdfs/mid_sem_exam_schedule.pdf',
+            fileSize: '1.2 MB',
+          ),
+        ],
+        links: const [
+          PostLink(label: 'Download Batch-wise Roll List', url: 'https://mit.asia/cse/batch-allotment-winter26'),
+        ],
+      ),
+
+      // 8. CULTURAL FEST GALLERY
+      PostModel(
+        id: 'pst_aura_fest_gallery_2026',
+        title: '🎭 Campus Highlights: Reliving the Magic of Aura 2026 Annual Cultural Fest!',
+        description:
+            '''What a phenomenal 3 days of music, dance, theatre, and non-stop energy! ✨
+
+From the mind-blowing Battle of the Bands on Day 1, to the stunning Traditional Fashion Walk on Day 2, and the unforgettable DJ Night that closed out the festival — Aura 2026 witnessed over 4,500 students from 30+ colleges celebrating together!
+
+A huge round of applause to all student volunteers, event heads, and faculty mentors who worked day and night to make this year's cultural extravaganza the biggest one in our college's history! Check out the photo highlights carousel above! 📸🎉''',
+        category: PostCategory.gallery,
+        department: 'All Departments',
+        targetYear: 'All',
+        authorName: 'Ananya Joshi (Cultural Secretary, Student Council)',
+        authorRole: UserRole.student,
+        authorId: 'usr_ananya_joshi',
+        authorAvatarUrl: 'assets/images/avatars/ananya_joshi.png',
+        timestamp: now.subtract(const Duration(days: 2)),
+        imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=800',
+        imageUrls: const [
+          'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=800',
+          'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&q=80&w=800',
+          'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=800',
+          'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&q=80&w=800',
+        ],
+        isUrgent: false,
+        isPinned: false,
+        saveCount: 420,
+        likeCount: 950,
+        congratulateCount: 84,
+        venue: 'Campus Open Amphitheatre',
+        links: const [
+          PostLink(label: 'Full Drive Photo Album (HD)', url: 'https://photos.app.goo.gl/aura2026highlights'),
+        ],
+      ),
+
+      // 9. SMART INDIA HACKATHON WINNERS
+      PostModel(
+        id: 'pst_sih_winners_2026',
+        title: '🏆 Grand Achievement: Team Garud Wins 1st Prize (₹1,00,000) at SIH 2026!',
+        description:
+            '''Huge moment of pride for our institution! 🇮🇳✨
+
+Team Garud, consisting of 6 students from the Department of Computer Science & Engineering, has bagged the 1st Prize of ₹1,00,000 at the Grand Finale of Smart India Hackathon 2026 (Hardware & Software Edition) organized by the Ministry of Education, Government of India!
+
+🌟 Team Members:
+• Pooja Gaikwad (Team Lead, TE CSE)
+• Omkar Kulkarni (TE CSE)
+• Shreya Deshmukh (TE IT)
+• Tanmay Shinde (BE CSE)
+• Sahil Pathan (BE E&TC)
+• Neha Jadhav (TE CSE)
+• Faculty Mentor: Dr. Bharati Chaudhari
+
+🛠️ Winning Solution: An Edge AI-powered Real-time Pothole Detection and Road Quality Severity Index system integrated with drone imagery for municipal corporations.''',
+        category: PostCategory.achievement,
+        department: 'Computer Science & Engineering',
+        targetYear: 'All',
+        authorName: 'Pooja Gaikwad (AI & Data Science Student Lead)',
+        authorRole: UserRole.student,
+        authorId: 'usr_pooja_gaikwad',
+        authorAvatarUrl: 'assets/images/avatars/pooja_gaikwad.png',
+        imageUrl: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&q=80&w=800',
+        timestamp: now.subtract(const Duration(days: 2, hours: 4)),
+        isUrgent: false,
+        isPinned: false,
+        saveCount: 275,
+        likeCount: 820,
+        congratulateCount: 264,
+        links: const [
+          PostLink(label: 'Press Release & Project Demo', url: 'https://sih.gov.in/final-results-2026'),
+        ],
+      ),
+
+      // 10. GENERATIVE AI & GEMINI 3.8 WORKSHOP
+      PostModel(
+        id: 'pst_gemini_ai_workshop_2026',
+        title: '🤖 Hands-on Workshop: Building Agentic Workflows with Google Gemini 3.8 & Flutter',
+        description:
+            '''Ready to go beyond basic prompt engineering and build real, autonomous AI coding agents? 🚀
+
+GDG On-Campus brings an intensive 4-hour hands-on coding workshop on Google Gemini 3.8 & Agentic Architecture!
+
+💻 What You Will Build:
+• Multi-turn tool calling with Gemini Function Calling API
+• Live streaming reasoning models with multi-modal inputs
+• Connecting Gemini with Flutter apps for conversational campus assistance
+• Local embeddings search & RAG pipeline
+
+🎒 Prerequisites: Bring your laptop with Flutter & VS Code/Android Studio installed. Free Gemini API credits provided to all registered attendees!''',
+        category: PostCategory.workshop,
+        department: 'Computer Science & Engineering',
+        targetYear: 'All',
+        authorName: 'Aditya Shinde (Google Developer Group On-Campus Lead)',
+        authorRole: UserRole.eventHost,
+        authorId: 'usr_aditya_shinde',
+        authorAvatarUrl: 'assets/images/avatars/aditya_shinde.png',
+        imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800',
+        timestamp: now.subtract(const Duration(days: 2, hours: 10)),
+        isUrgent: false,
+        isPinned: false,
+        saveCount: 310,
+        likeCount: 460,
+        venue: 'Turing Auditorium & Computer Lab 304, CS Block',
+        eventDate: DateTime(2026, 11, 22, 14, 0),
+        registrationDeadline: DateTime(2026, 11, 18, 18, 0),
+        maxParticipants: 90,
+        links: const [
+          PostLink(label: 'GDG Workshop GitHub Repository', url: 'https://github.com/gdg-mit/gemini-agent-workshop'),
+          PostLink(label: 'Prerequisite Installation Checklist', url: 'https://flutter.dev/docs/get-started'),
+        ],
+        form: const FormDefinition(
+          id: 'frm_gemini_workshop_2026',
+          title: 'GDG Gemini 3.8 Workshop Seat Reservation',
+          headerText: 'Confirm your hands-on coding workstation and prerequisites',
+          fields: [
+            FormFieldSpec(
+              id: 'fld_gdg_experience',
+              label: 'Experience with Flutter or Python',
+              type: FormFieldType.singleChoice,
+              required: true,
+              options: [
+                'Beginner (Curious to learn)',
+                'Intermediate (Built sample apps/scripts)',
+                'Advanced (Deploying models/APIs)',
+              ],
+            ),
+            FormFieldSpec(
+              id: 'fld_gdg_laptop',
+              label: 'Will you bring your own laptop?',
+              type: FormFieldType.singleChoice,
+              required: true,
+              options: [
+                'Yes, bringing laptop with Flutter installed',
+                'No, allocate desktop in Lab 304',
+              ],
+            ),
+            FormFieldSpec(
+              id: 'fld_gdg_github',
+              label: 'GitHub or LinkedIn Profile URL',
+              type: FormFieldType.shortText,
+              hint: 'https://github.com/username',
+            ),
+          ],
+        ),
       ),
     ];
+  }
+
+  void _generateMockPosts() {
+    _posts = _samplePostsList();
   }
 
   void _generateMockRoleRequests() {
     _roleRequests = [
       RoleRequestModel(
         id: 'req_101',
-        userId: 'usr_104',
-        userName: 'Rohan Gupta',
-        userEmail: 'rohan.gupta@studenthub.edu',
-        department: 'Electronics & Communication',
-        studentId: 'MIT/EC/2024/019',
+        userId: 'usr_vedant_tawade',
+        userName: 'Vedant Tawade',
+        userEmail: 'vedant.tawade@csn.mit.asia',
+        department: 'Computer Science & Engineering',
+        studentId: 'MIT23-A-04-UG-CSE-089',
         requestedRole: UserRole.eventHost,
         reason:
-            'I am the president of Robotics Club and need permissions to post robotics competitions and workshops for students.',
-        phoneNumber: '+91 99887 76655',
+            'Leading the CSI Student Chapter to organize state-level TECHयुग 2K26 exhibition and upcoming coding competitions.',
+        phoneNumber: '+91 75885 83192',
         submittedAt: DateTime.now().subtract(const Duration(days: 1)),
       ),
       RoleRequestModel(
         id: 'req_102',
-        userId: 'usr_108',
-        userName: 'Prof. Meera Malhotra',
-        userEmail: 'meera.m@studenthub.edu',
-        department: 'Management Studies',
-        studentId: 'EMP/FAC/704',
+        userId: 'host_rohan_deshpande',
+        userName: 'Rohan Deshpande',
+        userEmail: 'rohan.deshpande@studenthub.edu',
+        department: 'Electronics & Communication',
+        studentId: 'MIT24-B-02-UG-ETC-033',
+        requestedRole: UserRole.eventHost,
+        reason:
+            'President of Robotics Society. Need permissions to organize RoboClash 2026 arena and manage bot specifications.',
+        phoneNumber: '+91 97654 32109',
+        submittedAt: DateTime.now().subtract(const Duration(hours: 14)),
+      ),
+      RoleRequestModel(
+        id: 'req_103',
+        userId: 'fac_hod_smita',
+        userName: 'Dr. Smita Kasar',
+        userEmail: 'hod.cse@mit.asia',
+        department: 'Computer Science & Engineering',
+        studentId: 'MIT-EMP-CSE-102',
         requestedRole: UserRole.faculty,
         reason:
-            'Need faculty access to publish official departmental seminar notices and guest speaker updates.',
-        phoneNumber: '+91 91234 56789',
-        submittedAt: DateTime.now().subtract(const Duration(hours: 8)),
+            'Head of Department (CSE). Require faculty credentials to broadcast official university circulars, exam timetables, and notices.',
+        phoneNumber: '+91 94222 18765',
+        submittedAt: DateTime.now().subtract(const Duration(hours: 6)),
       ),
     ];
   }
@@ -5047,27 +5732,44 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     final now = DateTime.now();
     _notifications = [
       NotificationModel(
-        id: 'notif_001',
-        title: '🔥 Urgent Notice Published',
-        body: 'Mid-Semester Exam Schedule Revision posted for your department.',
+        id: 'notif_scholarship_01',
+        title: '🚨 URGENT: Post-Matric Scholarship 2026-27',
+        body: 'Fresh applications for OBC, SBC, VJNT open on National Scholarship Portal (NSP). Mandatory Aadhaar & NPCI mapping required.',
         category: NotificationCategory.academic,
-        timestamp: now.subtract(const Duration(hours: 2)),
-        relatedPostId: 'pst_001',
+        timestamp: now.subtract(const Duration(minutes: 45)),
+        relatedPostId: 'pst_scholarship_nsp_2026',
       ),
       NotificationModel(
-        id: 'notif_002',
-        title: '🤖 Flutter & Mobile AI Workshop Tomorrow',
-        body: 'Don\'t forget your registration deadline is in 3 days.',
+        id: 'notif_techyug_02',
+        title: '🚀 TECHयुग 2K26 Registration Extended!',
+        body: 'State-Level Project Competition deadline extended to 21 October. Register your team now!',
         category: NotificationCategory.events,
-        timestamp: now.subtract(const Duration(hours: 5)),
-        relatedPostId: 'pst_004',
+        timestamp: now.subtract(const Duration(hours: 3)),
+        relatedPostId: 'pst_techyug_2026',
       ),
       NotificationModel(
-        id: 'notif_003',
-        title: 'Welcome to StudentHub!',
-        body: 'Personalized updates for CS Third Year loaded.',
+        id: 'notif_openforge_03',
+        title: '⚡ OpenForge Hackathon Shortlist Announced',
+        body: 'Final build day scheduled for 16th October at JNEC Campus computing labs.',
+        category: NotificationCategory.events,
+        timestamp: now.subtract(const Duration(hours: 10)),
+        relatedPostId: 'pst_openforge_hackathon',
+      ),
+      NotificationModel(
+        id: 'notif_tcs_04',
+        title: '💼 TCS Digital & Ninja 2026 Recruitment Drive',
+        body: 'Final year CSE, IT, E&TC eligibility circular published. NQT starts 8th Nov.',
+        category: NotificationCategory.academic,
+        timestamp: now.subtract(const Duration(days: 1)),
+        relatedPostId: 'pst_placement_tcs_2026',
+      ),
+      NotificationModel(
+        id: 'notif_sih_05',
+        title: '🏆 Grand Achievement: Team Garud Wins SIH 2026!',
+        body: 'Our CSE students bagged 1st prize (₹1,00,000) at Smart India Hackathon Grand Finale!',
         category: NotificationCategory.general,
-        timestamp: now.subtract(const Duration(days: 3)),
+        timestamp: now.subtract(const Duration(days: 2)),
+        relatedPostId: 'pst_sih_winners_2026',
       ),
     ];
   }
@@ -5078,40 +5780,61 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     final now = DateTime.now();
     _formSubmissions = [
       FormSubmission(
-        id: 'sub_101',
-        postId: 'pst_004',
-        userId: 'usr_102',
-        name: 'Rohan Gupta',
-        studentOrEmployeeId: 'MIT/CS/2023/118',
+        id: 'sub_techyug_01',
+        postId: 'pst_techyug_2026',
+        userId: 'usr_101',
+        name: 'Aarav Sharma',
+        studentOrEmployeeId: 'MIT23-A-01-UG-CSE-101',
         department: 'Computer Science & Engineering',
         year: 'Third Year',
-        mobileNumber: '+91 99887 76655',
-        answers: {'teamSize': '3 members', 'mode': 'Offline'},
-        submittedAt: now.subtract(const Duration(days: 1, hours: 2)),
+        mobileNumber: '+91 98765 43210',
+        answers: {
+          'fld_techyug_project_title': 'Smart Campus Energy Optimization using LoRaWAN',
+          'fld_techyug_theme': 'IoT & Embedded System',
+          'fld_techyug_team_size': '3 Members',
+          'fld_techyug_team_lead': 'Aarav Sharma (MIT23-A-01-UG-CSE-101)',
+          'fld_techyug_mode': 'Offline (CSN Students Mandatory)',
+          'fld_techyug_contact': '+91 98765 43210',
+          'fld_techyug_abstract': 'Real-time power monitoring across campus labs using custom ESP32 LoRa nodes and dashboard analytics.',
+        },
+        submittedAt: now.subtract(const Duration(hours: 3)),
       ),
       FormSubmission(
-        id: 'sub_102',
-        postId: 'pst_004',
-        userId: 'usr_103',
+        id: 'sub_techyug_02',
+        postId: 'pst_techyug_2026',
+        userId: 'usr_102',
         name: 'Sneha Kulkarni',
-        studentOrEmployeeId: 'MIT/CS/2023/071',
+        studentOrEmployeeId: 'MIT23-A-02-UG-CSE-071',
         department: 'Computer Science & Engineering',
         year: 'Third Year',
         mobileNumber: '+91 97788 12340',
-        answers: {'teamSize': 'Solo (1)', 'mode': 'Online'},
-        submittedAt: now.subtract(const Duration(hours: 6)),
+        answers: {
+          'fld_techyug_project_title': 'Automated Crop Disease Diagnosis via Mobile Vision',
+          'fld_techyug_theme': 'AI & Data Science',
+          'fld_techyug_team_size': '2 Members',
+          'fld_techyug_team_lead': 'Sneha Kulkarni (MIT23-A-02-UG-CSE-071)',
+          'fld_techyug_mode': 'Offline (CSN Students Mandatory)',
+          'fld_techyug_contact': '+91 97788 12340',
+          'fld_techyug_abstract': 'On-device TFLite model running inside Flutter for instantaneous leaf blight identification.',
+        },
+        submittedAt: now.subtract(const Duration(hours: 5)),
       ),
       FormSubmission(
-        id: 'sub_103',
-        postId: 'pst_004',
+        id: 'sub_roboclash_01',
+        postId: 'pst_roboclash_2026',
         userId: 'usr_105',
         name: 'Arjun Nair',
-        studentOrEmployeeId: 'MIT/CS/2024/056',
-        department: 'Computer Science & Engineering',
+        studentOrEmployeeId: 'MIT24-B-01-UG-ETC-056',
+        department: 'Electronics & Communication',
         year: 'Second Year',
         mobileNumber: '+91 96655 43210',
-        answers: {'teamSize': '2 members', 'mode': 'Offline'},
-        submittedAt: now.subtract(const Duration(days: 2, hours: 1)),
+        answers: {
+          'fld_bot_name': 'Inferno Crusher v3',
+          'fld_bot_category': 'Robo-Wars (15kg Class)',
+          'fld_bot_weight': '14.6',
+          'fld_bot_rf': '2.4 GHz FlySky FS-i6X Dual Transmitter',
+        },
+        submittedAt: now.subtract(const Duration(days: 1)),
       ),
     ];
   }
