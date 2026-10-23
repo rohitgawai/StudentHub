@@ -28,10 +28,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   bool _isAppUpdateNotif(NotificationModel n) {
-    return n.relatedPostId == 'app_update' ||
-        n.id.contains('update') ||
-        n.title.toLowerCase().contains('update') ||
-        n.body.toLowerCase().contains('what\'s new');
+    final id = n.id.toLowerCase();
+    final title = n.title.toLowerCase();
+    final isExplicitUpdateId = id.contains('announcement_update_') ||
+        id.startsWith('notif_app_update_') ||
+        id.startsWith('notif_admin_broadcast_announcement_update_');
+
+    if (isExplicitUpdateId) return true;
+
+    if (n.relatedPostId == 'app_update') {
+      return title.startsWith('🚀 app update') ||
+          title.startsWith('app update:') ||
+          title.contains('studenthub v') ||
+          title.contains('update available');
+    }
+
+    return false;
   }
 
   bool _isUpdateInstalled(NotificationModel n) {
@@ -374,9 +386,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           ),
                           const SizedBox(width: 8),
                         ],
-                  if (n.title.toLowerCase().contains('update') ||
-                      n.body.toLowerCase().contains('what\'s new') ||
-                      _isAppUpdateNotif(n)) ...[
+                  if (_isAppUpdateNotif(n)) ...[
                     Builder(
                       builder: (context) {
                         final isInstalled = _isUpdateInstalled(n);

@@ -286,6 +286,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           return !n.timestamp.toUtc().isAfter(cutoff);
         });
       }
+      _deduplicateNotifications();
       _roleRequests = restored.roleRequests;
       _formSubmissions = restored.formSubmissions;
       _showAllYearsFeed = restored.showAllYearsFeed;
@@ -354,6 +355,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
     _syncInFlight = true;
     try {
       await _syncFromBackend();
+      _deduplicateNotifications();
       _invalidateDataCaches();
       notifyListeners();
     } finally {
@@ -2380,6 +2382,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         return false;
       }),
     ]);
+    if (_deduplicateNotifications()) changed = true;
     if (extras.any((changedExtra) => changedExtra)) changed = true;
     if (changed) {
       _invalidateDataCaches();
@@ -2419,8 +2422,7 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         }
 
         final createdAt = _parseDate(row['created_at'])?.toUtc() ?? nowUtc;
-        final isUpdate = id.startsWith('announcement_update_') ||
-            title.toLowerCase().contains('update');
+        final isUpdate = id.startsWith('announcement_update_');
 
         if (!isUpdate) {
           if (_notificationsCleared && _notificationsClearedAt != null) {
@@ -2432,13 +2434,29 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
           }
         }
 
-        final existingIndex = _notifications.indexWhere((n) => n.id == broadcastNotifId);
+        final existingIndex = _notifications.indexWhere((n) {
+          if (n.id == broadcastNotifId || n.id == id) return true;
+          if (isUpdate) {
+            final codeMatch = RegExp(r'update_(\d+)').firstMatch(id);
+            if (codeMatch != null) {
+              final code = codeMatch.group(1)!;
+              if (n.id == 'notif_app_update_$code' ||
+                  n.id == 'notif_admin_broadcast_announcement_update_$code' ||
+                  n.id == 'announcement_update_$code') {
+                return true;
+              }
+            }
+          }
+          return false;
+        });
         if (existingIndex != -1) {
           // Retroactively update category & relatedPostId if stored from older builds
           if (isUpdate &&
               (_notifications[existingIndex].category != NotificationCategory.general ||
-                  _notifications[existingIndex].relatedPostId != 'app_update')) {
+                  _notifications[existingIndex].relatedPostId != 'app_update' ||
+                  _notifications[existingIndex].id != broadcastNotifId)) {
             _notifications[existingIndex] = _notifications[existingIndex].copyWith(
+              id: broadcastNotifId,
               category: NotificationCategory.general,
               relatedPostId: 'app_update',
             );
@@ -2491,29 +2509,27 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       final versionName = res['version_name']?.toString() ?? '';
       if (versionCode <= 0 || versionName.isEmpty) return false;
 
-      final notifId = 'notif_app_update_$versionCode';
+      final canonicalId = 'notif_admin_broadcast_announcement_update_$versionCode';
       final broadcastId = 'announcement_update_$versionCode';
-      final fullBroadcastId = 'notif_admin_broadcast_$broadcastId';
+      final altNotifId = 'notif_app_update_$versionCode';
 
-      if (_dismissedNotificationIds.contains(notifId) ||
+      if (_dismissedNotificationIds.contains(canonicalId) ||
           _dismissedNotificationIds.contains(broadcastId) ||
-          _dismissedNotificationIds.contains(fullBroadcastId)) {
+          _dismissedNotificationIds.contains(altNotifId)) {
         return false;
       }
 
       final releaseNotes = res['release_notes']?.toString() ?? 'Bug fixes and performance improvements.';
       final isNewer = versionCode > UpdateService.currentVersionCode;
-      final title = isNewer
-          ? '🚀 New App Update Available: v$versionName'
-          : '🚀 StudentHub v$versionName (Installed)';
-      final body = isNewer
-          ? "A new update is available!\n\nWhat's new:\n$releaseNotes"
-          : "You're on the latest build (v$versionName).\n\nWhat's new:\n$releaseNotes";
+      // Fixed: Consistently use '🚀 App Update: v$versionName' so title never toggles
+      // between update and installed on refreshes.
+      final title = '🚀 App Update: v$versionName';
+      final body = "What's new:\n$releaseNotes\n\nBy Admin";
 
       final createdAt = _parseDate(res['created_at']) ?? DateTime.now();
 
       final notif = NotificationModel(
-        id: notifId,
+        id: canonicalId,
         title: title,
         body: body,
         category: NotificationCategory.general,
@@ -2522,13 +2538,27 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
         isRead: !isNewer,
       );
 
-      final existingIndex = _notifications.indexWhere(
-        (n) => n.id == notifId || n.id == fullBroadcastId || (n.relatedPostId == 'app_update' && n.id.contains('$versionCode')),
-      );
+      final existingIndex = _notifications.indexWhere((n) {
+        if (n.id == canonicalId || n.id == broadcastId || n.id == altNotifId) return true;
+        if (n.id == 'announcement_update_$versionCode' || n.id == 'notif_app_update_$versionCode') return true;
+        if (n.relatedPostId == 'app_update') {
+          if (n.id.endsWith('_$versionCode') || n.title.contains('v$versionName')) {
+            return true;
+          }
+        }
+        return false;
+      });
 
       if (existingIndex != -1) {
-        if (_notifications[existingIndex].title != title || _notifications[existingIndex].body != body) {
-          _notifications[existingIndex] = notif;
+        final existing = _notifications[existingIndex];
+        if (existing.id != canonicalId || existing.title != title || existing.body != body) {
+          _notifications[existingIndex] = existing.copyWith(
+            id: canonicalId,
+            title: title,
+            body: body,
+            category: NotificationCategory.general,
+            relatedPostId: 'app_update',
+          );
           return true;
         }
         return false;
@@ -2540,6 +2570,69 @@ class MockDataService extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('StudentHub: _syncAppUpdateNotification error: $e');
       return false;
     }
+  }
+
+  /// Deduplicates notifications in memory and purges any duplicate update notifications
+  /// that may have accumulated from previous refreshes or syncs.
+  /// Also repairs any notifications that were mistakenly tagged with relatedPostId == 'app_update'.
+  bool _deduplicateNotifications() {
+    final seenIds = <String>{};
+    final seenUpdateVersions = <String>{};
+    final toKeep = <NotificationModel>[];
+
+    for (var n in _notifications) {
+      if (seenIds.contains(n.id)) continue;
+
+      // Check whether this notification is legitimately an app update notification:
+      final idLower = n.id.toLowerCase();
+      final titleLower = n.title.toLowerCase();
+      final isLegitUpdate = idLower.contains('announcement_update_') ||
+          idLower.startsWith('notif_app_update_') ||
+          idLower.startsWith('notif_admin_broadcast_announcement_update_') ||
+          titleLower.startsWith('🚀 app update') ||
+          titleLower.startsWith('app update:') ||
+          (n.relatedPostId == 'app_update' &&
+              (titleLower.contains('studenthub v') ||
+                  titleLower.contains('update available')));
+
+      // Sanitize mistakenly tagged notifications (e.g., admin broadcasts or role alerts):
+      if (n.relatedPostId == 'app_update' && !isLegitUpdate) {
+        n = n.copyWith(relatedPostId: null);
+      }
+
+      if (isLegitUpdate) {
+        String? verKey;
+        final semverMatch = RegExp(r'v?(\d+\.\d+(?:\.\d+)?)', caseSensitive: false)
+            .firstMatch('${n.title} ${n.body}');
+        if (semverMatch != null) {
+          verKey = semverMatch.group(1);
+        } else {
+          final codeMatch = RegExp(r'update_(\d+)').firstMatch(n.id);
+          if (codeMatch != null) {
+            verKey = codeMatch.group(1);
+          }
+        }
+
+        if (verKey != null && verKey.isNotEmpty) {
+          if (seenUpdateVersions.contains(verKey)) {
+            // Duplicate notification for this app update version: skip it
+            continue;
+          }
+          seenUpdateVersions.add(verKey);
+        }
+      }
+
+      seenIds.add(n.id);
+      toKeep.add(n);
+    }
+
+    if (toKeep.length != _notifications.length) {
+      _notifications
+        ..clear()
+        ..addAll(toKeep);
+      return true;
+    }
+    return false;
   }
 
   /// Manually pulls recent admin broadcasts into the notification bell
